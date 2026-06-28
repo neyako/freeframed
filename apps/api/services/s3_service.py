@@ -17,9 +17,11 @@ CONTENT_TYPE_MAP = {
     ".png": ("image/png", "max-age=86400"),
 }
 
+
 def _is_aws_s3() -> bool:
     """Check if using AWS S3 (vs MinIO/local). Controlled by S3_STORAGE env var."""
     return settings.s3_storage.lower() == "s3"
+
 
 def get_s3_client():
     """
@@ -45,13 +47,16 @@ def get_s3_client():
             region_name=settings.s3_region,
         )
 
+
 def _get_presign_client():
     """
     Client for generating presigned URLs. Uses s3_public_endpoint if set,
     so presigned URLs are accessible from the browser (e.g. localhost:9000
     instead of minio:9000 in Docker).
     """
-    endpoint = settings.s3_public_endpoint or (None if _is_aws_s3() else settings.s3_endpoint)
+    endpoint = settings.s3_public_endpoint or (
+        None if _is_aws_s3() else settings.s3_endpoint
+    )
     kwargs = {
         "aws_access_key_id": settings.s3_access_key,
         "aws_secret_access_key": settings.s3_secret_key,
@@ -60,6 +65,7 @@ def _get_presign_client():
     if endpoint:
         kwargs["endpoint_url"] = endpoint
     return boto3.client("s3", **kwargs)
+
 
 def ensure_bucket_exists():
     """Create the S3 bucket if it does not exist. Called on app startup."""
@@ -73,7 +79,9 @@ def ensure_bucket_exists():
             if _is_aws_s3() and settings.s3_region != "us-east-1":
                 s3.create_bucket(
                     Bucket=settings.s3_bucket,
-                    CreateBucketConfiguration={"LocationConstraint": settings.s3_region}
+                    CreateBucketConfiguration={
+                        "LocationConstraint": settings.s3_region
+                    },
                 )
             else:
                 s3.create_bucket(Bucket=settings.s3_bucket)
@@ -97,8 +105,15 @@ def ensure_bucket_exists():
                         {
                             "AllowedHeaders": ["*"],
                             "AllowedMethods": ["GET", "PUT", "POST", "DELETE", "HEAD"],
-                            "AllowedOrigins": [settings.frontend_url, "http://localhost:3000"],
-                            "ExposeHeaders": ["ETag", "Content-Length", "x-amz-request-id"],
+                            "AllowedOrigins": [
+                                settings.frontend_url,
+                                "http://localhost:3000",
+                            ],
+                            "ExposeHeaders": [
+                                "ETag",
+                                "Content-Length",
+                                "x-amz-request-id",
+                            ],
                             "MaxAgeSeconds": 3600,
                         }
                     ]
@@ -133,8 +148,23 @@ def ensure_bucket_exists():
 def get_content_type(key: str) -> tuple[str, str]:
     """Return (content_type, cache_control) for a given S3 key."""
     import os
+
     ext = os.path.splitext(key)[1].lower()
     return CONTENT_TYPE_MAP.get(ext, ("application/octet-stream", "no-cache"))
+
+
+def upload_fileobj(s3_key: str, fileobj, content_type: str | None = None) -> None:
+    s3 = get_s3_client()
+    if content_type is not None:
+        s3.upload_fileobj(
+            fileobj,
+            settings.s3_bucket,
+            s3_key,
+            ExtraArgs={"ContentType": content_type},
+        )
+        return
+    s3.upload_fileobj(fileobj, settings.s3_bucket, s3_key)
+
 
 def create_multipart_upload(s3_key: str, content_type: str) -> str:
     """Initiate a multipart upload and return the upload_id."""
@@ -146,7 +176,10 @@ def create_multipart_upload(s3_key: str, content_type: str) -> str:
     )
     return response["UploadId"]
 
-def presign_upload_part(s3_key: str, upload_id: str, part_number: int, expires_in: int = 3600) -> str:
+
+def presign_upload_part(
+    s3_key: str, upload_id: str, part_number: int, expires_in: int = 3600
+) -> str:
     """Return a presigned URL for uploading a single part."""
     s3 = _get_presign_client()
     return s3.generate_presigned_url(
@@ -160,6 +193,7 @@ def presign_upload_part(s3_key: str, upload_id: str, part_number: int, expires_i
         ExpiresIn=expires_in,
     )
 
+
 def complete_multipart_upload(s3_key: str, upload_id: str, parts: list[dict]) -> None:
     """Complete a multipart upload. `parts` is a list of {"PartNumber": int, "ETag": str}."""
     s3 = get_s3_client()
@@ -170,6 +204,7 @@ def complete_multipart_upload(s3_key: str, upload_id: str, parts: list[dict]) ->
         MultipartUpload={"Parts": parts},
     )
 
+
 def abort_multipart_upload(s3_key: str, upload_id: str) -> None:
     """Abort a multipart upload and clean up uploaded parts."""
     s3 = get_s3_client()
@@ -178,6 +213,7 @@ def abort_multipart_upload(s3_key: str, upload_id: str) -> None:
         Key=s3_key,
         UploadId=upload_id,
     )
+
 
 def build_download_filename(display_name: str, source: str | None) -> str:
     """Return display_name with an extension appended from `source` if missing.
@@ -196,7 +232,9 @@ def build_download_filename(display_name: str, source: str | None) -> str:
     return f"{display_name}{ext}"
 
 
-def generate_presigned_get_url(s3_key: str, expires_in: int = 3600, download_filename: str | None = None) -> str:
+def generate_presigned_get_url(
+    s3_key: str, expires_in: int = 3600, download_filename: str | None = None
+) -> str:
     """Generate a presigned GET URL for an object.
 
     Args:
@@ -208,8 +246,8 @@ def generate_presigned_get_url(s3_key: str, expires_in: int = 3600, download_fil
     s3 = _get_presign_client()
     params: dict = {"Bucket": settings.s3_bucket, "Key": s3_key}
     if download_filename:
-        safe_name = re.sub(r'[\x00-\x1f\x7f]', '', download_filename)
-        safe_name = safe_name.replace('\\', '\\\\').replace('"', '\\"')
+        safe_name = re.sub(r"[\x00-\x1f\x7f]", "", download_filename)
+        safe_name = safe_name.replace("\\", "\\\\").replace('"', '\\"')
         params["ResponseContentDisposition"] = f'attachment; filename="{safe_name}"'
     return s3.generate_presigned_url(
         "get_object",
@@ -217,7 +255,13 @@ def generate_presigned_get_url(s3_key: str, expires_in: int = 3600, download_fil
         ExpiresIn=expires_in,
     )
 
-def put_object(s3_key: str, body: bytes, content_type: str | None = None, cache_control: str | None = None) -> None:
+
+def put_object(
+    s3_key: str,
+    body: bytes,
+    content_type: str | None = None,
+    cache_control: str | None = None,
+) -> None:
     """Upload a small object directly (for processed files like thumbnails)."""
     s3 = get_s3_client()
     kwargs = {"Bucket": settings.s3_bucket, "Key": s3_key, "Body": body}
@@ -226,6 +270,7 @@ def put_object(s3_key: str, body: bytes, content_type: str | None = None, cache_
     if cache_control:
         kwargs["CacheControl"] = cache_control
     s3.put_object(**kwargs)
+
 
 def delete_object(s3_key: str) -> None:
     s3 = get_s3_client()

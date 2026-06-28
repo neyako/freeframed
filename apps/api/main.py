@@ -3,15 +3,36 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .config import settings
-from .routers import auth, users, projects, upload, events, assets, me, comments, approvals, share, metadata, branding, notifications, admin, setup, folders, hls_proxy
+from .routers import (
+    auth,
+    users,
+    projects,
+    upload,
+    events,
+    assets,
+    me,
+    comments,
+    approvals,
+    share,
+    metadata,
+    branding,
+    notifications,
+    admin,
+    setup,
+    folders,
+    hls_proxy,
+    integrations,
+)
 from .services.s3_service import ensure_bucket_exists
 from .middleware.global_rate_limit import GlobalRateLimitMiddleware
 from .middleware.setup_guard import SetupGuardMiddleware
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     ensure_bucket_exists()
     yield
+
 
 _disable_docs = os.getenv("DISABLE_DOCS", "").lower() in ("true", "1", "yes")
 
@@ -58,8 +79,9 @@ app.include_router(admin.router)
 app.include_router(setup.router)
 app.include_router(folders.router)
 app.include_router(hls_proxy.router)
+app.include_router(integrations.router)
+
 
 @app.get("/health")
 def health():
     return {"status": "ok"}
-
