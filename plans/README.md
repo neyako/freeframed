@@ -31,7 +31,7 @@ do not modify the other repo from within a plan unless the plan's Scope says so.
 | Plan | Title | Target repo | Priority | Effort | Depends on | Status |
 |------|-------|-------------|----------|--------|------------|--------|
 | 001 | Responsive mobile review layout for share viewer | FreeFrame `apps/web` | P1 | M | — | DONE |
-| 002 | Reviewer-safe single-video share (force asset scope, hide siblings) | FreeFrame `apps/api` + `apps/web` | P1 | M | — | TODO |
+| 002 | Reviewer-safe single-video share (force asset scope, hide siblings) | FreeFrame `apps/api` + `apps/web` | P1 | M | — | DONE |
 | 003 | Service-to-service API key + review-ingest endpoint | FreeFrame `apps/api` | P1 | L | 002 | TODO |
 | 004 | projmgmt → FreeFrame review bridge (mint guest link on Editing→Review) | projmgmt | P1 | L | 002, 003 | TODO |
 | 005 | Project-tree vs final-video upload option | projmgmt | P2 | M | — | TODO |

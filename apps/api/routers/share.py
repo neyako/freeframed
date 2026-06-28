@@ -27,6 +27,8 @@ from ..schemas.share import (
     FolderShareAssetsResponse,
     FolderShareSubfolder,
     MultiShareCreate,
+    ReviewerShareCreate,
+    ReviewerShareResponse,
     ShareLinkActivityResponse,
     ShareLinkCreate,
     ShareLinkListItem,
@@ -166,6 +168,48 @@ def _get_latest_media_file(db: Session, asset_id: uuid.UUID) -> Optional[MediaFi
     return db.query(MediaFile).filter(MediaFile.version_id == version.id).first()
 
 
+def create_reviewer_share(
+    db: Session,
+    asset: Asset,
+    created_by: uuid.UUID,
+    permission: SharePermission = SharePermission.comment,
+    allow_download: bool = False,
+    expires_at: Optional[datetime] = None,
+    password: Optional[str] = None,
+    title: Optional[str] = None,
+) -> ShareLink:
+    token = secrets.token_urlsafe(32)
+    if password:
+        pwd_bytes = password[:72].encode("utf-8")
+        password_hash = bcrypt.hashpw(pwd_bytes, bcrypt.gensalt()).decode("utf-8")
+        password_encrypted = encrypt_password(password)
+    else:
+        password_hash = None
+        password_encrypted = None
+
+    link = ShareLink(
+        asset_id=asset.id,
+        folder_id=None,
+        project_id=None,
+        token=token,
+        created_by=created_by,
+        title=title if title else asset.name,
+        expires_at=expires_at,
+        password_hash=password_hash,
+        password_encrypted=password_encrypted,
+        permission=permission,
+        visibility="public",
+        allow_download=allow_download,
+        show_versions=False,
+        show_watermark=False,
+    )
+    db.add(link)
+    db.add(ActivityLog(user_id=created_by, asset_id=asset.id, action=ActivityAction.shared))
+    db.commit()
+    db.refresh(link)
+    return link
+
+
 # ── Share links ───────────────────────────────────────────────────────────────
 
 @router.post("/assets/{asset_id}/share", response_model=ShareLinkResponse, status_code=status.HTTP_201_CREATED)
@@ -208,6 +252,39 @@ def create_share_link(
     db.commit()
     db.refresh(link)
     return link
+
+
+@router.post(
+    "/assets/{asset_id}/reviewer-share",
+    response_model=ReviewerShareResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_reviewer_share_endpoint(
+    asset_id: uuid.UUID,
+    body: ReviewerShareCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    asset = _get_asset(db, asset_id)
+    require_project_role(db, asset.project_id, current_user, ProjectRole.editor)
+    link = create_reviewer_share(
+        db,
+        asset=asset,
+        created_by=current_user.id,
+        permission=body.permission,
+        allow_download=body.allow_download,
+        expires_at=body.expires_at,
+        password=body.password,
+        title=body.title,
+    )
+    return ReviewerShareResponse(
+        token=link.token,
+        asset_id=asset.id,
+        permission=link.permission,
+        allow_download=link.allow_download,
+        url=f"{settings.frontend_url.rstrip('/')}/share/{link.token}",
+        expires_at=link.expires_at,
+    )
 
 
 @router.get("/assets/{asset_id}/shares", response_model=list[ShareLinkResponse])

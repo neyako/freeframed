@@ -44,6 +44,23 @@ class MultiShareCreate(BaseModel):
     appearance: ShareLinkAppearance = ShareLinkAppearance()
 
 
+class ReviewerShareCreate(BaseModel):
+    permission: SharePermission = SharePermission.comment
+    allow_download: bool = False
+    expires_at: Optional[datetime] = None
+    password: Optional[str] = None
+    title: Optional[str] = None
+
+
+class ReviewerShareResponse(BaseModel):
+    token: str
+    asset_id: uuid.UUID
+    permission: SharePermission
+    allow_download: bool
+    url: str
+    expires_at: Optional[datetime] = None
+
+
 class ShareLinkResponse(BaseModel):
     id: uuid.UUID
     asset_id: Optional[uuid.UUID] = None
