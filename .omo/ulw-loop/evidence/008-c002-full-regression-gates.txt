@@ -1,0 +1,44 @@
+COMMAND: uv run --with-requirements apps/api/requirements.txt --python 3.11 --no-project python -m pytest apps/api/tests -q
+........................................................................ [ 82%]
+...............                                                          [100%]
+=============================== warnings summary ===============================
+apps/api/tests/test_projects.py::test_get_project
+  /Users/neyako/.cache/uv/archive-v0/v51FzwQ8EXWiKDiwjjsU2/lib/python3.11/site-packages/pydantic/type_adapter.py:451: UserWarning: Pydantic serializer warnings:
+    Expected `int` but got `MagicMock` with value `<MagicMock name='mock.scalar()' id='4501065744'>` - serialized value may not be as expected
+    Expected `int` but got `MagicMock` with value `<MagicMock name='mock.joi...alar()' id='4502178576'>` - serialized value may not be as expected
+    Expected `int` but got `MagicMock` with value `<MagicMock name='mock.scalar()' id='4501065744'>` - serialized value may not be as expected
+    return self.serializer.to_python(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+87 passed, 1 warning in 0.92s
+FULL_PYTEST_EXIT_STATUS: 0
+
+COMMAND: uv run --with-requirements apps/api/requirements.txt --python 3.11 --no-project python -c import sanity
+IMPORT_EXIT_STATUS: 0
+
+COMMAND: env settings print
+auto /dev/dri/renderD128
+SETTINGS_EXIT_STATUS: 0
+
+COMMAND: grep task wiring
+93:        hwaccel=settings.transcode_hwaccel,
+GREP_TASK_EXIT_STATUS: 0
+
+COMMAND: grep env
+17:TRANSCODE_HWACCEL=auto
+GREP_ENV_EXIT_STATUS: 0
+
+COMMAND: no libx264 in ffmpeg_transcoder.py
+NO_LIBX264_EXIT_STATUS: 0
+
+COMMAND: no apps.api imports in packages/transcoder
+NO_APPS_API_IMPORT_EXIT_STATUS: 0
+
+COMMAND: grep plan row
+40:| 008 | Hardware-accelerated transcode (NVENC/QSV/VAAPI + software fallback) | FreeFrame `packages/transcoder` + `apps/api` | P1 | L | — | DONE ✓ verified 06-29 |
+41:| 009 | True all-in-one Docker image (one container, GPU-ready, jellyfin-ffmpeg) | FreeFrame `Dockerfile.allinone` + `deploy/` | P1 | L | 008 | TODO |
+GREP_ROW_EXIT_STATUS: 0
+
+cleanup: no tmux/browser/server spawned; temp venv cleanup pending final gate
+
+cleanup: removed /tmp/freeframed-008-venv and /tmp/freeframed-008-venv311; no tmux/browser/server/container spawned; all subagents closed.

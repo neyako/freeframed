@@ -1,0 +1,49 @@
+PLAN008 STRICT CLEANUP VERIFICATION
+created_at=2026-06-29T09:53:55Z
+
+COMMAND no-excuse checker
+no violations in 5 file(s)
+
+COMMAND pure LOC
+250
+
+COMMAND resolve/select slice
+...                                                                      [100%]
+3 passed, 10 deselected in 0.02s
+
+COMMAND focused Plan 008 tests
+.............                                                            [100%]
+13 passed in 0.30s
+
+COMMAND full API tests
+........................................................................ [ 83%]
+..............                                                           [100%]
+=============================== warnings summary ===============================
+apps/api/tests/test_projects.py::test_get_project
+  /Users/neyako/.cache/uv/archive-v0/v51FzwQ8EXWiKDiwjjsU2/lib/python3.11/site-packages/pydantic/type_adapter.py:451: UserWarning: Pydantic serializer warnings:
+    Expected `int` but got `MagicMock` with value `<MagicMock name='mock.scalar()' id='4502716112'>` - serialized value may not be as expected
+    Expected `int` but got `MagicMock` with value `<MagicMock name='mock.joi...alar()' id='4501456080'>` - serialized value may not be as expected
+    Expected `int` but got `MagicMock` with value `<MagicMock name='mock.scalar()' id='4502716112'>` - serialized value may not be as expected
+    return self.serializer.to_python(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+86 passed, 1 warning in 1.02s
+
+COMMAND ruff
+All checks passed!
+
+COMMAND py_compile
+
+COMMAND import/settings sanity
+auto /dev/dri/renderD128
+
+COMMAND diff check
+
+
+COMMAND package boundary / done greps
+apps/api/.env.example:17:TRANSCODE_HWACCEL=auto
+apps/api/tasks/transcode_tasks.py:102:        hwaccel=settings.transcode_hwaccel,
+plans/README.md:40:| 008 | Hardware-accelerated transcode (NVENC/QSV/VAAPI + software fallback) | FreeFrame `packages/transcoder` + `apps/api` | P1 | L | — | DONE ✓ verified 06-29 |
+plans/README.md:111:  a new `TRANSCODE_HWACCEL` setting (`auto` detects), with a runtime fallback to software if a HW
+
+cleanup: no server/tmux/browser/container spawned; no temp runtime retained by this verification script

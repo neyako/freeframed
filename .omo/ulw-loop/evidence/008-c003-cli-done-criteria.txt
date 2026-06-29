@@ -1,0 +1,64 @@
+PLAN 008 FINAL CLI TRANSCRIPT
+BRANCH:
+advisor/008-hardware-accelerated-transcode
+
+FOCUSED TEST:
+..............                                                           [100%]
+14 passed in 0.21s
+
+FULL API TESTS:
+........................................................................ [ 82%]
+...............                                                          [100%]
+=============================== warnings summary ===============================
+apps/api/tests/test_projects.py::test_get_project
+  /Users/neyako/.cache/uv/archive-v0/v51FzwQ8EXWiKDiwjjsU2/lib/python3.11/site-packages/pydantic/type_adapter.py:451: UserWarning: Pydantic serializer warnings:
+    Expected `int` but got `MagicMock` with value `<MagicMock name='mock.scalar()' id='4520968848'>` - serialized value may not be as expected
+    Expected `int` but got `MagicMock` with value `<MagicMock name='mock.joi...alar()' id='4521995280'>` - serialized value may not be as expected
+    Expected `int` but got `MagicMock` with value `<MagicMock name='mock.scalar()' id='4520968848'>` - serialized value may not be as expected
+    return self.serializer.to_python(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+87 passed, 1 warning in 0.85s
+
+RUFF:
+All checks passed!
+
+IMPORT SANITY:
+
+SETTINGS:
+auto /dev/dri/renderD128
+
+DONE CRITERIA GREPS:
+93:        hwaccel=settings.transcode_hwaccel,
+17:TRANSCODE_HWACCEL=auto
+no libx264 in packages/transcoder/ffmpeg_transcoder.py
+no apps.api imports in packages/transcoder
+40:| 008 | Hardware-accelerated transcode (NVENC/QSV/VAAPI + software fallback) | FreeFrame `packages/transcoder` + `apps/api` | P1 | L | — | DONE ✓ verified 06-29 |
+41:| 009 | True all-in-one Docker image (one container, GPU-ready, jellyfin-ffmpeg) | FreeFrame `Dockerfile.allinone` + `deploy/` | P1 | L | 008 | TODO |
+
+GIT STATUS:
+ M apps/api/.env.example
+ M apps/api/config.py
+ M apps/api/tasks/transcode_tasks.py
+ M packages/transcoder/ffmpeg_transcoder.py
+ M plans/README.md
+?? .omo/
+?? .playwright-cli/
+?? apps/api/tests/test_transcoder_hwaccel.py
+?? output/
+?? packages/transcoder/hwaccel.py
+?? plans/001-mobile-review-layout.md
+?? plans/002-reviewer-safe-share.md
+?? plans/003-review-ingest-endpoint.md
+?? plans/004-projmgmt-review-bridge.md
+?? plans/005-project-tree-upload-option.md
+?? plans/006-resolve-push-for-review.md
+?? plans/007-resolve-sync-comments-to-markers.md
+?? plans/008-hardware-accelerated-transcode.md
+?? plans/009-all-in-one-docker-image.md
+?? plans/010-cicd-release-pipeline.md
+?? tools/
+
+cleanup: no tmux/browser/server/temp runtime spawned by this CLI transcript
+
+cleanup: removed /tmp/freeframed-008-venv and /tmp/freeframed-008-venv311; no tmux/browser/server/container spawned; all subagents closed.

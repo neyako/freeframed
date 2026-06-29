@@ -43,6 +43,8 @@ class Settings(BaseSettings):
     frontend_url: str = "http://localhost:3000"
     integration_api_key: str | None = None
     transcoder_engine: str = "ffmpeg"
+    transcode_hwaccel: str = "auto"
+    transcode_vaapi_device: str = "/dev/dri/renderD128"
 
     # Worker concurrency settings
     transcoding_concurrency: int = 2  # Number of concurrent video transcoding jobs

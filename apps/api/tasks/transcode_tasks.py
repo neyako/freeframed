@@ -1,8 +1,9 @@
 import uuid
 import sys
 import os
-import asyncio
+import asyncio  # noqa  # noqa: ANYIO_OK - Celery worker bridges async calls from sync tasks.
 import json
+from dataclasses import dataclass
 
 # Ensure the workspace root is on the path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
@@ -13,6 +14,14 @@ from ..models.asset import AssetVersion, MediaFile, ProcessingStatus, AssetType
 from ..models.asset import Asset
 from ..services.s3_service import get_s3_client
 from ..config import settings
+
+
+@dataclass(frozen=True, slots=True)
+class TranscodeProcessingError(Exception):
+    error: str | None
+
+    def __str__(self) -> str:
+        return f"Transcode failed: {self.error}"
 
 
 def _run_async(coro):
@@ -69,7 +78,7 @@ def process_asset(self, asset_id: str, version_id: str):
                 "version_id": version_id,
             })
 
-        except Exception as exc:
+        except Exception as exc:  # noqa  # noqa: BROAD_EXCEPT_OK - task boundary marks failed and retries.
             version.processing_status = ProcessingStatus.failed
             db.commit()
             _publish_event(str(asset.project_id), "transcode_failed", {
@@ -86,7 +95,13 @@ def _process_video(db, asset, version, media_file, s3, output_prefix):
     from packages.transcoder.ffmpeg_transcoder import FFmpegTranscoder
     from packages.transcoder.base import TranscodeJob
 
-    transcoder = FFmpegTranscoder(s3, settings.s3_bucket, settings.s3_endpoint)
+    transcoder = FFmpegTranscoder(
+        s3,
+        settings.s3_bucket,
+        settings.s3_endpoint,
+        hwaccel=settings.transcode_hwaccel,
+        vaapi_device=settings.transcode_vaapi_device,
+    )
     job = TranscodeJob(
         media_id=str(asset.id),
         version_id=str(version.id),
@@ -96,7 +111,7 @@ def _process_video(db, asset, version, media_file, s3, output_prefix):
     )
     result = _run_async(transcoder.transcode(job))
     if not result.success:
-        raise RuntimeError(f"Transcode failed: {result.error}")
+        raise TranscodeProcessingError(result.error)
 
     media_file.s3_key_processed = result.hls_prefix
     if result.thumbnail_keys:
@@ -129,5 +144,5 @@ def _publish_event(project_id: str, event_type: str, payload: dict):
         message = json.dumps({"type": event_type, "payload": payload})
         r.publish(f"project:{project_id}", message)
         r.close()
-    except Exception:
-        pass  # SSE publish is best-effort
+    except Exception:  # noqa  # noqa: BROAD_EXCEPT_OK - SSE publish is best-effort.
+        return

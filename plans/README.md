@@ -30,13 +30,41 @@ do not modify the other repo from within a plan unless the plan's Scope says so.
 
 | Plan | Title | Target repo | Priority | Effort | Depends on | Status |
 |------|-------|-------------|----------|--------|------------|--------|
-| 001 | Responsive mobile review layout for share viewer | FreeFrame `apps/web` | P1 | M | — | DONE |
-| 002 | Reviewer-safe single-video share (force asset scope, hide siblings) | FreeFrame `apps/api` + `apps/web` | P1 | M | — | DONE |
-| 003 | Service-to-service API key + review-ingest endpoint | FreeFrame `apps/api` | P1 | L | 002 | DONE |
-| 004 | projmgmt → FreeFrame review bridge (mint guest link on Editing→Review) | projmgmt | P1 | L | 002, 003 | TODO |
-| 005 | Project-tree vs final-video upload option | projmgmt | P2 | M | — | TODO |
+| 001 | Responsive mobile review layout for share viewer | FreeFrame `apps/web` | P1 | M | — | DONE ✓ verified 06-29 |
+| 002 | Reviewer-safe single-video share (force asset scope, hide siblings) | FreeFrame `apps/api` + `apps/web` | P1 | M | — | DONE ✓ verified 06-29 |
+| 003 | Service-to-service API key + review-ingest endpoint | FreeFrame `apps/api` | P1 | L | 002 | DONE ✓ verified 06-29 |
+| 004 | projmgmt → FreeFrame review bridge (mint guest link on Editing→Review) | projmgmt | P1 | L | 002, 003 | TODO — ready (no drift; code deps landed) |
+| 005 | Project-tree vs final-video upload option | projmgmt | P2 | M | — | TODO — ready (no drift) |
+| 006 | DaVinci Resolve → FreeFrame "Push for Review" (auto-render timeline, upload, get link) | FreeFrame `tools/resolve` | P1 | L | 003 | DONE ✓ verified 06-29 |
+| 007 | DaVinci Resolve ← FreeFrame "Sync Comments" (pull comments onto timeline as markers) | FreeFrame `tools/resolve` | P1 | M | 006 | DONE ✓ verified 06-29 |
+| 008 | Hardware-accelerated transcode (NVENC/QSV/VAAPI + software fallback) | FreeFrame `packages/transcoder` + `apps/api` | P1 | L | — | DONE ✓ verified 06-29 |
+| 009 | True all-in-one Docker image (one container, GPU-ready, jellyfin-ffmpeg) | FreeFrame `Dockerfile.allinone` + `deploy/` | P1 | L | 008 | TODO |
+| 010 | CI/CD — publish images to GHCR on release (test-gated) + build all-in-one in CI | FreeFrame `.github/workflows` | P1 | M | 009 | TODO |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED (with one-line rationale)
+
+## Reconcile log — 2026-06-29
+
+Run against FreeFrame HEAD `c6eb4db` and projmgmt HEAD `1905a0b`.
+
+- **001/002/003 — DONE, verified.** Each plan's cheap done-criteria re-checked on the current
+  FreeFrame HEAD and all hold: 001 grep anchors (`md:flex-row`, `md:w-[360px]`,
+  `matchMedia('(min-width: 768px)')`) present in `apps/web/app/share/[token]/page.tsx`; 002
+  `create_reviewer_share` + `reviewer-share` route present in `apps/api/routers/share.py` and
+  `apps/api/tests/test_reviewer_share.py` exists; 003 `upload_fileobj`, `integrations.py`
+  `review-ingest` route, `integrations.router` in `main.py`, `INTEGRATION_API_KEY` in
+  `.env.example`, and `apps/api/tests/test_integration_ingest.py` all present. Matching commits in
+  the log (`d41f1e1`, `90dda1f`, `c6eb4db`). Full test suites/builds NOT re-run (out of scope for a
+  cheap spot-check) — anchors + commits are the verification gate here.
+- **004 — TODO, refreshed: no drift.** projmgmt HEAD is still the planning SHA `1905a0b`; the drift
+  diff on `src/actions/projects.ts` + `src/lib/nextcloud.ts` is empty, so all "Current state"
+  excerpts remain accurate — no excerpt/SHA refresh needed. `src/lib/freeframe.ts` is absent, as
+  expected (plan not executed). Its **code** dependencies (002, 003) are now DONE, so 004 is
+  executable. Caveat unchanged: end-to-end Test-plan case #2 still needs a deployed, reachable
+  FreeFrame with 002+003 — that's a runtime/deploy precondition, not a code blocker.
+- **005 — TODO, refreshed: no drift.** Same projmgmt SHA `1905a0b`; drift diff empty; no
+  dependencies. Executable right now.
+- **Nothing rejected or blocked.** No stale IN PROGRESS rows. No findings retired.
 
 ## Recommended sequencing
 
@@ -45,6 +73,50 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJE
 3. **003** — adds the S2S ingest endpoint that creates an asset + reviewer-safe share in one call. Needs 002's share helper.
 4. **004** — projmgmt side of the bridge. Needs 002 (share shape) and 003 (endpoint) live and reachable.
 5. **005** — independent projmgmt feature (tree vs final upload). Can run any time, even before 001.
+6. **006** — DaVinci Resolve "Push for Review" tool (FreeFrame `tools/resolve/`). Stdlib-only Resolve
+   script that auto-renders the current timeline and uploads it via the 003 ingest endpoint. Needs a
+   deployed/reachable FreeFrame with 003 for end-to-end, but the code + unit tests stand alone.
+7. **007** — Resolve "Sync Comments" tool. Reads reviewer comments back onto the timeline as markers.
+   Builds on 006's shared client module (`freeframe_review.py`); do 006 first.
+
+## The DaVinci Resolve bridge (006 + 007)
+
+The editor team cuts in DaVinci Resolve. 006 + 007 give them a two-way bridge as a small,
+**stdlib-only** Python tool installed into Resolve's *Workspace → Scripts → Utility* menu (no pip
+installs into Resolve's interpreter):
+
+- **006 (out): "Push for Review"** — one click renders the current timeline (whole timeline, H.264
+  mp4), uploads it to FreeFrame's `/integrations/review-ingest` (003), prints the reviewer-safe
+  `…/share/<token>` link, and saves the token locally (`~/.freeframe/resolve_links.json`).
+- **007 (in): "Sync Comments"** — one click pulls the reviewers' frame-accurate comments
+  (`GET /share/{token}/comments`, public/token-only) and drops a timeline **marker** at each
+  commented frame (Green = resolved, Yellow = open), with author + note in the marker text.
+  Idempotent re-sync via a `freeframe:` marker customData prefix.
+
+Config + secret live in `~/.freeframe/config.json` (api_url = FreeFrame API origin, api_key =
+server's `INTEGRATION_API_KEY`, project_id = the FreeFrame review project). Marker frame math relies
+on the whole-timeline render (`mark_in_frame = 0`, so `frame = round(timecode_start * fps)`).
+
+## Single-box deployment + GPU transcode + CI/CD (008 + 009 + 010)
+
+Goal: a one-`docker run` self-host image with hardware transcode, plus automated image publishing.
+Decided shape (maintainer-selected): a **true all-in-one container** (web + api + all workers +
+Postgres + Redis + MinIO under supervisord, one `/data` volume) shipping **jellyfin-ffmpeg** for
+**all HW backends** (NVENC + Intel QSV + VAAPI), with a software fallback. The existing
+multi-container `docker-compose.prod.yml` stays as the scalable option.
+
+- **008 — Hardware-accelerated transcode (code).** Today `packages/transcoder/ffmpeg_transcoder.py`
+  hard-codes `libx264`. 008 extracts a pure, unit-tested command builder
+  (`packages/transcoder/hwaccel.py`) that selects `h264_nvenc`/`h264_qsv`/`h264_vaapi`/`libx264` via
+  a new `TRANSCODE_HWACCEL` setting (`auto` detects), with a runtime fallback to software if a HW
+  encode fails. No GPU needed in CI — the decision surface is unit-tested.
+- **009 — All-in-one image.** `Dockerfile.allinone` + `deploy/allinone/` (supervisord, nginx, first-
+  boot entrypoint/init). Ships jellyfin-ffmpeg so 008's `auto` resolves to a real GPU encoder when
+  `--gpus all` / `--device /dev/dri` is passed. Bundles the DB in the image — a deliberate single-box
+  trade-off (not for horizontal scaling).
+- **010 — CI/CD.** Adds `.github/workflows/release.yml`: on a `v*` tag, run the test suite, then
+  build & push `freeframe` (all-in-one), `freeframe-api`, `freeframe-web` to GHCR (amd64). Extends CI
+  to build the all-in-one image on PRs. Existing CI jobs are untouched.
 
 ## Dependency notes
 
@@ -54,6 +126,20 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJE
   the reviewer-safe share semantics (002). 004 cannot be verified end-to-end until a FreeFrame
   instance with 002+003 is running and reachable from projmgmt.
 - **001 and 005** have no dependencies and can be done in parallel with the rest.
+- **006 requires 003** — it calls the `/integrations/review-ingest` endpoint (003) with the
+  `X-Api-Key` integration auth. The tool's unit tests run standalone, but a real push needs a
+  deployed FreeFrame with 003.
+- **007 requires 006** — it reuses 006's `tools/resolve/freeframe_review.py` (the `fetch_comments`
+  client + the `~/.freeframe/resolve_links.json` sidecar that stores the token and `mark_in_frame`).
+  Its marker placement is only correct because 006 renders the whole timeline (`mark_in_frame = 0`).
+- **009 depends on 008** — the all-in-one image ships jellyfin-ffmpeg, but it only becomes *hardware*
+  transcode through 008's encoder-selection code. The image builds without 008; land 008 first so the
+  GPU actually gets used.
+- **010 depends on 009** — `release.yml` builds & pushes `Dockerfile.allinone`, and CI builds it on
+  PRs; both fail if 009 hasn't created that file. The api/web publish steps and the test gate are
+  independent of 009.
+- **008 is standalone** — no dependency; can land any time (it's pure transcoder code + a setting +
+  unit tests). It's the foundation for the GPU half of the deployment story.
 
 ## Findings considered and rejected
 

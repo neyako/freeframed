@@ -1,21 +1,34 @@
-import asyncio
 import json
-import os
 import shutil
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Optional
-import boto3
-from botocore.config import Config
+from typing import TypedDict
+
 from .base import BaseTranscoder, TranscodeJob, TranscodeResult, VideoMetadata
+from .hwaccel import build_hls_command, resolve_backend
+
+
+class WaveformData(TypedDict):
+    samples: list[float]
+    peak: float
+    source: str
 
 
 class FFmpegTranscoder(BaseTranscoder):
-    def __init__(self, s3_client, bucket: str, s3_endpoint: str = None):
+    def __init__(
+        self,
+        s3_client,
+        bucket: str,
+        s3_endpoint: str = None,
+        hwaccel: str = "auto",
+        vaapi_device: str = "/dev/dri/renderD128",
+    ):
         self.s3 = s3_client
         self.bucket = bucket
         self.s3_endpoint = s3_endpoint
+        self.hwaccel = hwaccel
+        self.vaapi_device = vaapi_device
     
     def _get_presigned_url(self, s3_key: str, expires_in: int = 7200) -> str:
         """Generate a presigned URL for streaming input to FFmpeg."""
@@ -60,9 +73,8 @@ class FFmpegTranscoder(BaseTranscoder):
         finally:
             shutil.rmtree(thumb_dir, ignore_errors=True)
 
-    async def generate_waveform(self, s3_key: str) -> dict:
+    async def generate_waveform(self, s3_key: str) -> WaveformData:
         """Generate waveform data for audio visualization using streaming."""
-        input_url = self._get_presigned_url(s3_key)
         # Simplified waveform: just return peak data (full waveform extraction is complex)
         return {"samples": [], "peak": 1.0, "source": s3_key}
 
@@ -83,7 +95,7 @@ class FFmpegTranscoder(BaseTranscoder):
                 "ffprobe", "-v", "quiet", "-print_format", "json",
                 "-show_streams", "-select_streams", "v:0", input_url,
             ]
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+            subprocess.run(cmd, capture_output=True, text=True, timeout=120)
 
             # 3. Build quality ladder based on available qualities
             QUALITY_MAP = {
@@ -96,48 +108,35 @@ class FFmpegTranscoder(BaseTranscoder):
             hls_dir = work_dir / "hls"
             hls_dir.mkdir()
 
-            # Build filter_complex and map args
-            # Use force_original_aspect_ratio=decrease to preserve aspect ratio,
-            # then pad to even dimensions required by libx264
-            split_outputs = "".join(f"[v{i}]" for i in range(len(qualities)))
-            filter_complex = f"[v:0]split={len(qualities)}{split_outputs};"
-            filter_complex += ";".join(
-                f"[v{i}]scale={QUALITY_MAP[q][0]}:force_original_aspect_ratio=decrease,pad=ceil(iw/2)*2:ceil(ih/2)*2[{q}]"
-                for i, q in enumerate(qualities)
-            )
+            backend = resolve_backend(self.hwaccel, self.vaapi_device)
 
-            ffmpeg_cmd = [
-                "ffmpeg", "-y", "-i", input_url,
-                "-filter_complex", filter_complex,
-            ]
-
-            for i, quality in enumerate(qualities):
-                scale, crf = QUALITY_MAP[quality]
-                ffmpeg_cmd += [
-                    "-map", f"[{quality}]", "-map", "a:0",
-                    f"-c:v:{i}", "libx264", f"-crf", str(crf), "-preset", "fast",
-                    "-force_key_frames", "expr:gte(t,n_forced*2)",
-                ]
-
-            segment_dir = hls_dir / "%v"
-            ffmpeg_cmd += [
-                "-f", "hls",
-                "-hls_time", "2",
-                "-hls_playlist_type", "vod",
-                "-hls_flags", "independent_segments",
-                "-hls_segment_type", "mpegts",
-                "-master_pl_name", "master.m3u8",
-                "-var_stream_map", " ".join(f"v:{i},a:{i}" for i in range(len(qualities))),
-                "-hls_segment_filename", str(hls_dir / "%v" / "seg_%03d.ts"),
-                str(hls_dir / "%v" / "playlist.m3u8"),
-            ]
-
-            # Create per-quality directories
             for q in qualities:
                 (hls_dir / q).mkdir(exist_ok=True)
 
+            ffmpeg_cmd = build_hls_command(
+                input_url, qualities, QUALITY_MAP, hls_dir, backend, self.vaapi_device
+            )
+
             # Timeout scales with expected duration - 4 hours for very large files
-            subprocess.run(ffmpeg_cmd, check=True, capture_output=True, timeout=14400)
+            try:
+                subprocess.run(ffmpeg_cmd, check=True, capture_output=True, timeout=14400)
+            except subprocess.CalledProcessError:
+                if backend == "software":
+                    raise
+
+                for child in hls_dir.iterdir():
+                    if child.is_dir() and not child.is_symlink():
+                        shutil.rmtree(child, ignore_errors=True)
+                    else:
+                        child.unlink(missing_ok=True)
+
+                for q in qualities:
+                    (hls_dir / q).mkdir(exist_ok=True)
+
+                ffmpeg_cmd = build_hls_command(
+                    input_url, qualities, QUALITY_MAP, hls_dir, "software", self.vaapi_device
+                )
+                subprocess.run(ffmpeg_cmd, check=True, capture_output=True, timeout=14400)
 
             # 4. Upload HLS files to S3
             uploaded_keys = []
@@ -173,7 +172,7 @@ class FFmpegTranscoder(BaseTranscoder):
                 thumbnail_keys=[thumbnail_key],
             )
 
-        except Exception as e:
+        except Exception as e:  # noqa  # noqa: BROAD_EXCEPT_OK - boundary converts failure to result.
             return TranscodeResult(success=False, error=str(e))
         finally:
             shutil.rmtree(work_dir, ignore_errors=True)
