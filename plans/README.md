@@ -35,11 +35,11 @@ do not modify the other repo from within a plan unless the plan's Scope says so.
 | 003 | Service-to-service API key + review-ingest endpoint | FreeFrame `apps/api` | P1 | L | 002 | DONE ✓ verified 06-29 |
 | 004 | projmgmt → FreeFrame review bridge (mint guest link on Editing→Review) | projmgmt | P1 | L | 002, 003 | TODO — ready (no drift; code deps landed) |
 | 005 | Project-tree vs final-video upload option | projmgmt | P2 | M | — | TODO — ready (no drift) |
-| 006 | DaVinci Resolve → FreeFrame "Push for Review" (auto-render timeline, upload, get link) | FreeFrame `tools/resolve` | P1 | L | 003 | DONE ✓ verified 06-29 |
-| 007 | DaVinci Resolve ← FreeFrame "Sync Comments" (pull comments onto timeline as markers) | FreeFrame `tools/resolve` | P1 | M | 006 | DONE ✓ verified 06-29 |
-| 008 | Hardware-accelerated transcode (NVENC/QSV/VAAPI + software fallback) | FreeFrame `packages/transcoder` + `apps/api` | P1 | L | — | DONE ✓ verified 06-29 |
-| 009 | True all-in-one Docker image (one container, GPU-ready, jellyfin-ffmpeg) | FreeFrame `Dockerfile.allinone` + `deploy/` | P1 | L | 008 | TODO |
-| 010 | CI/CD — publish images to GHCR on release (test-gated) + build all-in-one in CI | FreeFrame `.github/workflows` | P1 | M | 009 | TODO |
+| 006 | DaVinci Resolve → FreeFrame "Push for Review" (auto-render timeline, upload, get link) | FreeFrame `tools/resolve` | P1 | L | 003 | DONE ✓ verified 06-29 — ⚠ uncommitted |
+| 007 | DaVinci Resolve ← FreeFrame "Sync Comments" (pull comments onto timeline as markers) | FreeFrame `tools/resolve` | P1 | M | 006 | DONE ✓ verified 06-29 — ⚠ uncommitted |
+| 008 | Hardware-accelerated transcode (NVENC/QSV/VAAPI + software fallback) | FreeFrame `packages/transcoder` + `apps/api` | P1 | L | — | DONE ✓ verified 06-29 (committed `9d79a92`) |
+| 009 | True all-in-one Docker image (one container, GPU-ready, jellyfin-ffmpeg) | FreeFrame `Dockerfile.allinone` + `deploy/` | P1 | L | 008 | DONE ✓ static-verified 06-29 — ⚠ uncommitted, build-smoke not re-run |
+| 010 | CI/CD — publish images to GHCR on release (test-gated) + build all-in-one in CI | FreeFrame `.github/workflows` | P1 | M | 009 | DONE ✓ verified 06-29 — ⚠ uncommitted |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED (with one-line rationale)
 
@@ -64,6 +64,45 @@ Run against FreeFrame HEAD `c6eb4db` and projmgmt HEAD `1905a0b`.
   FreeFrame with 002+003 — that's a runtime/deploy precondition, not a code blocker.
 - **005 — TODO, refreshed: no drift.** Same projmgmt SHA `1905a0b`; drift diff empty; no
   dependencies. Executable right now.
+- **Nothing rejected or blocked.** No stale IN PROGRESS rows. No findings retired.
+
+## Reconcile log — 2026-06-29 (run 2)
+
+Run against FreeFrame HEAD `9d79a92` (was `c6eb4db` last run; `9d79a92` adds 008) and projmgmt HEAD
+`1905a0b`. This run verifies **006/007/008/009/010**, which the prior log had not yet covered even
+though the table marked them DONE.
+
+- **001/002/003 — re-confirmed.** Anchors still present on HEAD `9d79a92`: 001 `md:flex-row` in
+  `apps/web/app/share/[token]/page.tsx`; 002 `create_reviewer_share` + `test_reviewer_share.py`; 003
+  `review-ingest` route + `test_integration_ingest.py`. Committed (`d41f1e1`/`90dda1f`/`c6eb4db`).
+- **008 — DONE, verified, committed `9d79a92`.** All cheap criteria hold: `libx264` no longer in
+  `ffmpeg_transcoder.py`, no `apps.api` import under `packages/transcoder/`,
+  `hwaccel=settings.transcode_hwaccel` in `transcode_tasks.py`, `TRANSCODE_HWACCEL` in `.env.example`,
+  and `from packages.transcoder.hwaccel import select_backend, build_hls_command, resolve_backend`
+  imports clean. Full suite NOT re-run (cheap spot-check only).
+- **006 + 007 — DONE, verified, ⚠ UNCOMMITTED.** `tools/resolve/` is present but **untracked** (not in
+  git history). `py_compile` of all three scripts OK; `unittest discover` → **11 tests pass**;
+  `comment_to_marker(...,24)['frameId'] == 48`; no `requests` import (stdlib-only); README mentions
+  `freeframe_sync_comments`; `config.example.json` valid JSON with `PASTE_` placeholders (no real key).
+- **009 — DONE, STATIC-verified only, ⚠ UNCOMMITTED.** `Dockerfile.allinone`, `deploy/allinone/*`,
+  `.dockerignore` present but **untracked**. Static gates pass: `bash -n` on entrypoint.sh/init-app.sh,
+  supervisord.conf parses as INI, README documents `gpus all`, Dockerfile references `jellyfin-ffmpeg`.
+  **The plan's real gate — `docker build -f Dockerfile.allinone` + run smoke — was NOT re-run** (it's
+  inherently expensive / needs a Docker daemon; out of scope for a cheap reconcile). Treat the build as
+  verified-by-the-original-executor, re-confirmed static-only here.
+- **010 — DONE, verified, ⚠ UNCOMMITTED.** `.github/workflows/release.yml` (untracked) + the `ci.yml`
+  edit (modified, uncommitted). Both YAML files parse (validated via `ruby -ryaml`; system `python3`
+  lacks PyYAML). `needs: test` gate present, `packages: write` scoped, exactly 3
+  `docker/build-push-action@v6` (allinone/api/web), `ci.yml` has the "Build all-in-one image (no push)"
+  step.
+- **004 — TODO, re-confirmed: no drift.** projmgmt still at `1905a0b`; drift diff on
+  `src/actions/projects.ts` + `src/lib/nextcloud.ts` empty; `src/lib/freeframe.ts` absent (unexecuted).
+  Code deps 002 + 003 are DONE (002/003 committed). **Executable now.** End-to-end test still needs a
+  deployed, reachable FreeFrame (runtime precondition, not a code blocker).
+- **005 — TODO, re-confirmed: no drift.** Same projmgmt SHA; drift diff empty; no deps. Executable now.
+- **⚠ Action for the maintainer:** 006/007/009/010 (and the `ci.yml` edit) are **complete but never
+  committed** — they live only in the working tree on branch `advisor/009-all-in-one-docker-image`.
+  Commit them (or they're lost on a clean/checkout). 008 is the only one of 006–010 in git history.
 - **Nothing rejected or blocked.** No stale IN PROGRESS rows. No findings retired.
 
 ## Recommended sequencing
