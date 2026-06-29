@@ -222,3 +222,8 @@ CLAUDE.md
 
 .DS_Store
 .worktrees/
+
+# Agent tooling / scratch (not source)
+.omo/
+.playwright-cli/
+output/
