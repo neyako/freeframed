@@ -1,0 +1,6 @@
+{
+  "api_url": "http://localhost:8000",
+  "api_key": "PASTE_INTEGRATION_API_KEY_HERE",
+  "project_id": "PASTE_FREEFRAME_PROJECT_UUID_HERE",
+  "_comment": "api_url is the FreeFrame API origin that serves /integrations and /share. api_key must equal the server's INTEGRATION_API_KEY. project_id is the FreeFrame project UUID that holds review assets."
+}
