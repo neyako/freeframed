@@ -586,14 +586,18 @@ export function AssetGrid({
                         className="z-[100] min-w-[200px] rounded-xl border border-border bg-bg-elevated shadow-2xl py-1.5 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <DropdownMenu.Item
-                          onSelect={() => onAssetShare?.(asset)}
-                          className="flex items-center gap-2.5 mx-1 px-2.5 py-2 rounded-lg text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary cursor-pointer outline-none transition-colors"
-                        >
-                          <Share2 className="h-3.5 w-3.5 text-text-tertiary" />
-                          Create Share Link
-                        </DropdownMenu.Item>
-                        <DropdownMenu.Separator className="my-1 h-px bg-border mx-1" />
+                        {onAssetShare && (
+                          <>
+                            <DropdownMenu.Item
+                              onSelect={() => onAssetShare(asset)}
+                              className="flex items-center gap-2.5 mx-1 px-2.5 py-2 rounded-lg text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary cursor-pointer outline-none transition-colors"
+                            >
+                              <Share2 className="h-3.5 w-3.5 text-text-tertiary" />
+                              Create Share Link
+                            </DropdownMenu.Item>
+                            <DropdownMenu.Separator className="my-1 h-px bg-border mx-1" />
+                          </>
+                        )}
                         <DropdownMenu.Item
                           onSelect={() => onAssetDownload?.(asset)}
                           className="flex items-center gap-2.5 mx-1 px-2.5 py-2 rounded-lg text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary cursor-pointer outline-none transition-colors"

@@ -1,42 +1,34 @@
 "use client";
 
 import * as React from "react";
-import * as Dialog from "@radix-ui/react-dialog";
-import * as Tabs from "@radix-ui/react-tabs";
 import * as Select from "@radix-ui/react-select";
 import {
-  X,
   Copy,
   Check,
-  Trash2,
   Link2,
   Users,
   ChevronDown,
   Loader2,
   Share2,
-  Plus,
-  Search,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
-import { useShareLinks } from "@/hooks/use-share-links";
-import { ShareCreateDialog } from "@/components/projects/share-create-dialog";
-import type { ShareLink, AssetShare, SharePermission, Team, ShareLinkListItem, AssetResponse } from "@/types";
+import type { ShareLink, SharePermission, Team, AssetResponse } from "@/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface ShareLinkResponse {
-  share_link: ShareLink & { url: string };
-}
+type AssetShareLink = Omit<ShareLink, "created_by" | "deleted_at"> &
+  Partial<Pick<ShareLink, "created_by" | "deleted_at">> & { url?: string };
 
-interface ShareLinksListResponse {
-  share_links: (ShareLink & { url?: string })[];
-}
-
-interface AssetSharesResponse {
-  shares: AssetShare[];
+interface DirectShare {
+  id: string;
+  asset_id?: string | null;
+  folder_id?: string | null;
+  shared_with_user_id: string | null;
+  shared_with_team_id?: string | null;
+  permission: SharePermission;
+  created_at?: string;
 }
 
 interface TeamsResponse {
@@ -128,210 +120,136 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
-// ─── Link tab ─────────────────────────────────────────────────────────────────
-
-interface LinkTabProps {
+interface SingleLinkSectionProps {
   assetId: string;
 }
 
-function LinkTab({ assetId }: LinkTabProps) {
-  const [permission, setPermission] = React.useState<SharePermission>("view");
-  const [password, setPassword] = React.useState("");
-  const [expiresAt, setExpiresAt] = React.useState("");
-  const [allowDownload, setAllowDownload] = React.useState(false);
-  const [generating, setGenerating] = React.useState(false);
+function SingleLinkSection({ assetId }: SingleLinkSectionProps) {
+  const [link, setLink] = React.useState<AssetShareLink | null>(null);
+  const [loading, setLoading] = React.useState(true);
+  const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  const [generatedUrl, setGeneratedUrl] = React.useState<string | null>(null);
 
-  const [links, setLinks] = React.useState<(ShareLink & { url?: string })[]>(
-    [],
-  );
-  const [loadingLinks, setLoadingLinks] = React.useState(true);
-  const [deletingId, setDeletingId] = React.useState<string | null>(null);
-
-  // Load existing links
   React.useEffect(() => {
     if (!assetId) return;
-    setLoadingLinks(true);
-    api
-      .get<ShareLinksListResponse>(`/assets/${assetId}/share`)
-      .then((res) => setLinks(res.share_links))
-      .catch(() => setLinks([]))
-      .finally(() => setLoadingLinks(false));
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    void (async () => {
+      try {
+        const links = await api.get<AssetShareLink[]>(`/assets/${assetId}/shares`);
+        const existing =
+          links.find((candidate) => candidate.is_enabled) ??
+          links[0];
+        if (existing) {
+          if (!cancelled) setLink(existing);
+          return;
+        }
+
+        const created = await api.post<AssetShareLink>(
+          `/assets/${assetId}/share`,
+          {
+            permission: "comment",
+            allow_download: false,
+          },
+        );
+        if (!cancelled) setLink(created);
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Failed to load share link");
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [assetId]);
 
-  async function handleGenerate() {
-    setGenerating(true);
-    setError(null);
-    setGeneratedUrl(null);
-    try {
-      const body: Record<string, unknown> = {
-        permission,
-        allow_download: allowDownload,
-      };
-      if (password.trim()) body.password = password.trim();
-      if (expiresAt) body.expires_at = new Date(expiresAt).toISOString();
+  const url =
+    link?.url ??
+    (link
+      ? `${typeof window !== "undefined" ? window.location.origin : ""}/share/${link.token}`
+      : "");
 
-      const res = await api.post<ShareLinkResponse>(
-        `/assets/${assetId}/share`,
-        body,
+  async function patchLink(
+    updates: Partial<Pick<ShareLink, "permission" | "allow_download">>,
+  ) {
+    if (!link) return;
+    const previous = link;
+    setSaving(true);
+    setError(null);
+    setLink({ ...link, ...updates });
+    try {
+      const updated = await api.patch<AssetShareLink>(
+        `/share/${link.token}`,
+        updates,
       );
-      const newLink = res.share_link;
-      const url =
-        newLink.url ?? `${window.location.origin}/share/${newLink.token}`;
-      setGeneratedUrl(url);
-      setLinks((prev) => [...prev, { ...newLink, url }]);
+      setLink({ ...updated, url: previous.url ?? updated.url });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to generate link");
+      setLink(previous);
+      setError(err instanceof Error ? err.message : "Failed to update");
     } finally {
-      setGenerating(false);
+      setSaving(false);
     }
   }
 
-  async function handleDelete(linkId: string) {
-    setDeletingId(linkId);
-    try {
-      await api.delete(`/share/${linkId}`);
-      setLinks((prev) => prev.filter((l) => l.id !== linkId));
-    } catch {
-      // silent
-    } finally {
-      setDeletingId(null);
-    }
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 py-3">
+        <Loader2 className="h-4 w-4 animate-spin text-text-tertiary" />
+        <span className="text-xs text-text-tertiary">
+          Preparing share link…
+        </span>
+      </div>
+    );
+  }
+
+  if (!link) {
+    return (
+      <p className="py-2 text-xs text-status-error">
+        {error ?? "No share link"}
+      </p>
+    );
   }
 
   return (
-    <div className="space-y-5">
-      {/* Generator form */}
-      <div className="space-y-3">
-        <div className="grid grid-cols-2 gap-3">
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-text-secondary">
-              Permission
-            </label>
-            <PermissionSelect value={permission} onChange={setPermission} />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-text-secondary">
-              Expiry (optional)
-            </label>
-            <input
-              type="datetime-local"
-              value={expiresAt}
-              onChange={(e) => setExpiresAt(e.target.value)}
-              className="flex h-9 rounded-md border border-border bg-bg-secondary px-3 text-sm text-text-primary focus:outline-none focus:border-border-focus"
-            />
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-text-secondary">
-            Password (optional)
-          </label>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Leave blank for no password"
-            className="flex h-9 w-full rounded-md border border-border bg-bg-secondary px-3 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-border-focus"
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <Link2 className="h-4 w-4 shrink-0 text-text-tertiary" />
+        <span className="text-sm font-medium text-text-primary">
+          Anyone with the link
+        </span>
+        <div className="ml-auto">
+          <PermissionSelect
+            value={link.permission}
+            onChange={(permission) => void patchLink({ permission })}
+            disabled={saving}
           />
         </div>
-
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={allowDownload}
-            onChange={(e) => setAllowDownload(e.target.checked)}
-            className="rounded border-border"
-          />
-          <span className="text-sm text-text-secondary">Allow download</span>
-        </label>
-
-        {error && <p className="text-xs text-status-error">{error}</p>}
-
-        <Button
-          size="sm"
-          onClick={handleGenerate}
-          loading={generating}
-          className="w-full"
-        >
-          <Link2 className="h-4 w-4" />
-          Generate link
-        </Button>
       </div>
 
-      {/* Generated URL */}
-      {generatedUrl && (
-        <div className="flex items-center gap-2 rounded-md border border-border bg-bg-tertiary px-3 py-2">
-          <span className="flex-1 truncate font-mono text-xs text-text-primary">
-            {generatedUrl}
-          </span>
-          <CopyButton text={generatedUrl} />
-        </div>
-      )}
+      <div className="flex items-center gap-2 rounded-md border border-border bg-bg-tertiary px-3 py-2">
+        <span className="flex-1 truncate font-mono text-xs text-text-primary">
+          {url}
+        </span>
+        <CopyButton text={url} />
+      </div>
 
-      {/* Existing links */}
-      {(loadingLinks || links.length > 0) && (
-        <div className="space-y-2">
-          <p className="text-xs font-medium text-text-secondary">
-            Existing links
-          </p>
-          {loadingLinks ? (
-            <div className="flex items-center gap-2 py-2">
-              <Loader2 className="h-4 w-4 animate-spin text-text-tertiary" />
-              <span className="text-xs text-text-tertiary">Loading…</span>
-            </div>
-          ) : (
-            <div className="space-y-2 max-h-48 overflow-y-auto">
-              {links.map((link) => {
-                const linkUrl =
-                  link.url ??
-                  `${typeof window !== "undefined" ? window.location.origin : ""}/share/${link.token}`;
-                return (
-                  <div
-                    key={link.id}
-                    className="flex items-center gap-2 rounded-md border border-border bg-bg-secondary px-3 py-2"
-                  >
-                    <div className="flex-1 min-w-0 space-y-0.5">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-medium text-text-primary capitalize">
-                          {link.permission}
-                        </span>
-                        {link.expires_at && (
-                          <span className="text-2xs text-text-tertiary">
-                            expires{" "}
-                            {new Date(link.expires_at).toLocaleDateString()}
-                          </span>
-                        )}
-                        {link.allow_download && (
-                          <span className="text-2xs text-text-tertiary">
-                            download
-                          </span>
-                        )}
-                      </div>
-                      <span className="font-mono text-2xs text-text-tertiary truncate block">
-                        {linkUrl}
-                      </span>
-                    </div>
-                    <CopyButton text={linkUrl} />
-                    <button
-                      onClick={() => handleDelete(link.id)}
-                      disabled={deletingId === link.id}
-                      className="text-text-tertiary hover:text-status-error transition-colors disabled:opacity-50"
-                    >
-                      {deletingId === link.id ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Trash2 className="h-3.5 w-3.5" />
-                      )}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
+      <label className="flex cursor-pointer items-center gap-2">
+        <input
+          type="checkbox"
+          checked={link.allow_download}
+          onChange={(e) => void patchLink({ allow_download: e.target.checked })}
+          disabled={saving}
+          className="rounded border-border"
+        />
+        <span className="text-sm text-text-secondary">Allow download</span>
+      </label>
+
+      {error && <p className="text-xs text-status-error">{error}</p>}
     </div>
   );
 }
@@ -361,7 +279,7 @@ function DirectTab({ assetId, orgId }: DirectTabProps) {
   const [teams, setTeams] = React.useState<Team[]>([]);
   const [loadingTeams, setLoadingTeams] = React.useState(false);
 
-  const [shares, setShares] = React.useState<AssetShare[]>([]);
+  const [shares, setShares] = React.useState<DirectShare[]>([]);
   const [loadingShares, setLoadingShares] = React.useState(true);
 
   // Load teams for selector
@@ -380,8 +298,8 @@ function DirectTab({ assetId, orgId }: DirectTabProps) {
     if (!assetId) return;
     setLoadingShares(true);
     api
-      .get<AssetSharesResponse>(`/assets/${assetId}/shares`)
-      .then((res) => setShares(res.shares))
+      .get<DirectShare[]>(`/assets/${assetId}/direct-shares`)
+      .then((res) => setShares(res))
       .catch(() => setShares([]))
       .finally(() => setLoadingShares(false));
   }, [assetId]);
@@ -393,14 +311,14 @@ function DirectTab({ assetId, orgId }: DirectTabProps) {
     setUserError(null);
     setUserSuccess(false);
     try {
-      const res = await api.post<{ share: AssetShare }>(
+      const res = await api.post<DirectShare>(
         `/assets/${assetId}/share/user`,
         {
           email: userEmail.trim(),
           permission: userPermission,
         },
       );
-      setShares((prev) => [...prev, res.share]);
+      setShares((prev) => [...prev, res]);
       setUserEmail("");
       setUserSuccess(true);
       setTimeout(() => setUserSuccess(false), 3000);
@@ -418,14 +336,14 @@ function DirectTab({ assetId, orgId }: DirectTabProps) {
     setTeamError(null);
     setTeamSuccess(false);
     try {
-      const res = await api.post<{ share: AssetShare }>(
+      const res = await api.post<DirectShare>(
         `/assets/${assetId}/share/team`,
         {
           team_id: selectedTeamId,
           permission: teamPermission,
         },
       );
-      setShares((prev) => [...prev, res.share]);
+      setShares((prev) => [...prev, res]);
       setSelectedTeamId("");
       setTeamSuccess(true);
       setTimeout(() => setTeamSuccess(false), 3000);
@@ -443,8 +361,8 @@ function DirectTab({ assetId, orgId }: DirectTabProps) {
         <p className="text-xs font-medium text-text-secondary">
           Share with user
         </p>
-        <form onSubmit={handleShareUser} className="flex items-end gap-2">
-          <div className="flex-1">
+        <form onSubmit={handleShareUser} className="space-y-2">
+          <div>
             <input
               type="email"
               value={userEmail}
@@ -453,18 +371,21 @@ function DirectTab({ assetId, orgId }: DirectTabProps) {
               className="flex h-9 w-full rounded-md border border-border bg-bg-secondary px-3 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-border-focus"
             />
           </div>
-          <PermissionSelect
-            value={userPermission}
-            onChange={setUserPermission}
-          />
-          <Button
-            type="submit"
-            size="sm"
-            loading={sharingUser}
-            disabled={!userEmail.trim()}
-          >
-            Share
-          </Button>
+          <div className="flex items-center gap-2">
+            <PermissionSelect
+              value={userPermission}
+              onChange={setUserPermission}
+            />
+            <Button
+              type="submit"
+              size="sm"
+              loading={sharingUser}
+              disabled={!userEmail.trim()}
+              className="ml-auto"
+            >
+              Share
+            </Button>
+          </div>
         </form>
         {userError && <p className="text-xs text-status-error">{userError}</p>}
         {userSuccess && (
@@ -477,8 +398,8 @@ function DirectTab({ assetId, orgId }: DirectTabProps) {
         <p className="text-xs font-medium text-text-secondary">
           Share with team
         </p>
-        <form onSubmit={handleShareTeam} className="flex items-end gap-2">
-          <div className="flex-1">
+        <form onSubmit={handleShareTeam} className="space-y-2">
+          <div>
             <select
               value={selectedTeamId}
               onChange={(e) => setSelectedTeamId(e.target.value)}
@@ -493,18 +414,21 @@ function DirectTab({ assetId, orgId }: DirectTabProps) {
               ))}
             </select>
           </div>
-          <PermissionSelect
-            value={teamPermission}
-            onChange={setTeamPermission}
-          />
-          <Button
-            type="submit"
-            size="sm"
-            loading={sharingTeam}
-            disabled={!selectedTeamId}
-          >
-            Share
-          </Button>
+          <div className="flex items-center gap-2">
+            <PermissionSelect
+              value={teamPermission}
+              onChange={setTeamPermission}
+            />
+            <Button
+              type="submit"
+              size="sm"
+              loading={sharingTeam}
+              disabled={!selectedTeamId}
+              className="ml-auto"
+            >
+              Share
+            </Button>
+          </div>
         </form>
         {teamError && <p className="text-xs text-status-error">{teamError}</p>}
         {teamSuccess && (
@@ -562,41 +486,20 @@ interface ShareDialogProps {
 
 export function ShareDialog({
   assetId,
-  assetName,
   projectId,
-  asset,
 }: ShareDialogProps) {
   const [dropdownOpen, setDropdownOpen] = React.useState(false);
-  const [search, setSearch] = React.useState("");
-  const [addingToToken, setAddingToToken] = React.useState<string | null>(null);
-  const [addedToToken, setAddedToToken] = React.useState<string | null>(null);
-  const [createDialogOpen, setCreateDialogOpen] = React.useState(false);
   const dropdownRef = React.useRef<HTMLDivElement>(null);
-
-  const { shareLinks, isLoading, mutateShareLinks } = useShareLinks(projectId ?? "");
-
-  // Stable references for ShareCreateDialog props
-  const stableAssets = React.useMemo(
-    () => (asset ? [asset as AssetResponse] : []),
-    [asset],
-  );
-  const emptyFolders = React.useMemo(() => [] as never[], []);
-  const stablePreselectedItem = React.useMemo(
-    () =>
-      asset
-        ? { type: "asset" as const, id: asset.id, name: asset.name }
-        : { type: "asset" as const, id: assetId, name: assetName || "Asset" },
-    [asset, assetId, assetName],
-  );
 
   // Close dropdown on outside click
   React.useEffect(() => {
     if (!dropdownOpen) return;
     function handleClick(e: MouseEvent) {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(e.target as Node)
-      ) {
+      const target = e.target;
+      const isSelectPortal =
+        target instanceof HTMLElement &&
+        target.closest("[data-radix-popper-content-wrapper]");
+      if (dropdownRef.current && !dropdownRef.current.contains(target as Node) && !isSelectPortal) {
         setDropdownOpen(false);
       }
     }
@@ -614,168 +517,35 @@ export function ShareDialog({
     return () => document.removeEventListener("keydown", handleKey);
   }, [dropdownOpen]);
 
-  const filteredLinks = React.useMemo(() => {
-    if (!search.trim()) return shareLinks;
-    const q = search.toLowerCase();
-    return shareLinks.filter(
-      (l) =>
-        l.title.toLowerCase().includes(q) ||
-        l.target_name.toLowerCase().includes(q),
-    );
-  }, [shareLinks, search]);
-
-  async function handleAddToLink(link: ShareLinkListItem) {
-    setAddingToToken(link.token);
-    try {
-      await api.post(`/share/${link.token}/add-asset/${assetId}`, {});
-      setAddedToToken(link.token);
-      mutateShareLinks();
-      setTimeout(() => {
-        setAddedToToken(null);
-        setDropdownOpen(false);
-      }, 1500);
-    } catch {
-      // Could show error, but keeping simple
-    } finally {
-      setAddingToToken(null);
-    }
-  }
-
-  function handleNewShareLink() {
-    setDropdownOpen(false);
-    setCreateDialogOpen(true);
-  }
-
   return (
-    <>
-      <div className="relative" ref={dropdownRef}>
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={() => setDropdownOpen(!dropdownOpen)}
+    <div className="relative" ref={dropdownRef}>
+      <Button
+        variant="secondary"
+        size="sm"
+        onClick={() => setDropdownOpen(!dropdownOpen)}
+        className={cn(dropdownOpen && "bg-bg-hover")}
+      >
+        <Share2 className="h-4 w-4" />
+        Share
+      </Button>
+
+      {dropdownOpen && (
+        <div
           className={cn(
-            dropdownOpen && "bg-bg-hover",
+            "fixed left-2 right-2 top-12 z-50 w-auto sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-1.5 sm:w-80",
+            "rounded-xl border border-border bg-bg-elevated p-3 shadow-xl",
+            "animate-in fade-in-0 zoom-in-95 duration-150 space-y-4",
           )}
         >
-          <Share2 className="h-4 w-4" />
-          Share
-        </Button>
-
-        {dropdownOpen && (
-          <div
-            className={cn(
-              "absolute right-0 top-full mt-1.5 z-50 w-80",
-              "rounded-xl border border-border bg-bg-elevated shadow-xl",
-              "animate-in fade-in-0 zoom-in-95 duration-150",
-            )}
-          >
-            {/* New Share Link button */}
-            <div className="p-2">
-              <button
-                onClick={handleNewShareLink}
-                className="flex w-full items-center justify-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-white hover:bg-accent/90 transition-colors"
-              >
-                <Plus className="h-4 w-4" />
-                New Share Link
-              </button>
-            </div>
-
-            {/* Divider + existing links */}
-            {projectId && (
-              <div className="border-t border-border">
-                <p className="px-3 pt-2.5 pb-1.5 text-xs font-medium text-text-tertiary">
-                  Add to Existing Share Links
-                </p>
-
-                {/* Search (only if more than 3 links) */}
-                {shareLinks.length > 3 && (
-                  <div className="px-2 pb-2">
-                    <div className="relative">
-                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-text-tertiary" />
-                      <input
-                        type="text"
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        placeholder={`Search ${shareLinks.length} Share Links`}
-                        className="flex h-8 w-full rounded-md border border-border bg-bg-secondary pl-8 pr-3 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-accent"
-                        autoFocus
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {/* Links list */}
-                <div className="max-h-72 overflow-y-auto px-1 pb-1.5">
-                  {isLoading ? (
-                    <div className="flex items-center justify-center py-6">
-                      <Loader2 className="h-4 w-4 animate-spin text-text-tertiary" />
-                    </div>
-                  ) : filteredLinks.length === 0 ? (
-                    <p className="py-4 text-center text-xs text-text-tertiary">
-                      {search ? "No matching share links" : "No share links yet"}
-                    </p>
-                  ) : (
-                    filteredLinks.map((link) => {
-                      const isAdding = addingToToken === link.token;
-                      const isAdded = addedToToken === link.token;
-                      return (
-                        <button
-                          key={link.id}
-                          onClick={() => handleAddToLink(link)}
-                          disabled={isAdding || isAdded}
-                          className={cn(
-                            "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors",
-                            isAdded
-                              ? "bg-status-success/10"
-                              : "hover:bg-bg-hover",
-                            "disabled:opacity-70",
-                          )}
-                        >
-                          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-bg-tertiary shrink-0">
-                            {isAdding ? (
-                              <Loader2 className="h-4 w-4 animate-spin text-text-tertiary" />
-                            ) : isAdded ? (
-                              <Check className="h-4 w-4 text-status-success" />
-                            ) : (
-                              <Link2 className="h-4 w-4 text-text-tertiary" />
-                            )}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-sm text-text-primary truncate">
-                              {link.title || link.target_name}
-                            </p>
-                            {isAdded && (
-                              <p className="text-[10px] text-status-success">
-                                Asset added!
-                              </p>
-                            )}
-                          </div>
-                        </button>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-            )}
+          <SingleLinkSection assetId={assetId} />
+          <div className="border-t border-border pt-3">
+            <p className="mb-2 text-xs font-medium text-text-secondary">
+              Share with people
+            </p>
+            <DirectTab assetId={assetId} orgId={projectId} />
           </div>
-        )}
-      </div>
-
-      {/* ShareCreateDialog for new link */}
-      {projectId && (
-        <ShareCreateDialog
-          open={createDialogOpen}
-          onOpenChange={setCreateDialogOpen}
-          projectId={projectId}
-          currentFolderId={asset?.folder_id ?? null}
-          assets={stableAssets}
-          folders={emptyFolders}
-          preselectedItem={stablePreselectedItem}
-          onShareCreated={() => {
-            mutateShareLinks();
-          }}
-        />
+        </div>
       )}
-    </>
+    </div>
   );
 }

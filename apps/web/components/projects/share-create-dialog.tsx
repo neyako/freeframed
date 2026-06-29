@@ -913,16 +913,20 @@ function LinkCreatedPhase({ result, allResults, onSelectResult, onDone, onAdvanc
 
       {/* Footer */}
       <div className="flex items-center justify-between border-t border-border px-5 py-3">
-        <button
-          onClick={() => {
-            onAdvancedSettings?.(result.token)
-            onDone()
-          }}
-          className="text-xs text-text-tertiary hover:text-text-secondary transition-colors flex items-center gap-1"
-        >
-          Advanced settings
-          <ExternalLink className="h-3 w-3" />
-        </button>
+        {onAdvancedSettings ? (
+          <button
+            onClick={() => {
+              onAdvancedSettings(result.token)
+              onDone()
+            }}
+            className="text-xs text-text-tertiary hover:text-text-secondary transition-colors flex items-center gap-1"
+          >
+            Advanced settings
+            <ExternalLink className="h-3 w-3" />
+          </button>
+        ) : (
+          <span />
+        )}
         <div className="flex items-center gap-2">
           <CopyButton text={shareUrl} label="Copy Link" />
           <Button size="sm" onClick={onDone}>

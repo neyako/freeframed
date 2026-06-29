@@ -40,6 +40,13 @@ do not modify the other repo from within a plan unless the plan's Scope says so.
 | 008 | Hardware-accelerated transcode (NVENC/QSV/VAAPI + software fallback) | FreeFrame `packages/transcoder` + `apps/api` | P1 | L | — | DONE ✓ verified 06-29 (committed `9d79a92`) |
 | 009 | True all-in-one Docker image (one container, GPU-ready, jellyfin-ffmpeg) | FreeFrame `Dockerfile.allinone` + `deploy/` | P1 | L | 008 | DONE ✓ verified 06-29 (build+run smoke passed, committed) |
 | 010 | CI/CD — publish images to GHCR on release (test-gated) + build all-in-one in CI | FreeFrame `.github/workflows` | P1 | M | 009 | DONE ✓ verified 06-29 — ⚠ uncommitted |
+| 011 | Responsive mobile layout for the **editor** review page (stack viewer + comments, mirror 001) | FreeFrame `apps/web` | P1 | S–M | — | TODO — ready (found by live testing 06-29) |
+| 012 | Fix browser uploads **and guest video playback** in the all-in-one image (MinIO 0.0.0.0 + S3_PUBLIC_ENDPOINT + CORS) | FreeFrame `Dockerfile.allinone` + `deploy/` | P1 | S–M | 009 | DONE ✓ verified 06-29 — branch `advisor/012-allinone-upload-endpoint-fix`, commit pending |
+| 013 | Share viewer comment panel — bottom toggle on mobile + open only when comments exist (#1b, #5) | FreeFrame `apps/web` | P2 | S–M | — | TODO — ready |
+| 014 | Drag-and-drop upload onto the project grid (#2) | FreeFrame `apps/web` | P2 | S–M | — | TODO — ready |
+| 015 | Single Drive-style share link per asset; remove multi-link UI (#3, full cleanup, keep people-share) | FreeFrame `apps/web` | P1 | L | — | DONE ✓ verified 06-30 — single-link asset Share UI + management cleanup |
+| 016 | Open an asset on a single click/tap instead of double-click (#4) | FreeFrame `apps/web` | P2 | S | — | TODO — ready |
+| 019 | Extend single-link sharing to folders/projects/bulk; retire ShareCreateDialog (#3 completion) | FreeFrame `apps/web` | P2 | L | 015 | TODO — ready (the part 015 deferred) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED (with one-line rationale)
 
@@ -108,6 +115,42 @@ though the table marked them DONE.
   `ffmpeg -encoders` lists `h264_nvenc`/`h264_qsv`/`h264_vaapi`. The earlier "build not re-run"
   caveat is now closed. (Run on an arm64 host under amd64 emulation; GPU passthrough N/A on macOS.)
 - **Nothing rejected or blocked.** No stale IN PROGRESS rows. No findings retired.
+
+## New findings — live testing of the all-in-one image (2026-06-29 run 2)
+
+While running `freeframe:allinone` locally (HEAD `d229011`), two real defects surfaced. Both captured
+as plans rather than fixed in-session (advisor lane):
+
+- **011 — editor review page unusable on mobile.** `/projects/{id}/assets/{assetId}`
+  (`apps/web/app/(dashboard)/projects/[id]/assets/[assetId]/page.tsx`) hard-codes a desktop 2-column
+  layout (`flex` row + fixed `w-[360px]` sidebar, lines ~403/412) that never stacks; on a phone the
+  sidebar is wider than the viewport and the video collapses to a sliver. Plan 001 already solved the
+  identical problem for the **share** viewer — 011 copies that proven `flex-col md:flex-row` /
+  `w-full h-[55vh] md:w-[360px]` / `matchMedia` recipe to the editor page. No deps; ready.
+- **012 — browser uploads broken in the all-in-one image.** Uploads are presigned multipart PUTs
+  **browser → MinIO**, but the image binds MinIO to `127.0.0.1:9000` (loopback-only, unreachable via a
+  published port) and leaves `S3_PUBLIC_ENDPOINT` unset, so presigned URLs point at an internal address;
+  bucket CORS (from `FRONTEND_URL=http://localhost`) also won't match a non-`:80` origin. Fix is
+  config-only (bind `0.0.0.0:9000`, `EXPOSE`/publish 9000, default `S3_PUBLIC_ENDPOINT`, document
+  `FRONTEND_URL`/`S3_PUBLIC_ENDPOINT` overrides). Verified live: rebinding + the two env vars made the
+  CORS preflight pass and uploads work. Depends on 009 (edits that image's files); ready.
+- **Known follow-up (not yet a plan):** the dashboard shell `app/(dashboard)/layout.tsx` nav rail does
+  not collapse on mobile (~56px wasted) — candidate **Plan 017** (called out in 011's maintenance notes).
+
+## Review-UX requests — 5 items from live testing (2026-06-29)
+
+The maintainer raised five UX/bug items while testing. Mapping to plans (HEAD `d229011`):
+
+| Request | Plan(s) | Notes |
+|---------|---------|-------|
+| #1 — guest link can't play video | **012** | **Same root cause as the upload bug**: HLS `.ts` segments are presigned (`hls_proxy.py:78`) to the unreachable internal MinIO. 012's fix (MinIO `0.0.0.0` + `S3_PUBLIC_ENDPOINT`) fixes playback too; 012 now verifies the stream path. The running container's live patch already makes it play — reload the share link. |
+| #1 — comment-toggle placement (mobile) | **013** | Bottom-anchored “Comments (N)” button + in-panel collapse handle; hide the top-corner toggle on mobile. |
+| #2 — drag-n-drop upload | **014** | Drop files onto the project grid → `startUpload` to the current folder; keep the dialog as fallback. |
+| #3 — Drive-style share links | **015** (asset) + **019** (folder/project/bulk) | **Decision: full cleanup + keep people-share.** 015 does per-asset single-link + removes the management section, but **keeps `ShareCreateDialog`** (an executor correctly blocked on deleting it — folder/bulk/project share depend on it). 019 (depends on 015) extends single-link to folders/projects/bulk and finally retires `ShareCreateDialog`. Frontend-only — backend unchanged. |
+| #4 — 1-click/tap preview | **016** | `asset-grid` single click opens (share mode still toggles selection). |
+| #5 — hide comment panel when no comments | **011 (editor) + 013 (share viewer)** | Panel auto-opens once only when comments exist; otherwise collapsed, user opens via toggle. |
+
+Decisions captured via AskUserQuestion: share rework = **full cleanup**; **keep** direct people-share.
 
 ## Recommended sequencing
 

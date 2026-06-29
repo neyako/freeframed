@@ -5,24 +5,15 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import Link from "next/link";
 import * as Dialog from "@radix-ui/react-dialog";
-import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import {
   Upload,
   X,
-  FolderOpen,
-  Link as LinkIcon,
   Download,
   Share2,
   Plus,
-  Trash2,
-  ChevronDown,
   MessageSquare,
   FolderPlus,
   Folder as FolderIcon,
-  FileText,
-  MoreHorizontal,
-  MinusCircle,
-  ExternalLink,
   Users,
 } from "lucide-react";
 import { cn, formatRelativeTime, formatBytes } from "@/lib/utils";
@@ -39,13 +30,7 @@ import { useViewStore } from "@/stores/view-store";
 import { useBreadcrumbStore } from "@/stores/breadcrumb-store";
 import { useComments } from "@/hooks/use-comments";
 import { useFolders, useTrash } from "@/hooks/use-folders";
-import { useShareLinks } from "@/hooks/use-share-links";
 import { FolderTree } from "@/components/projects/folder-tree";
-import { ShareLinksTable } from "@/components/projects/share-links-table";
-import {
-  ShareLinkContent,
-  ShareLinkSettingsPanel,
-} from "@/components/projects/share-link-detail";
 import { NameDialog } from "@/components/projects/name-dialog";
 import { ShareCreateDialog } from "@/components/projects/share-create-dialog";
 import { ProjectMembersDialog } from "@/components/projects/project-members-dialog";
@@ -57,7 +42,6 @@ import type {
   ProjectMember,
   User,
   Folder,
-  ShareLink,
 } from "@/types";
 
 export default function ProjectDetailPage() {
@@ -71,7 +55,6 @@ export default function ProjectDetailPage() {
   const [pendingFiles, setPendingFiles] = React.useState<File[]>([]);
   const [selectedAsset, setSelectedAsset] =
     React.useState<AssetResponse | null>(null);
-  const [shareLinksExpanded, setShareLinksExpanded] = React.useState(true);
   const [rightTab, setRightTab] = React.useState<"comments" | "fields">(
     "comments",
   );
@@ -81,10 +64,6 @@ export default function ProjectDetailPage() {
     searchParams.get("folder") || null,
   );
   const [showTrash, setShowTrash] = React.useState(false);
-  const [showShareLinks, setShowShareLinks] = React.useState(false);
-  const [selectedShareLink, setSelectedShareLink] = React.useState<
-    string | null
-  >(null);
   const [folderDialogOpen, setFolderDialogOpen] = React.useState(false);
   const [folderDialogParentId, setFolderDialogParentId] = React.useState<
     string | null
@@ -133,13 +112,6 @@ export default function ProjectDetailPage() {
   } = useFolders(projectId);
 
   const { trash, mutateTrash } = useTrash(projectId);
-  const {
-    shareLinks,
-    toggleEnabled,
-    deleteShareLink,
-    createFolderShare,
-    mutateShareLinks,
-  } = useShareLinks(projectId);
 
   // Comments for the selected asset
   const selectedVersionId = selectedAsset?.latest_version?.id || null;
@@ -292,7 +264,6 @@ export default function ProjectDetailPage() {
   const canCreateFolder = currentRole === "owner" || currentRole === "editor";
   const canShare = currentRole === "owner" || currentRole === "editor";
   const canManageMembers = currentRole === "owner";
-  const canSeeShareLinks = currentRole === "owner" || currentRole === "editor";
   const canComment = currentRole !== "viewer";
 
   function openShareDialog(assetIds: string[], folderIds: string[]) {
@@ -365,8 +336,6 @@ export default function ProjectDetailPage() {
     (folderId: string | null) => {
       setCurrentFolderId(folderId);
       setShowTrash(false);
-      setShowShareLinks(false);
-      setSelectedShareLink(null);
       const url = folderId
         ? `/projects/${projectId}?folder=${folderId}`
         : `/projects/${projectId}`;
@@ -409,8 +378,6 @@ export default function ProjectDetailPage() {
             onShowTrash={() => {
               setShowTrash(true);
               setCurrentFolderId(null);
-              setShowShareLinks(false);
-              setSelectedShareLink(null);
             }}
             onCreateFolder={async (_name, parentId) => {
               setFolderDialogParentId(parentId);
@@ -433,155 +400,6 @@ export default function ProjectDetailPage() {
             }}
           />
         </div>
-
-        {/* Share Links section — only visible to owner/editor */}
-        {canSeeShareLinks && <div className="px-3 py-2 border-t border-border">
-          <div className="w-full flex items-center justify-between px-2 mb-1">
-            <span
-              className="text-2xs font-semibold text-text-tertiary uppercase tracking-wider cursor-pointer"
-              onClick={() => setShareLinksExpanded(!shareLinksExpanded)}
-            >
-              Share Links
-            </span>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowShareLinks(false);
-                  setShowTrash(false);
-                  openShareDialog([], []);
-                }}
-                className="text-text-tertiary hover:text-text-primary transition-colors"
-                title="Create share link"
-              >
-                <Plus className="h-3.5 w-3.5" />
-              </button>
-              <button
-                onClick={() => setShareLinksExpanded(!shareLinksExpanded)}
-                className="text-text-tertiary hover:text-text-primary transition-colors"
-              >
-                <ChevronDown
-                  className={cn(
-                    "h-3 w-3 transition-transform",
-                    !shareLinksExpanded && "-rotate-90",
-                  )}
-                />
-              </button>
-            </div>
-          </div>
-
-          {shareLinksExpanded && (
-            <div className="space-y-0.5">
-              <button
-                onClick={() => {
-                  setShowShareLinks(true);
-                  setSelectedShareLink(null);
-                  setShowTrash(false);
-                  setCurrentFolderId(null);
-                }}
-                className={cn(
-                  "w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors",
-                  showShareLinks && !selectedShareLink
-                    ? "bg-bg-hover text-text-primary"
-                    : "text-text-secondary hover:bg-bg-hover hover:text-text-primary",
-                )}
-              >
-                <LinkIcon className="h-4 w-4" />
-                <span>All Share Links ({shareLinks.length})</span>
-              </button>
-              {shareLinks.map((link) => (
-                <div
-                  key={link.token}
-                  className={cn(
-                    "group w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm transition-colors cursor-pointer",
-                    selectedShareLink === link.token
-                      ? "bg-bg-hover text-text-primary"
-                      : "text-text-secondary hover:bg-bg-hover hover:text-text-primary",
-                  )}
-                  onClick={() => {
-                    setShowShareLinks(true);
-                    setSelectedShareLink(link.token);
-                    setShowTrash(false);
-                    setCurrentFolderId(null);
-                  }}
-                >
-                  {link.share_type === "folder" ? (
-                    <FolderIcon className="h-4 w-4 shrink-0" />
-                  ) : (
-                    <FileText className="h-4 w-4 shrink-0" />
-                  )}
-                  <span className="truncate flex-1">
-                    {link.title || link.target_name}
-                  </span>
-                  <DropdownMenu.Root>
-                    <DropdownMenu.Trigger asChild>
-                      <button
-                        className="h-5 w-5 flex items-center justify-center rounded text-text-tertiary hover:text-text-primary opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                        }}
-                      >
-                        <MoreHorizontal className="h-3.5 w-3.5" />
-                      </button>
-                    </DropdownMenu.Trigger>
-                    <DropdownMenu.Portal>
-                      <DropdownMenu.Content
-                        className="z-50 min-w-[180px] rounded-xl border border-border bg-bg-secondary p-1 shadow-xl"
-                        sideOffset={4}
-                        align="end"
-                      >
-                        <DropdownMenu.Item
-                          className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary cursor-pointer outline-none transition-colors"
-                          onSelect={() =>
-                            window.open(
-                              `${window.location.origin}/share/${link.token}`,
-                              "_blank",
-                            )
-                          }
-                        >
-                          <ExternalLink className="h-4 w-4 text-text-tertiary" />
-                          Open Share
-                        </DropdownMenu.Item>
-                        <DropdownMenu.Item
-                          className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary cursor-pointer outline-none transition-colors"
-                          onSelect={() =>
-                            navigator.clipboard.writeText(
-                              `${window.location.origin}/share/${link.token}`,
-                            )
-                          }
-                        >
-                          <LinkIcon className="h-4 w-4 text-text-tertiary" />
-                          Copy Link
-                        </DropdownMenu.Item>
-                        <DropdownMenu.Separator className="my-1 h-px bg-border" />
-                        <DropdownMenu.Item
-                          className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary cursor-pointer outline-none transition-colors"
-                          onSelect={() =>
-                            toggleEnabled(link.token, !link.is_enabled)
-                          }
-                        >
-                          <MinusCircle className="h-4 w-4 text-text-tertiary" />
-                          {link.is_enabled ? "Disable Access" : "Enable Access"}
-                        </DropdownMenu.Item>
-                        <DropdownMenu.Item
-                          className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-status-error hover:bg-status-error/10 cursor-pointer outline-none transition-colors"
-                          onSelect={async () => {
-                            await deleteShareLink(link.token);
-                            if (selectedShareLink === link.token)
-                              setSelectedShareLink(null);
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                          Delete
-                        </DropdownMenu.Item>
-                      </DropdownMenu.Content>
-                    </DropdownMenu.Portal>
-                  </DropdownMenu.Root>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>}
 
         {/* Spacer */}
         <div className="flex-1" />
@@ -627,30 +445,7 @@ export default function ProjectDetailPage() {
         onClick={() => setSelectedAsset(null)}
       >
         <div className="px-5 pt-3 pb-6 space-y-3">
-          {/* Asset grid, Share links, or Trash view */}
-          {showShareLinks && !selectedShareLink ? (
-            <ShareLinksTable
-              shareLinks={shareLinks}
-              onSelectLink={(token) => setSelectedShareLink(token)}
-              onToggleEnabled={(token, enabled) =>
-                toggleEnabled(token, enabled)
-              }
-              onViewActivity={(token) => setSelectedShareLink(token)}
-              frontendUrl={
-                typeof window !== "undefined" ? window.location.origin : ""
-              }
-            />
-          ) : showShareLinks && selectedShareLink ? (
-            <ShareLinkContent
-              token={selectedShareLink}
-              projectId={projectId}
-              onBack={() => setSelectedShareLink(null)}
-              frontendUrl={
-                typeof window !== "undefined" ? window.location.origin : ""
-              }
-              onUpdate={mutateShareLinks}
-            />
-          ) : showTrash ? (
+          {showTrash ? (
             <div className="flex-1 overflow-y-auto">
               <h2 className="text-sm font-medium text-text-primary mb-3">
                 Recently Deleted
@@ -764,16 +559,6 @@ export default function ProjectDetailPage() {
               shareMode={false}
               onShareModeChange={setShareMode}
               onCreateShareLink={openShareDialog}
-              onAssetShare={(asset) => {
-                // Open dialog in configure phase — creation happens when user clicks "Create"
-                setShareDialogPreselect({
-                  type: "asset",
-                  id: asset.id,
-                  name: asset.name,
-                });
-                setShareDialogResult(null);
-                setShareDialogOpen(true);
-              }}
               onAssetDownload={async (asset) => {
                 try {
                   const data = await api.get<{ url: string }>(
@@ -947,13 +732,9 @@ export default function ProjectDetailPage() {
         </div>
       </div>
 
-      {/* ─── Right Panel (Comments + Fields tabs, or Share Link Settings) ─ */}
       {rightPanelOpen && (
         <div className="hidden xl:flex w-[360px] flex-col border-l border-border bg-bg-secondary shrink-0">
-          {showShareLinks && selectedShareLink ? (
-            <ShareLinkSettingsPanel token={selectedShareLink} />
-          ) : (
-            <>
+          <>
               {/* Tabs */}
               <div className="flex items-center border-b border-border">
                 <button
@@ -1127,21 +908,6 @@ export default function ProjectDetailPage() {
                         variant="secondary"
                         size="sm"
                         className="gap-1"
-                        onClick={() => {
-                          setShareDialogPreselect({
-                            type: "asset",
-                            id: selectedAsset.id,
-                            name: selectedAsset.name,
-                          });
-                          setShareDialogOpen(true);
-                        }}
-                      >
-                        <LinkIcon className="h-3.5 w-3.5" /> Share
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        className="gap-1"
                         onClick={async () => {
                           try {
                             const res = await api.get<{ url: string }>(
@@ -1177,8 +943,7 @@ export default function ProjectDetailPage() {
                   </div>
                 </div>
               )}
-            </>
-          )}
+          </>
         </div>
       )}
 
@@ -1214,11 +979,9 @@ export default function ProjectDetailPage() {
         preselectedItem={shareDialogPreselect}
         preselectedItems={shareDialogPreselectedItems}
         initialResult={shareDialogResult}
-        onShareCreated={() => mutateShareLinks()}
-        onAdvancedSettings={(token) => {
-          setShowShareLinks(true);
-          setSelectedShareLink(token);
-          setShowTrash(false);
+        onShareCreated={() => {
+          mutateAssets();
+          mutateSubfolders();
         }}
       />
 

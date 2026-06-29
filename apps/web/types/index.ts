@@ -303,19 +303,6 @@ export interface ShareLinkListItem {
   last_viewed_at: string | null
 }
 
-export type ShareActivityAction = "opened" | "viewed_asset" | "commented" | "approved" | "rejected" | "downloaded"
-
-export interface ShareLinkActivity {
-  id: string
-  share_link_id: string
-  action: ShareActivityAction
-  actor_email: string
-  actor_name: string | null
-  asset_id: string | null
-  asset_name: string | null
-  created_at: string
-}
-
 export interface FolderShareAssetItem {
   id: string
   name: string
