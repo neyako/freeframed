@@ -38,7 +38,7 @@ do not modify the other repo from within a plan unless the plan's Scope says so.
 | 006 | DaVinci Resolve → FreeFrame "Push for Review" (auto-render timeline, upload, get link) | FreeFrame `tools/resolve` | P1 | L | 003 | DONE ✓ verified 06-29 — ⚠ uncommitted |
 | 007 | DaVinci Resolve ← FreeFrame "Sync Comments" (pull comments onto timeline as markers) | FreeFrame `tools/resolve` | P1 | M | 006 | DONE ✓ verified 06-29 — ⚠ uncommitted |
 | 008 | Hardware-accelerated transcode (NVENC/QSV/VAAPI + software fallback) | FreeFrame `packages/transcoder` + `apps/api` | P1 | L | — | DONE ✓ verified 06-29 (committed `9d79a92`) |
-| 009 | True all-in-one Docker image (one container, GPU-ready, jellyfin-ffmpeg) | FreeFrame `Dockerfile.allinone` + `deploy/` | P1 | L | 008 | DONE ✓ static-verified 06-29 — ⚠ uncommitted, build-smoke not re-run |
+| 009 | True all-in-one Docker image (one container, GPU-ready, jellyfin-ffmpeg) | FreeFrame `Dockerfile.allinone` + `deploy/` | P1 | L | 008 | DONE ✓ verified 06-29 (build+run smoke passed, committed) |
 | 010 | CI/CD — publish images to GHCR on release (test-gated) + build all-in-one in CI | FreeFrame `.github/workflows` | P1 | M | 009 | DONE ✓ verified 06-29 — ⚠ uncommitted |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED (with one-line rationale)
@@ -100,9 +100,13 @@ though the table marked them DONE.
   Code deps 002 + 003 are DONE (002/003 committed). **Executable now.** End-to-end test still needs a
   deployed, reachable FreeFrame (runtime precondition, not a code blocker).
 - **005 — TODO, re-confirmed: no drift.** Same projmgmt SHA; drift diff empty; no deps. Executable now.
-- **⚠ Action for the maintainer:** 006/007/009/010 (and the `ci.yml` edit) are **complete but never
-  committed** — they live only in the working tree on branch `advisor/009-all-in-one-docker-image`.
-  Commit them (or they're lost on a clean/checkout). 008 is the only one of 006–010 in git history.
+- **Committed + merged (06-29 run 2):** 006/007/009/010 + the `ci.yml` edit + all plan files were
+  committed (5 conventional commits `b858154`..`8582f67`) and fast-forwarded into `main` (`8582f67`,
+  not pushed). `.omo/`, `.playwright-cli/`, `output/` added to `.gitignore` as agent scratch.
+- **009 build+run smoke PASSED (06-29 run 2):** `docker build -f Dockerfile.allinone` exit 0, then
+  `docker run` → all 9 services RUNNING (`init` EXITED 0), `/api/health` 200, `/`→`/login` 200, and
+  `ffmpeg -encoders` lists `h264_nvenc`/`h264_qsv`/`h264_vaapi`. The earlier "build not re-run"
+  caveat is now closed. (Run on an arm64 host under amd64 emulation; GPU passthrough N/A on macOS.)
 - **Nothing rejected or blocked.** No stale IN PROGRESS rows. No findings retired.
 
 ## Recommended sequencing
