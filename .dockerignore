@@ -1,0 +1,10 @@
+.git
+.omo/
+.playwright-cli/
+node_modules
+**/node_modules
+.next
+**/.next
+**/__pycache__
+output/
+plans/

@@ -1,0 +1,88 @@
+# Stage 1: build the Next.js standalone web bundle
+ARG ALLINONE_PLATFORM=linux/amd64
+FROM --platform=$ALLINONE_PLATFORM node:20-bookworm AS web-builder
+RUN corepack enable && corepack prepare pnpm@10 --activate
+WORKDIR /app
+COPY apps/web/package.json apps/web/pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
+COPY apps/web/ ./
+ARG NEXT_PUBLIC_API_URL=/api
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN pnpm build
+
+# Stage 2: runtime with all services in one image
+FROM --platform=$ALLINONE_PLATFORM debian:bookworm-slim AS runtime
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ca-certificates curl gnupg supervisor nginx \
+      postgresql postgresql-client redis-server \
+      python3 python3-venv python3-pip imagemagick \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get update && apt-get install -y --no-install-recommends nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN mkdir -p /etc/apt/keyrings \
+    && curl -fsSL https://repo.jellyfin.org/jellyfin_team.gpg.key | gpg --dearmor -o /etc/apt/keyrings/jellyfin.gpg \
+    && echo "deb [signed-by=/etc/apt/keyrings/jellyfin.gpg] https://repo.jellyfin.org/debian bookworm main" > /etc/apt/sources.list.d/jellyfin.list \
+    && apt-get update && apt-get install -y --no-install-recommends jellyfin-ffmpeg7 \
+    && ln -sf /usr/lib/jellyfin-ffmpeg/ffmpeg /usr/local/bin/ffmpeg \
+    && ln -sf /usr/lib/jellyfin-ffmpeg/ffprobe /usr/local/bin/ffprobe \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN case "$(dpkg --print-architecture)" in \
+      amd64) MINIO_ARCH=linux-amd64 ;; \
+      arm64) MINIO_ARCH=linux-arm64 ;; \
+      *) echo "unsupported MinIO architecture: $(dpkg --print-architecture)" >&2; exit 1 ;; \
+    esac \
+    && curl -fsSL "https://dl.min.io/server/minio/release/${MINIO_ARCH}/minio" -o /usr/local/bin/minio \
+    && curl -fsSL "https://dl.min.io/client/mc/release/${MINIO_ARCH}/mc" -o /usr/local/bin/mc \
+    && chmod +x /usr/local/bin/minio /usr/local/bin/mc
+
+ENV VENV=/opt/venv
+RUN python3 -m venv $VENV
+ENV PATH="$VENV/bin:$PATH"
+COPY apps/api/requirements.txt /workspace/apps/api/requirements.txt
+RUN $VENV/bin/pip install --no-cache-dir -r /workspace/apps/api/requirements.txt gunicorn
+
+WORKDIR /workspace
+COPY packages/transcoder /workspace/packages/transcoder
+COPY apps/api /workspace/apps/api
+
+COPY --from=web-builder /app/.next/standalone /app/web
+COPY --from=web-builder /app/.next/static /app/web/.next/static
+COPY --from=web-builder /app/public /app/web/public
+
+COPY deploy/allinone/supervisord.conf /etc/supervisor/conf.d/freeframe.conf
+COPY deploy/allinone/nginx.conf /etc/nginx/sites-available/default
+COPY deploy/allinone/entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY deploy/allinone/init-app.sh /usr/local/bin/init-app.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/init-app.sh
+
+ENV DATABASE_URL=postgresql://freeframe:freeframe@127.0.0.1:5432/freeframe \
+    REDIS_URL=redis://127.0.0.1:6379/0 \
+    S3_STORAGE=minio \
+    S3_ENDPOINT=http://127.0.0.1:9000 \
+    S3_ACCESS_KEY=minioadmin \
+    S3_SECRET_KEY=minioadmin \
+    S3_BUCKET=freeframe \
+    S3_REGION=us-east-1 \
+    FRONTEND_URL=http://localhost \
+    DISABLE_DOCS=true \
+    TRANSCODE_HWACCEL=auto \
+    API_WORKERS=4 \
+    TRANSCODING_CONCURRENCY=2 \
+    EMAIL_CONCURRENCY=2 \
+    NEXT_PUBLIC_API_URL=/api \
+    PORT=3000 \
+    HOSTNAME=0.0.0.0 \
+    PYTHONPATH=/workspace
+
+VOLUME ["/data"]
+EXPOSE 80
+HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=5 \
+    CMD curl -fsS http://127.0.0.1/api/health || exit 1
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
