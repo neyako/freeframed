@@ -16,6 +16,8 @@ import {
   FolderPlus,
   Folder as FolderIcon,
   Users,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import { cn, formatRelativeTime, formatBytes } from "@/lib/utils";
 import { api } from "@/lib/api";
@@ -68,7 +70,7 @@ export default function ProjectDetailPage() {
   const [rightTab, setRightTab] = React.useState<"comments" | "fields">(
     "comments",
   );
-  const { rightPanelOpen } = useViewStore();
+  const { rightPanelOpen, leftPanelOpen, toggleLeftPanel } = useViewStore();
 
   const [currentFolderId, setCurrentFolderId] = React.useState<string | null>(
     searchParams.get("folder") || null,
@@ -326,6 +328,18 @@ export default function ProjectDetailPage() {
   return (
     <div className="flex h-full flex-col lg:flex-row overflow-hidden">
       {/* ─── Left Sidebar (Frame.io style) ──────────────────────────────── */}
+      {!leftPanelOpen && (
+        <div className="hidden lg:flex w-9 shrink-0 flex-col items-center border-r border-border bg-bg-secondary pt-3">
+          <button
+            onClick={toggleLeftPanel}
+            className="text-text-tertiary hover:text-text-primary transition-colors"
+            title="Show panel"
+          >
+            <PanelLeftOpen className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+      {leftPanelOpen && (
       <div className="hidden lg:flex w-72 flex-col border-r border-border bg-bg-secondary shrink-0">
         {/* Assets section */}
         <div className="p-3 space-y-0.5">
@@ -333,6 +347,7 @@ export default function ProjectDetailPage() {
             <span className="text-2xs font-semibold text-text-tertiary uppercase tracking-wider">
               Assets
             </span>
+            <div className="flex items-center gap-1">
             {canCreateFolder && (
               <button
                 className="text-text-tertiary hover:text-text-primary transition-colors"
@@ -345,6 +360,14 @@ export default function ProjectDetailPage() {
                 <Plus className="h-3.5 w-3.5" />
               </button>
             )}
+            <button
+              onClick={toggleLeftPanel}
+              className="text-text-tertiary hover:text-text-primary transition-colors"
+              title="Collapse panel"
+            >
+              <PanelLeftClose className="h-3.5 w-3.5" />
+            </button>
+            </div>
           </div>
 
           {/* Project folder tree */}
@@ -417,6 +440,7 @@ export default function ProjectDetailPage() {
           );
         })()}
       </div>
+      )}
 
       {/* ─── Main Content ───────────────────────────────────────────────── */}
       <div
@@ -752,7 +776,7 @@ export default function ProjectDetailPage() {
         </div>
       </div>
 
-      {rightPanelOpen && (
+      {rightPanelOpen && selectedAsset && (
         <div className="hidden xl:flex w-[360px] flex-col border-l border-border bg-bg-secondary shrink-0">
           <>
               {/* Tabs */}
@@ -790,8 +814,7 @@ export default function ProjectDetailPage() {
                 )}
               </div>
 
-              {selectedAsset ? (
-                rightTab === "comments" ? (
+              {rightTab === "comments" ? (
                   /* Comments tab — real comments */
                   <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
                     {comments.length > 0 ? (
@@ -949,20 +972,7 @@ export default function ProjectDetailPage() {
                       </Button>
                     </div>
                   </div>
-                )
-              ) : (
-                /* No asset selected */
-                <div className="flex-1 flex items-center justify-center p-6 text-center">
-                  <div>
-                    <div className="mx-auto mb-3 h-16 w-16 rounded-full bg-bg-tertiary flex items-center justify-center">
-                      <MessageSquare className="h-8 w-8 text-text-tertiary/50" />
-                    </div>
-                    <p className="text-sm text-text-secondary">
-                      Select an asset to view comments
-                    </p>
-                  </div>
-                </div>
-              )}
+                )}
           </>
         </div>
       )}
