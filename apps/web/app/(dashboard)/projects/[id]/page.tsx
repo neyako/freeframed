@@ -7,6 +7,7 @@ import Link from "next/link";
 import * as Dialog from "@radix-ui/react-dialog";
 import {
   Upload,
+  UploadCloud,
   X,
   Download,
   Share2,
@@ -86,6 +87,8 @@ export default function ProjectDetailPage() {
   } | null>(null);
   const [assetToRename, setAssetToRename] = React.useState<AssetResponse | null>(null);
   const [assetToDelete, setAssetToDelete] = React.useState<AssetResponse | null>(null);
+  const [isDraggingFiles, setIsDraggingFiles] = React.useState(false);
+  const dragDepth = React.useRef(0);
 
   const { files: uploadFiles, startUpload } = useUploadStore();
   const { user } = useAuthStore();
@@ -288,14 +291,25 @@ export default function ProjectDetailPage() {
     pendingFiles.forEach((file) => {
       const name =
         pendingFiles.length === 1 ? assetName || file.name : file.name;
-      // Note: startUpload does not yet accept folderId — assets will upload to root.
-      // Upload store needs to be updated in a future task to support folder placement.
       startUpload(file, projectId, name, project?.name, currentFolderId);
     });
     setPendingFiles([]);
     setAssetName("");
     setUploadOpen(false);
   };
+
+  const handleDropFiles = React.useCallback(
+    (fileList: FileList | null) => {
+      const files = Array.from(fileList ?? []);
+      if (files.length === 0) return;
+
+      files.forEach((file) => {
+        const name = file.name.replace(/\.[^/.]+$/, "");
+        startUpload(file, projectId, name, project?.name, currentFolderId);
+      });
+    },
+    [startUpload, projectId, project?.name, currentFolderId],
+  );
 
   const handleSelectFolder = React.useCallback(
     (folderId: string | null) => {
@@ -406,9 +420,44 @@ export default function ProjectDetailPage() {
 
       {/* ─── Main Content ───────────────────────────────────────────────── */}
       <div
-        className="flex-1 flex flex-col min-w-0 bg-bg-primary h-full overflow-y-auto"
+        className="relative flex-1 flex flex-col min-w-0 bg-bg-primary h-full overflow-y-auto"
+        onDragEnter={(e) => {
+          if (!canUpload || showTrash || !e.dataTransfer.types.includes("Files")) return;
+          e.preventDefault();
+          dragDepth.current += 1;
+          setIsDraggingFiles(true);
+        }}
+        onDragOver={(e) => {
+          if (!canUpload || showTrash || !e.dataTransfer.types.includes("Files")) return;
+          e.preventDefault();
+        }}
+        onDragLeave={(e) => {
+          if (!canUpload || showTrash || !e.dataTransfer.types.includes("Files")) return;
+          dragDepth.current = Math.max(0, dragDepth.current - 1);
+          if (dragDepth.current === 0) setIsDraggingFiles(false);
+        }}
+        onDrop={(e) => {
+          if (!canUpload || showTrash || !e.dataTransfer.types.includes("Files")) return;
+          e.preventDefault();
+          dragDepth.current = 0;
+          setIsDraggingFiles(false);
+          handleDropFiles(e.dataTransfer.files);
+        }}
         onClick={() => setSelectedAsset(null)}
       >
+        {isDraggingFiles && (
+          <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center rounded-lg border-2 border-dashed border-accent bg-bg-primary/80 backdrop-blur-sm">
+            <div className="flex flex-col items-center gap-3 text-center">
+              <UploadCloud className="h-10 w-10 text-accent" />
+              <p className="text-sm font-medium text-text-primary">
+                Drop files to upload
+              </p>
+              <p className="text-xs text-text-tertiary">
+                They will be added to {currentFolderId ? "this folder" : "the project root"}.
+              </p>
+            </div>
+          </div>
+        )}
         <div className="px-5 pt-3 pb-6 space-y-3">
           {showTrash ? (
             <div className="flex-1 overflow-y-auto">
@@ -747,7 +796,7 @@ export default function ProjectDetailPage() {
                   <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
                     {comments.length > 0 ? (
                       <CommentPanel
-                        comments={comments as any}
+                        comments={comments}
                         currentUserId={user?.id}
                         onResolve={resolveComment}
                         onDelete={deleteComment}

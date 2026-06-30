@@ -43,9 +43,9 @@ do not modify the other repo from within a plan unless the plan's Scope says so.
 | 011 | Responsive mobile layout for the **editor** review page (stack viewer + comments, mirror 001) | FreeFrame `apps/web` | P1 | S–M | — | DONE ✓ verified 06-30 — mobile stack + comment-gated sidebar |
 | 012 | Fix browser uploads **and guest video playback** in the all-in-one image (MinIO 0.0.0.0 + S3_PUBLIC_ENDPOINT + CORS) | FreeFrame `Dockerfile.allinone` + `deploy/` | P1 | S–M | 009 | DONE ✓ verified 06-29 — branch `advisor/012-allinone-upload-endpoint-fix`, commit pending |
 | 013 | Share viewer comment panel — bottom toggle on mobile + open only when comments exist (#1b, #5) | FreeFrame `apps/web` | P2 | S–M | — | DONE ✓ verified 06-30 — bottom mobile toggle + comment-gated sidebar |
-| 014 | Drag-and-drop upload onto the project grid (#2) | FreeFrame `apps/web` | P2 | S–M | — | TODO — ready |
+| 014 | Drag-and-drop upload onto the project grid (#2) | FreeFrame `apps/web` | P2 | S–M | — | DONE ✓ verified 06-30 — grid drop uploads to current folder |
 | 015 | Single Drive-style share link per asset; remove multi-link UI (#3, full cleanup, keep people-share) | FreeFrame `apps/web` | P1 | L | — | DONE ✓ verified 06-30 — single-link asset Share UI + management cleanup |
-| 016 | Open an asset on a single click/tap instead of double-click (#4) | FreeFrame `apps/web` | P2 | S | — | TODO — ready |
+| 016 | Open an asset on a single click/tap instead of double-click (#4) | FreeFrame `apps/web` | P2 | S | — | DONE ✓ verified 06-30 — single click opens; share mode still selects |
 | 019 | Extend single-link sharing to folders/projects/bulk; retire ShareCreateDialog (#3 completion) | FreeFrame `apps/web` | P2 | L | 015 | DONE ✓ verified 06-30 |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED (with one-line rationale)

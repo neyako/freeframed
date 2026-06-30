@@ -335,7 +335,14 @@ export function AssetGrid({
                 'rounded-lg transition-all cursor-pointer',
                 selectedAssetId === asset.id && 'ring-2 ring-accent ring-offset-1 ring-offset-bg-primary',
               )}
-              onClick={(e) => onAssetSelect?.(asset, e)}
+              onClick={(e) => {
+                if (shareMode) {
+                  e.stopPropagation()
+                  toggleAssetSelect(asset.id)
+                } else {
+                  onAssetOpen?.(asset)
+                }
+              }}
               onDoubleClick={() => onAssetOpen?.(asset)}
             >
               <AssetCard
@@ -507,7 +514,14 @@ export function AssetGrid({
             return (
               <div
                 key={asset.id}
-                onClick={(e) => onAssetSelect?.(asset, e)}
+                onClick={(e) => {
+                  if (shareMode) {
+                    e.stopPropagation()
+                    toggleAssetSelect(asset.id)
+                  } else {
+                    onAssetOpen?.(asset)
+                  }
+                }}
                 onDoubleClick={() => onAssetOpen?.(asset)}
                 className={cn(
                   'group flex items-center gap-4 px-3 py-2 transition-colors hover:bg-bg-hover cursor-pointer',
