@@ -227,3 +227,4 @@ CLAUDE.md
 .omo/
 .playwright-cli/
 output/
+test-results/
