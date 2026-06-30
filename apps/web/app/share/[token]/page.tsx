@@ -10,6 +10,7 @@ import {
   XCircle,
   Download,
   ArrowLeft,
+  ChevronDown,
   Columns2,
   MessageSquare,
   User,
@@ -442,7 +443,7 @@ function ShareTopBar({
         <button
           onClick={onToggleSidebar}
           className={cn(
-            'flex items-center justify-center h-8 w-8 rounded-md transition-colors',
+            'hidden md:flex items-center justify-center h-8 w-8 rounded-md transition-colors',
             sidebarOpen
               ? 'bg-white/10 text-white'
               : 'text-zinc-500 hover:text-white hover:bg-white/10',
@@ -550,6 +551,7 @@ interface ShareRightPanelProps {
   permission: SharePermission
   commentRefreshKey: number
   onCommentPosted: () => void
+  onClose: () => void
 }
 
 function ShareRightPanel({
@@ -558,11 +560,21 @@ function ShareRightPanel({
   permission,
   commentRefreshKey,
   onCommentPosted,
+  onClose,
 }: ShareRightPanelProps) {
   const [activeTab, setActiveTab] = React.useState<'comments' | 'fields'>('comments')
 
   return (
     <div className="w-full h-[55vh] border-t md:h-auto md:w-[360px] md:border-t-0 md:border-l flex flex-col border-white/[0.06] bg-[#141416] shrink-0 animate-in slide-in-from-bottom-2 md:slide-in-from-right-2 duration-150">
+      {/* Mobile collapse handle — keeps the toggle adjacent to the panel (#1b). */}
+      <button
+        onClick={onClose}
+        className="md:hidden flex items-center justify-center gap-1.5 w-full py-2 text-xs text-zinc-400 border-b border-white/[0.06]"
+      >
+        <ChevronDown className="h-4 w-4" />
+        Hide comments
+      </button>
+
       {/* Tabs */}
       <div className="px-4 pt-3 pb-2 shrink-0">
         <div className="flex items-center bg-white/5 rounded-lg p-0.5">
@@ -705,14 +717,33 @@ function ShareViewer({
   const [streamLoading, setStreamLoading] = React.useState(false)
   const [commentKey, setCommentKey] = React.useState(0)
   const [sidebarOpen, setSidebarOpen] = React.useState(false)
+  const [commentCount, setCommentCount] = React.useState<number | null>(null)
+  const autoOpened = React.useRef(false)
 
-  // Open the comment panel by default on desktop; keep it collapsed on mobile so
-  // the video is fully visible on first paint. Reviewers toggle it from the top bar.
+  // Fetch the comment count for this share so we can (a) label the mobile button and
+  // (b) auto-open the panel ONCE only when there are comments (#5). Empty cuts start
+  // with the panel collapsed so the video fills the screen.
   React.useEffect(() => {
-    if (typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches) {
-      setSidebarOpen(true)
-    }
-  }, [])
+    let cancelled = false
+    fetch(`${API_URL}/share/${token}/comments`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data) => {
+        if (cancelled) return
+        const n = Array.isArray(data) ? data.length : 0
+        setCommentCount(n)
+        if (n > 0 && !autoOpened.current) {
+          setSidebarOpen(true)
+          autoOpened.current = true
+        }
+      })
+      .catch((error: unknown) => {
+        if (!(error instanceof Error)) {
+          throw error
+        }
+        if (!cancelled) setCommentCount(0)
+      })
+    return () => { cancelled = true }
+  }, [token, commentKey])
 
   // For video/audio assets, get a stream URL if not already provided
   React.useEffect(() => {
@@ -768,9 +799,21 @@ function ShareViewer({
             permission={permission}
             commentRefreshKey={commentKey}
             onCommentPosted={() => setCommentKey((k) => k + 1)}
+            onClose={() => setSidebarOpen(false)}
           />
         )}
       </div>
+
+      {/* Mobile-only: Open the comments panel from the bottom of the screen (#1b). */}
+      {!sidebarOpen && (
+        <button
+          onClick={() => setSidebarOpen(true)}
+          className="md:hidden absolute bottom-4 left-1/2 -translate-x-1/2 z-30 inline-flex items-center gap-2 rounded-full bg-white/10 backdrop-blur px-4 py-2.5 text-sm font-medium text-white shadow-lg border border-white/10"
+        >
+          <MessageSquare className="h-4 w-4" />
+          Comments{commentCount ? ` (${commentCount})` : ''}
+        </button>
+      )}
 
       {/* Custom footer */}
       {branding?.custom_footer && (

@@ -54,8 +54,9 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
   usePageTitle(asset?.name ?? null)
   const [annotationData, setAnnotationData] = useState<Record<string, unknown> | null>(null)
   const [activeTab, setActiveTab] = useState<'comments' | 'fields'>('comments')
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const deepLinkApplied = useRef(false)
+  const autoOpenedRef = useRef(false)
 
   // Fetch folder tree to build the folder path for the breadcrumb
   const { data: folderTree } = useSWR<FolderTreeNode[]>(
@@ -124,6 +125,17 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
     addReaction,
     removeReaction,
   } = useComments(asset?.id || '', currentVersion?.id || '')
+
+  // Auto-open the comments panel once, only when the asset actually has comments (#5).
+  // Empty assets start with the panel hidden so the media fills the screen; the user
+  // can open it any time via the top-bar toggle, and their choice then sticks.
+  useEffect(() => {
+    if (autoOpenedRef.current) return
+    if (comments.length > 0) {
+      setSidebarOpen(true)
+      autoOpenedRef.current = true
+    }
+  }, [comments.length])
 
   // Deep-link to a specific comment from notification (?commentId=...)
   // Runs once after comments are loaded — seeks to timecode, focuses comment, shows annotation
@@ -343,7 +355,7 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
-            <span className="text-xs text-text-secondary tabular-nums px-1">
+            <span className="hidden sm:inline text-xs text-text-secondary tabular-nums px-1">
               {currentIndex + 1} of {totalAssets}
             </span>
             <button
@@ -381,7 +393,7 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
             title="Upload new version"
           >
             <Upload className="h-3.5 w-3.5" />
-            New Version
+            <span className="hidden sm:inline">New Version</span>
           </button>
           <ShareDialog assetId={asset.id} assetName={asset.name} projectId={projectId} asset={asset} />
           <button
@@ -400,7 +412,7 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
       </div>
 
       {/* ─── Main content: viewer + sidebar ────────────────────────────── */}
-      <div className="flex flex-1 overflow-hidden min-h-0">
+      <div className="flex flex-col md:flex-row flex-1 overflow-hidden min-h-0">
         {/* Left: viewer column */}
         <div className="flex-1 flex flex-col bg-bg-primary overflow-hidden min-w-0">
           {/* Media viewer */}
@@ -409,7 +421,7 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
 
         {/* Right: comments sidebar */}
         {sidebarOpen && (
-          <div className="w-[360px] flex flex-col border-l border-border bg-bg-secondary shrink-0 animate-in slide-in-from-right-2 duration-150">
+          <div className="w-full h-[55vh] md:h-auto md:w-[360px] flex flex-col border-t md:border-t-0 border-l-0 md:border-l border-border bg-bg-secondary shrink-0 animate-in slide-in-from-bottom-2 md:slide-in-from-right-2 duration-150">
             {/* Tabs (Frame.io pill style) */}
             <div className="px-4 pt-3 pb-2 shrink-0">
               <div className="flex items-center bg-bg-tertiary rounded-lg p-0.5">
