@@ -48,7 +48,7 @@ do not modify the other repo from within a plan unless the plan's Scope says so.
 | 016 | Open an asset on a single click/tap instead of double-click (#4) | FreeFrame `apps/web` | P2 | S | — | DONE ✓ verified 06-30 — single click opens; share mode still selects |
 | 019 | Extend single-link sharing to folders/projects/bulk; retire ShareCreateDialog (#3 completion) | FreeFrame `apps/web` | P2 | L | 015 | DONE ✓ verified 06-30 |
 | 020 | Guest share video actually plays (HLS via hls.js) + auto-open comments for commentable guests | FreeFrame `apps/web` | P1 | M | — | TODO — ready (no drift) |
-| 021 | Editor/review page mobile rework — full-bleed viewer + bottom-sheet comments (no nav rail) | FreeFrame `apps/web` | P1 | M–L | — | TODO — ready (interacts w/ 025) |
+| 021 | Editor/review page mobile rework — full-bleed viewer + bottom-sheet comments (no nav rail) | FreeFrame `apps/web` | P1 | M–L | — | DONE ✓ verified 06-30 — no 021 regressions; baseline type/test debt unchanged |
 | 022 | Offer "upload as new version" when a dropped/selected file matches an existing asset | FreeFrame `apps/web` | P2 | M | — | TODO — ready (no drift) |
 | 023 | Simplify the share popup — collapse people-invite behind progressive disclosure | FreeFrame `apps/web` | P2 | S–M | — | TODO — ready (no drift) |
 | 024 | Hide comments panel until an asset is selected + collapsible assets panel | FreeFrame `apps/web` | P2 | S–M | — | TODO — ready (no drift) |

@@ -44,16 +44,18 @@ export default function DashboardLayout({
 
   return (
     <div className="flex h-screen overflow-hidden bg-bg-primary">
-      <Sidebar
-        collapsed={sidebarCollapsed}
-        onToggle={() => setSidebarCollapsed((c) => !c)}
-      />
+      {!isAssetViewer && (
+        <Sidebar
+          collapsed={sidebarCollapsed}
+          onToggle={() => setSidebarCollapsed((c) => !c)}
+        />
+      )}
 
       {/* Main content area */}
       <main
         className={cn(
           "flex flex-1 flex-col overflow-hidden transition-[margin] duration-200 ease-spring",
-          sidebarCollapsed ? "ml-[52px]" : "ml-[220px]",
+          isAssetViewer ? "ml-0" : sidebarCollapsed ? "ml-[52px]" : "ml-[220px]",
         )}
       >
         {!isAssetViewer && <Header onSearchOpen={() => setCommandOpen(true)} />}
