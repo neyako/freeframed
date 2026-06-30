@@ -22,6 +22,7 @@ interface ViewSettings {
   sortKey: SortKey
   sortDirection: SortDirection
   rightPanelOpen: boolean
+  leftPanelOpen: boolean
 }
 
 interface ViewStore extends ViewSettings {
@@ -38,6 +39,7 @@ interface ViewStore extends ViewSettings {
   setSortDirection: (dir: SortDirection) => void
   toggleSortDirection: () => void
   toggleRightPanel: () => void
+  toggleLeftPanel: () => void
 }
 
 export const useViewStore = create<ViewStore>()(
@@ -55,6 +57,7 @@ export const useViewStore = create<ViewStore>()(
       sortKey: 'date',
       sortDirection: 'desc',
       rightPanelOpen: true,
+      leftPanelOpen: true,
 
       setLayout: (layout) => set({ layout }),
       setCardSize: (size) => set({ cardSize: size }),
@@ -71,6 +74,8 @@ export const useViewStore = create<ViewStore>()(
         set((s) => ({ sortDirection: s.sortDirection === 'asc' ? 'desc' : 'asc' })),
       toggleRightPanel: () =>
         set((s) => ({ rightPanelOpen: !s.rightPanelOpen })),
+      toggleLeftPanel: () =>
+        set((s) => ({ leftPanelOpen: !s.leftPanelOpen })),
     }),
     { name: 'freeframe-view-settings' },
   ),
