@@ -47,13 +47,13 @@ do not modify the other repo from within a plan unless the plan's Scope says so.
 | 015 | Single Drive-style share link per asset; remove multi-link UI (#3, full cleanup, keep people-share) | FreeFrame `apps/web` | P1 | L | — | DONE ✓ verified 06-30 — single-link asset Share UI + management cleanup |
 | 016 | Open an asset on a single click/tap instead of double-click (#4) | FreeFrame `apps/web` | P2 | S | — | DONE ✓ verified 06-30 — single click opens; share mode still selects |
 | 019 | Extend single-link sharing to folders/projects/bulk; retire ShareCreateDialog (#3 completion) | FreeFrame `apps/web` | P2 | L | 015 | DONE ✓ verified 06-30 |
-| 020 | Guest share video actually plays (HLS via hls.js) + auto-open comments for commentable guests | FreeFrame `apps/web` | P1 | M | — | TODO — ready (no drift) |
-| 021 | Editor/review page mobile rework — full-bleed viewer + bottom-sheet comments (no nav rail) | FreeFrame `apps/web` | P1 | M–L | — | TODO — ready (interacts w/ 025) |
-| 022 | Offer "upload as new version" when a dropped/selected file matches an existing asset | FreeFrame `apps/web` | P2 | M | — | TODO — ready (no drift) |
-| 023 | Simplify the share popup — collapse people-invite behind progressive disclosure | FreeFrame `apps/web` | P2 | S–M | — | TODO — ready (no drift) |
-| 024 | Hide comments panel until an asset is selected + collapsible assets panel | FreeFrame `apps/web` | P2 | S–M | — | TODO — ready (no drift) |
-| 025 | Move global nav from the left rail into the top header (remove the rail) | FreeFrame `apps/web` | P2 | L | — | DONE ✓ verified 2026-07-01 (branch `advisor/025-nav-into-header`) |
-| 026 | Restore green web test/type baseline (stale vitest mocks + asset-grid fixture + Node-25 localStorage) | FreeFrame `apps/web` | P1 | S–M | — | TODO — ready (no drift) |
+| 020 | Guest share video actually plays (HLS via hls.js) + auto-open comments for commentable guests | FreeFrame `apps/web` | P1 | M | — | DONE on branch ✓ anchors 07-01 (`advisor/020`) — code merges clean, only `plans/*.md` add/add |
+| 021 | Editor/review page mobile rework — full-bleed viewer + bottom-sheet comments (no nav rail) | FreeFrame `apps/web` | P1 | M–L | 025 | ⚠ NEEDS REWORK 07-01 (`advisor/021`) — `layout.tsx` half superseded by merged 025, CONFLICTS on merge; assetId-page half good |
+| 022 | Offer "upload as new version" when a dropped/selected file matches an existing asset | FreeFrame `apps/web` | P2 | M | — | DONE on branch ✓ anchors 07-01 (`advisor/022`) — clean vs main, overlaps 024 on `projects/[id]/page.tsx` |
+| 023 | Simplify the share popup — collapse people-invite behind progressive disclosure | FreeFrame `apps/web` | P2 | S–M | — | DONE on branch ✓ anchors 07-01 (`advisor/023`) — merges clean |
+| 024 | Hide comments panel until an asset is selected + collapsible assets panel | FreeFrame `apps/web` | P2 | S–M | — | DONE on branch ✓ anchors 07-01 (`advisor/024`) — clean vs main, overlaps 022 |
+| 025 | Move global nav from the left rail into the top header (remove the rail) | FreeFrame `apps/web` | P2 | L | — | DONE ✓ merged to main 07-01 (`1f405e7`) — rail removed, nav in header, `sidebar.tsx` deleted |
+| 026 | Restore green web test/type baseline (stale vitest mocks + asset-grid fixture + Node-25 localStorage) | FreeFrame `apps/web` | P1 | S–M | — | DONE on branch ✓ anchors 07-01 (`advisor/026`) — fixes confirmed-RED main baseline; **merge FIRST** |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED (with one-line rationale)
 
@@ -232,6 +232,69 @@ against FreeFrame HEAD `4d0c20f`. Frontend-only; no backend or DB changes.
 land one and reconcile the other's `layout.tsx` step per their cross-notes). All
 six are independent at the file level **except** the 021↔025 `layout.tsx` overlap,
 which each plan's STOP/Maintenance notes call out.
+
+## Reconcile log — 2026-07-01
+
+Run against FreeFrame HEAD `603e6c6` (main) and projmgmt HEAD `1905a0b`. Today's date 2026-07-01.
+
+**Headline: the six "TODO" round-2 plans are not TODO — every one has finished executor work
+sitting on an unmerged `advisor/*` branch.** The main `plans/README.md` was stale because each
+executor updated the index only on its own branch. Status corrected above; merge map below.
+
+- **025 — DONE, merged & verified @603e6c6.** `1f405e7` landed on main: `apps/web/components/layout/sidebar.tsx`
+  is **deleted**, `app/(dashboard)/layout.tsx` has **zero** `Sidebar` references, and
+  `components/layout/header.tsx` now imports the upload store + notification store and renders
+  Bell/Upload/user-menu controls. Post-025 `layout.tsx` already carries `isAssetViewer` logic that
+  hides the Header on the viewer route.
+- **026 — DONE on branch `advisor/026`, merge FIRST.** Branched off current main (`603e6c6`), so it's
+  the freshest. `pnpm test` **was run on current main this session → RED: 12 failed / 111 passed (123)**.
+  Failures are exactly 026's targets: `localStorage.clear is not a function` (Node-25),
+  `response.text is not a function` (stale `api.test.ts` mock), asset-grid fixture. 026 adds a global
+  `localStorage` shim in `test/setup.ts` + fixes the mocks → its criterion is `123 passed (123)`.
+  Merges clean. **Consequence: 020–024's "pnpm test exits 0" done-criteria are UNVERIFIED** — those
+  branches predate 026 and inherited this red baseline, so their gate only becomes honest once 026 is
+  underneath them. Static anchors for 020–024 were verified per-branch (below); the full test gate was not.
+- **020 — DONE on branch `advisor/020`.** Anchors @branch: `components/share/share-video-player.tsx`
+  uses `useVideoPlayer`; `share/[token]/page.tsx` has **0** `<video` tags + **1** `matchMedia('(min-width: 768px)')`;
+  `__tests__/share-video-player.test.tsx` present. **Code merges clean**; the only merge conflicts are
+  `add/add` on `plans/020–023*.md` + `plans/README.md` (the branch independently re-added the round-2
+  plan docs main already has at `9f7b40b`). Resolve docs by keeping main's plan files.
+- **021 — ⚠ NEEDS REWORK, branch `advisor/021`.** Built on pre-025 main (merge-base `9f7b40b`). Its
+  `layout.tsx` hunk hides `<Sidebar>` + sets `ml-0` on the viewer route — but 025 **deleted the sidebar
+  entirely** and already added `isAssetViewer` Header-hiding. `git merge-tree` reports a **content
+  CONFLICT in `layout.tsx`**. The other half (assetId-page mobile affordances: `Columns2` `hidden md:flex`,
+  floating Comments button, "Hide comments" handle) is on `assets/[assetId]/page.tsx` and merges clean.
+  Action for the merger/executor: **drop the `layout.tsx` hunk** (its goal is already met by 025), **keep
+  the assetId-page hunk**. Plan body should be refreshed to reflect post-025 reality before re-execution.
+- **022 — DONE on branch `advisor/022`.** `lib/version-match.ts` exports `normalizeAssetName` +
+  `findVersionCandidate`; `lib/__tests__/version-match.test.ts` present; `.gitignore` anchored so
+  `apps/web/lib` source tracks. **Clean vs main**, but **overlaps 024** on `projects/[id]/page.tsx`.
+- **023 — DONE on branch `advisor/023`.** `components/review/share-dialog.tsx` has **1** "Invite specific
+  people"; test asserts collapsed-default. **Merges clean**, fully isolated.
+- **024 — DONE on branch `advisor/024`.** `stores/view-store.ts` exports `leftPanelOpen` + `toggleLeftPanel`;
+  dead "Select an asset to view comments" empty-state removed (**0** matches). Code clean vs main (only
+  `plans/README.md` conflicts), but **`024-on-022` conflicts** — both edit `projects/[id]/page.tsx`, so the
+  second to merge needs manual resolution.
+- **004 / 005 — TODO, re-confirmed: no drift.** projmgmt still at `1905a0b`; `src/lib/freeframe.ts` absent
+  (unexecuted); drift diff on `src/actions/projects.ts` + `src/lib/nextcloud.ts` empty. 004's code deps
+  (002/003) are DONE+merged in FreeFrame; end-to-end still needs a deployed, reachable FreeFrame (runtime
+  precondition, not a code blocker). Both executable now.
+- **Nothing rejected. No stale IN PROGRESS.** No findings retired.
+
+### Recommended merge order (advisor never merges — maintainer's call)
+
+All six branches are committed and unpushed; none is merged into main. Suggested sequence to minimise
+conflict pain and give each branch an honest test gate:
+
+1. **026** — restores the green `pnpm test` baseline (123/123). Clean. Everything else assumes it.
+2. **023** — clean, isolated (share-dialog).
+3. **020** — code clean; resolve the `plans/*.md` add/add by taking main's committed plan files.
+4. **022** — clean (`projects/[id]/page.tsx`).
+5. **024** — after 022: manually resolve the `projects/[id]/page.tsx` overlap + `plans/README.md`.
+6. **021** — last, and **rework before merging**: drop the obsolete `layout.tsx` hunk (025 covers it),
+   keep the assetId-page mobile affordances. Re-run the conflict check after rework.
+
+After each merge, re-run `cd apps/web && pnpm test` to confirm green before taking the next branch.
 
 ## Recommended sequencing
 
