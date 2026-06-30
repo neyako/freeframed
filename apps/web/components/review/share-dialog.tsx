@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Share2 } from "lucide-react";
+import { ChevronDown, Share2, Users } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,7 @@ export function SharePanel({
   projectId,
   withPeople = false,
 }: SharePanelProps) {
+  const [showPeople, setShowPeople] = React.useState(false);
   const peopleTarget: PeopleShareTarget | null =
     target.kind === "project" ? null : target;
 
@@ -31,10 +32,25 @@ export function SharePanel({
       <SingleLinkSection target={target} />
       {withPeople && peopleTarget && (
         <div className="border-t border-border pt-3">
-          <p className="mb-2 text-xs font-medium text-text-secondary">
-            Share with people
-          </p>
-          <DirectTab target={peopleTarget} orgId={projectId} />
+          <button
+            type="button"
+            onClick={() => setShowPeople((v) => !v)}
+            className="flex w-full items-center gap-2 text-xs font-medium text-text-secondary hover:text-text-primary transition-colors"
+          >
+            <Users className="h-3.5 w-3.5" />
+            Invite specific people
+            <ChevronDown
+              className={cn(
+                "ml-auto h-3.5 w-3.5 transition-transform",
+                showPeople && "rotate-180",
+              )}
+            />
+          </button>
+          {showPeople && (
+            <div className="mt-3">
+              <DirectTab target={peopleTarget} orgId={projectId} />
+            </div>
+          )}
         </div>
       )}
     </div>
