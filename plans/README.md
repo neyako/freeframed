@@ -47,13 +47,13 @@ do not modify the other repo from within a plan unless the plan's Scope says so.
 | 015 | Single Drive-style share link per asset; remove multi-link UI (#3, full cleanup, keep people-share) | FreeFrame `apps/web` | P1 | L | — | DONE ✓ verified 06-30 — single-link asset Share UI + management cleanup |
 | 016 | Open an asset on a single click/tap instead of double-click (#4) | FreeFrame `apps/web` | P2 | S | — | DONE ✓ verified 06-30 — single click opens; share mode still selects |
 | 019 | Extend single-link sharing to folders/projects/bulk; retire ShareCreateDialog (#3 completion) | FreeFrame `apps/web` | P2 | L | 015 | DONE ✓ verified 06-30 |
-| 020 | Guest share video actually plays (HLS via hls.js) + auto-open comments for commentable guests | FreeFrame `apps/web` | P1 | M | — | DONE on branch ✓ anchors 07-01 (`advisor/020`) — code merges clean, only `plans/*.md` add/add |
-| 021 | Editor/review page mobile rework — full-bleed viewer + bottom-sheet comments (no nav rail) | FreeFrame `apps/web` | P1 | M–L | 025 | ⚠ NEEDS REWORK 07-01 (`advisor/021`) — `layout.tsx` half superseded by merged 025, CONFLICTS on merge; assetId-page half good |
-| 022 | Offer "upload as new version" when a dropped/selected file matches an existing asset | FreeFrame `apps/web` | P2 | M | — | DONE on branch ✓ anchors 07-01 (`advisor/022`) — clean vs main, overlaps 024 on `projects/[id]/page.tsx` |
-| 023 | Simplify the share popup — collapse people-invite behind progressive disclosure | FreeFrame `apps/web` | P2 | S–M | — | DONE on branch ✓ anchors 07-01 (`advisor/023`) — merges clean |
-| 024 | Hide comments panel until an asset is selected + collapsible assets panel | FreeFrame `apps/web` | P2 | S–M | — | DONE on branch ✓ anchors 07-01 (`advisor/024`) — clean vs main, overlaps 022 |
+| 020 | Guest share video actually plays (HLS via hls.js) + auto-open comments for commentable guests | FreeFrame `apps/web` | P1 | M | — | DONE ✓ merged to main 07-01 (`dc132a1`) — HLS player + comment-gate, full gate green |
+| 021 | Editor/review page mobile rework — full-bleed viewer + bottom-sheet comments (no nav rail) | FreeFrame `apps/web` | P1 | M–L | 025 | DONE (partial) ✓ merged to main 07-01 (`57fa5c4`) — assetId-page mobile affordances kept; obsolete `layout.tsx` hunk dropped (025 covers it) |
+| 022 | Offer "upload as new version" when a dropped/selected file matches an existing asset | FreeFrame `apps/web` | P2 | M | — | DONE ✓ merged to main 07-01 (`d879d5d`) — `version-match.ts` + prompt; `/lib/` gitignore anchored |
+| 023 | Simplify the share popup — collapse people-invite behind progressive disclosure | FreeFrame `apps/web` | P2 | S–M | — | DONE ✓ merged to main 07-01 (`62fc31a`) — progressive-disclosure share popup |
+| 024 | Hide comments panel until an asset is selected + collapsible assets panel | FreeFrame `apps/web` | P2 | S–M | — | DONE ✓ merged to main 07-01 (`7b4386e`) — right-panel gated on asset; left panel collapsible |
 | 025 | Move global nav from the left rail into the top header (remove the rail) | FreeFrame `apps/web` | P2 | L | — | DONE ✓ merged to main 07-01 (`1f405e7`) — rail removed, nav in header, `sidebar.tsx` deleted |
-| 026 | Restore green web test/type baseline (stale vitest mocks + asset-grid fixture + Node-25 localStorage) | FreeFrame `apps/web` | P1 | S–M | — | DONE on branch ✓ anchors 07-01 (`advisor/026`) — fixes confirmed-RED main baseline; **merge FIRST** |
+| 026 | Restore green web test/type baseline (stale vitest mocks + asset-grid fixture + Node-25 localStorage) | FreeFrame `apps/web` | P1 | S–M | — | DONE ✓ merged to main 07-01 (`eea166c`) — baseline back to green (123→133 tests pass) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED (with one-line rationale)
 
@@ -295,6 +295,23 @@ conflict pain and give each branch an honest test gate:
    keep the assetId-page mobile affordances. Re-run the conflict check after rework.
 
 After each merge, re-run `cd apps/web && pnpm test` to confirm green before taking the next branch.
+
+### ✓ Merged 2026-07-01 (maintainer requested merge) — all six landed on main
+
+Executed in the recommended order. `main` advanced `6a70c3c` (reconcile doc) → six merge commits:
+
+| Plan | Merge commit | Resolution notes |
+|------|--------------|------------------|
+| 026 | `eea166c` | clean code; `plans/README.md` → ours. `test-results/` scratch added to `.gitignore` (amended into this commit). |
+| 023 | `62fc31a` | clean; README → ours. |
+| 020 | `dc132a1` | code clean; `plans/*.md` add/add + README → ours (main's canonical plan files kept). |
+| 022 | `d879d5d` | code clean; README → ours. `.gitignore` auto-merged (`/lib/` anchor + `test-results/` coexist). |
+| 024 | `7b4386e` | `projects/[id]/page.tsx` **auto-merged cleanly** with 022 (the predicted overlap conflict did not materialise — edits fell in separate regions). Verified both 022 + 024 features coexist. |
+| 021 | `57fa5c4` | **partial merge**: assetId-page mobile affordances kept; `layout.tsx` resolved to ours (025's post-rail layout — 021's Sidebar-hiding hunk dropped as obsolete). README → ours. |
+
+**Post-merge full gate (run on `apps/web`):** `tsc --noEmit` → 0; `pnpm lint` → 0 (warnings only, all pre-existing `exhaustive-deps`/`no-img-element`); `pnpm test` → **133 passed (133)** across 18 files (was 123/16 — +10 tests from 020/022/023). Working tree clean. **Not pushed** — merging to remote is the maintainer's call.
+
+All `advisor/*` branches are now ancestors of `main`. 021's plan body still describes the pre-025 layout approach; if 021 is ever revisited, refresh it — but its shipped value (mobile affordances) is already on main.
 
 ## Recommended sequencing
 
