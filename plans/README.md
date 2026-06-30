@@ -41,7 +41,7 @@ do not modify the other repo from within a plan unless the plan's Scope says so.
 | 009 | True all-in-one Docker image (one container, GPU-ready, jellyfin-ffmpeg) | FreeFrame `Dockerfile.allinone` + `deploy/` | P1 | L | 008 | DONE ✓ verified 06-29 (build+run smoke passed, committed) |
 | 010 | CI/CD — publish images to GHCR on release (test-gated) + build all-in-one in CI | FreeFrame `.github/workflows` | P1 | M | 009 | DONE ✓ verified 06-29 — ⚠ uncommitted |
 | 011 | Responsive mobile layout for the **editor** review page (stack viewer + comments, mirror 001) | FreeFrame `apps/web` | P1 | S–M | — | DONE ✓ verified 06-30 — mobile stack + comment-gated sidebar |
-| 012 | Fix browser uploads **and guest video playback** in the all-in-one image (MinIO 0.0.0.0 + S3_PUBLIC_ENDPOINT + CORS) | FreeFrame `Dockerfile.allinone` + `deploy/` | P1 | S–M | 009 | DONE ✓ verified 06-29 — ⚠ **unmerged**: lives only on branch `advisor/012` (`90350ad`); not in `main` or HEAD |
+| 012 | Fix browser uploads **and guest video playback** in the all-in-one image (MinIO 0.0.0.0 + S3_PUBLIC_ENDPOINT + CORS) | FreeFrame `Dockerfile.allinone` + `deploy/` | P1 | S–M | 009 | DONE ✓ merged to `main` 06-30 (merge `10983b3`) |
 | 013 | Share viewer comment panel — bottom toggle on mobile + open only when comments exist (#1b, #5) | FreeFrame `apps/web` | P2 | S–M | — | DONE ✓ verified 06-30 — bottom mobile toggle + comment-gated sidebar |
 | 014 | Drag-and-drop upload onto the project grid (#2) | FreeFrame `apps/web` | P2 | S–M | — | DONE ✓ verified 06-30 — grid drop uploads to current folder |
 | 015 | Single Drive-style share link per asset; remove multi-link UI (#3, full cleanup, keep people-share) | FreeFrame `apps/web` | P1 | L | — | DONE ✓ verified 06-30 — single-link asset Share UI + management cleanup |
@@ -184,15 +184,16 @@ web-UX batch **011/013/014/015/016/019**, which the table marked DONE but no pri
 - **005 — TODO, re-confirmed: no drift.** Same projmgmt SHA; drift diff empty; no deps. Executable now.
 - **Nothing rejected or blocked.** No stale IN PROGRESS rows. No findings retired.
 
-### ⚠ Merge & tracking hygiene (action for the maintainer — advisor does not commit)
+### ✓ Merge & tracking hygiene — RESOLVED 2026-06-30 (maintainer requested merge)
 
-- **Batch unmerged to `main`.** `main` = `d229011`; HEAD `advisor/019` = `039e2fb` is **4 commits ahead**
-  carrying 015 (`274baa1`), 019 (`000a211`), 011+013 (`d97c78b`), 014+016 (`039e2fb`). None merged yet.
-- **012 stranded.** Its fix lives only on `advisor/012` (`90350ad`) — not in `main`, not in `advisor/019`.
-  Merge it, or its upload/playback fix never reaches the all-in-one image users build from `main`.
-- **Plan files 011–016 untracked.** They exist on disk but are not in git (`git status` → `??`), while the
-  README and plan 019 *are* committed. Merging `advisor/019` to `main` would carry the README rows for
-  011–016 but not their plan files. Commit `plans/011..016` so the record matches the index.
+All three loose ends from the reconcile run are closed. `main` is now `6774f4b`:
+
+- **Batch merged.** `advisor/019` (web batch 015/019/011/013/014/016) fast-forwarded into `main`.
+- **012 merged.** `advisor/012` (MinIO `0.0.0.0` + `S3_PUBLIC_ENDPOINT` + CORS) merged via `10983b3`;
+  the all-in-one image built from `main` now bakes the upload/playback fix.
+- **Plan files committed.** `plans/011..016` are now tracked (`6774f4b`); record matches the index.
+
+All `advisor/*` branches are now ancestors of `main` (`git branch --no-merged main` → empty). Not pushed.
 
 ## Recommended sequencing
 
