@@ -52,7 +52,7 @@ do not modify the other repo from within a plan unless the plan's Scope says so.
 | 022 | Offer "upload as new version" when a dropped/selected file matches an existing asset | FreeFrame `apps/web` | P2 | M | — | TODO — ready (no drift) |
 | 023 | Simplify the share popup — collapse people-invite behind progressive disclosure | FreeFrame `apps/web` | P2 | S–M | — | TODO — ready (no drift) |
 | 024 | Hide comments panel until an asset is selected + collapsible assets panel | FreeFrame `apps/web` | P2 | S–M | — | TODO — ready (no drift) |
-| 025 | Move global nav from the left rail into the top header (remove the rail) | FreeFrame `apps/web` | P2 | L | — | TODO — ready (interacts w/ 021) |
+| 025 | Move global nav from the left rail into the top header (remove the rail) | FreeFrame `apps/web` | P2 | L | — | DONE ✓ verified 2026-07-01 (branch `advisor/025-nav-into-header`) |
 | 026 | Restore green web test/type baseline (stale vitest mocks + asset-grid fixture + Node-25 localStorage) | FreeFrame `apps/web` | P1 | S–M | — | TODO — ready (no drift) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED (with one-line rationale)
