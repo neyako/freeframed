@@ -46,7 +46,7 @@ do not modify the other repo from within a plan unless the plan's Scope says so.
 | 014 | Drag-and-drop upload onto the project grid (#2) | FreeFrame `apps/web` | P2 | S–M | — | TODO — ready |
 | 015 | Single Drive-style share link per asset; remove multi-link UI (#3, full cleanup, keep people-share) | FreeFrame `apps/web` | P1 | L | — | DONE ✓ verified 06-30 — single-link asset Share UI + management cleanup |
 | 016 | Open an asset on a single click/tap instead of double-click (#4) | FreeFrame `apps/web` | P2 | S | — | TODO — ready |
-| 019 | Extend single-link sharing to folders/projects/bulk; retire ShareCreateDialog (#3 completion) | FreeFrame `apps/web` | P2 | L | 015 | TODO — ready (the part 015 deferred) |
+| 019 | Extend single-link sharing to folders/projects/bulk; retire ShareCreateDialog (#3 completion) | FreeFrame `apps/web` | P2 | L | 015 | DONE ✓ verified 06-30 |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED (with one-line rationale)
 

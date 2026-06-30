@@ -32,7 +32,10 @@ import { useComments } from "@/hooks/use-comments";
 import { useFolders, useTrash } from "@/hooks/use-folders";
 import { FolderTree } from "@/components/projects/folder-tree";
 import { NameDialog } from "@/components/projects/name-dialog";
-import { ShareCreateDialog } from "@/components/projects/share-create-dialog";
+import {
+  BulkSharePanel,
+  SharePanel,
+} from "@/components/review/share-dialog";
 import { ProjectMembersDialog } from "@/components/projects/project-members-dialog";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { usePageTitle } from "@/hooks/use-page-title";
@@ -43,6 +46,12 @@ import type {
   User,
   Folder,
 } from "@/types";
+
+type ActiveShare =
+  | { kind: "project" }
+  | { kind: "folder"; id: string; name: string }
+  | { kind: "asset"; id: string; name: string }
+  | { kind: "bulk"; assetIds: string[]; folderIds: string[]; title: string };
 
 export default function ProjectDetailPage() {
   const params = useParams();
@@ -68,24 +77,7 @@ export default function ProjectDetailPage() {
   const [folderDialogParentId, setFolderDialogParentId] = React.useState<
     string | null
   >(null);
-  const [shareDialogOpen, setShareDialogOpen] = React.useState(false);
-  const [shareDialogPreselect, setShareDialogPreselect] = React.useState<{
-    type: "folder" | "asset";
-    id: string;
-    name: string;
-  } | null>(null);
-  const [shareDialogPreselectedItems, setShareDialogPreselectedItems] = React.useState<
-    { type: "folder" | "asset"; id: string; name: string }[]
-  >([]);
-  const [shareDialogResult, setShareDialogResult] = React.useState<{
-    token: string;
-    title: string;
-    itemType: "asset" | "folder";
-    thumbnailUrl: string | null;
-    assetId?: string | null;
-    folderId?: string | null;
-    projectId?: string | null;
-  } | null>(null);
+  const [activeShare, setActiveShare] = React.useState<ActiveShare | null>(null);
   const [shareMode, setShareMode] = React.useState(false);
   const [membersDialogOpen, setMembersDialogOpen] = React.useState(false);
   const [pendingBulkDelete, setPendingBulkDelete] = React.useState<{
@@ -266,42 +258,15 @@ export default function ProjectDetailPage() {
   const canManageMembers = currentRole === "owner";
   const canComment = currentRole !== "viewer";
 
-  function openShareDialog(assetIds: string[], folderIds: string[]) {
-    if (folderIds.length === 1 && assetIds.length === 0) {
-      const folder = subfolders?.find((f) => f.id === folderIds[0]);
-      setShareDialogPreselect({
-        type: "folder",
-        id: folderIds[0],
-        name: folder?.name || "Shared Folder",
-      });
-      setShareDialogPreselectedItems([]);
-    } else if (assetIds.length === 1 && folderIds.length === 0) {
-      const asset = assets?.find((a) => a.id === assetIds[0]);
-      setShareDialogPreselect({
-        type: "asset",
-        id: assetIds[0],
-        name: asset?.name || "Shared Asset",
-      });
-      setShareDialogPreselectedItems([]);
-    } else if (assetIds.length > 0 || folderIds.length > 0) {
-      // Multiple items — build preselectedItems array
-      setShareDialogPreselect(null);
-      const items: { type: "folder" | "asset"; id: string; name: string }[] = [];
-      for (const id of assetIds) {
-        const asset = assets?.find((a) => a.id === id);
-        if (asset) items.push({ type: "asset", id, name: asset.name });
-      }
-      for (const id of folderIds) {
-        const folder = subfolders?.find((f) => f.id === id);
-        if (folder) items.push({ type: "folder", id, name: folder.name });
-      }
-      setShareDialogPreselectedItems(items);
-    } else {
-      setShareDialogPreselect(null);
-      setShareDialogPreselectedItems([]);
-    }
-    setShareDialogResult(null);
-    setShareDialogOpen(true);
+  function openBulkShare(assetIds: string[], folderIds: string[]) {
+    if (!canShare) return;
+    const itemCount = assetIds.length + folderIds.length;
+    setActiveShare({
+      kind: "bulk",
+      assetIds,
+      folderIds,
+      title: `Share ${itemCount} item${itemCount === 1 ? "" : "s"}`,
+    });
   }
 
   React.useEffect(() => {
@@ -543,22 +508,28 @@ export default function ProjectDetailPage() {
                 mutateAssets();
                 mutateSubfolders();
               }}
-              onFolderShare={async (folderId, folderName) => {
-                setShareDialogPreselect({
-                  type: "folder",
+              onFolderShare={canShare ? async (folderId, folderName) => {
+                setActiveShare({
+                  kind: "folder",
                   id: folderId,
                   name: folderName,
                 });
-                setShareDialogOpen(true);
-              }}
+              } : undefined}
               onDropToFolder={async (targetFolderId, assetIds, folderIds) => {
                 await bulkMove(assetIds, folderIds, targetFolderId);
                 mutateAssets();
                 mutateSubfolders();
               }}
-              shareMode={false}
-              onShareModeChange={setShareMode}
-              onCreateShareLink={openShareDialog}
+              shareMode={canShare ? shareMode : false}
+              onShareModeChange={canShare ? setShareMode : undefined}
+              onCreateShareLink={canShare ? openBulkShare : undefined}
+              onAssetShare={canShare ? (asset) => {
+                setActiveShare({
+                  kind: "asset",
+                  id: asset.id,
+                  name: asset.name,
+                });
+              } : undefined}
               onAssetDownload={async (asset) => {
                 try {
                   const data = await api.get<{ url: string }>(
@@ -637,7 +608,7 @@ export default function ProjectDetailPage() {
                     <Button
                       variant="secondary"
                       size="sm"
-                      onClick={() => openShareDialog([], [])}
+                      onClick={() => setActiveShare({ kind: "project" })}
                     >
                       <Share2 className="h-4 w-4" />
                       Share
@@ -961,29 +932,68 @@ export default function ProjectDetailPage() {
         }}
       />
 
-      {/* Share create dialog */}
-      <ShareCreateDialog
-        open={shareDialogOpen}
+      {/* Share dialog */}
+      <Dialog.Root
+        open={activeShare !== null}
         onOpenChange={(open) => {
-          setShareDialogOpen(open);
-          if (!open) {
-            setShareDialogPreselect(null);
-            setShareDialogPreselectedItems([]);
-            setShareDialogResult(null);
-          }
+          if (!open) setActiveShare(null);
         }}
-        projectId={projectId}
-        currentFolderId={currentFolderId}
-        assets={assets ?? []}
-        folders={subfolders ?? []}
-        preselectedItem={shareDialogPreselect}
-        preselectedItems={shareDialogPreselectedItems}
-        initialResult={shareDialogResult}
-        onShareCreated={() => {
-          mutateAssets();
-          mutateSubfolders();
-        }}
-      />
+      >
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-bg-secondary p-5 shadow-xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95">
+            <Dialog.Close className="absolute right-4 top-4 text-text-tertiary hover:text-text-primary transition-colors">
+              <X className="h-4 w-4" />
+            </Dialog.Close>
+            <Dialog.Title className="text-base font-semibold text-text-primary">
+              {activeShare?.kind === "folder"
+                ? `Share ${activeShare.name}`
+                : activeShare?.kind === "asset"
+                  ? `Share ${activeShare.name}`
+                : activeShare?.kind === "bulk"
+                  ? activeShare.title
+                  : "Share project"}
+            </Dialog.Title>
+            <Dialog.Description className="sr-only">
+              Create and copy a reviewer share link.
+            </Dialog.Description>
+            <div className="mt-4">
+              {activeShare?.kind === "project" && (
+                <SharePanel
+                  target={{
+                    kind: "project",
+                    id: projectId,
+                    name: project?.name ?? "Project",
+                  }}
+                  projectId={projectId}
+                />
+              )}
+              {activeShare?.kind === "folder" && (
+                <SharePanel
+                  target={{ kind: "folder", id: activeShare.id }}
+                  projectId={projectId}
+                  withPeople
+                />
+              )}
+              {activeShare?.kind === "asset" && (
+                <SharePanel
+                  target={{ kind: "asset", id: activeShare.id }}
+                  projectId={projectId}
+                  withPeople
+                />
+              )}
+              {activeShare?.kind === "bulk" && (
+                <BulkSharePanel
+                  projectId={projectId}
+                  assetIds={activeShare.assetIds}
+                  folderIds={activeShare.folderIds}
+                  title={activeShare.title}
+                />
+              )}
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
 
       {/* Project members dialog */}
       <ProjectMembersDialog
