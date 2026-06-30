@@ -71,6 +71,9 @@ describe("ShareDialog", () => {
     expect(screen.getByText(/\/share\/token$/)).toBeInTheDocument();
     expect(screen.getByLabelText(/allow download/i)).not.toBeChecked();
     expect(screen.getByRole("button", { name: /copy/i })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /invite specific people/i }));
+
     expect(screen.getByText(/share with user/i)).toBeInTheDocument();
 
     expect(mockedApi.get).toHaveBeenCalledWith("/assets/asset-1/shares");
@@ -100,6 +103,7 @@ describe("ShareDialog", () => {
   });
 
   it("creates a folder single-link panel with folder people-share endpoints", async () => {
+    const user = userEvent.setup();
     const link = folderShareLink();
 
     mockedApi.get.mockImplementation(async (path: string) => {
@@ -123,13 +127,18 @@ describe("ShareDialog", () => {
 
     expect(await screen.findByText("Anyone with the link")).toBeInTheDocument();
     expect(screen.getByText(/\/share\/folder-token$/)).toBeInTheDocument();
-    expect(screen.getByText(/share with people/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /invite specific people/i })).toBeInTheDocument();
 
     expect(mockedApi.get).toHaveBeenCalledWith("/folders/folder-1/shares");
-    expect(mockedApi.get).toHaveBeenCalledWith("/folders/folder-1/direct-shares");
     expect(mockedApi.post).toHaveBeenCalledWith("/folders/folder-1/share", {
       permission: "view",
       allow_download: false,
+    });
+
+    await user.click(screen.getByRole("button", { name: /invite specific people/i }));
+
+    await waitFor(() => {
+      expect(mockedApi.get).toHaveBeenCalledWith("/folders/folder-1/direct-shares");
     });
   });
 
@@ -268,5 +277,39 @@ describe("ShareDialog", () => {
     await waitFor(() => {
       expect(mockedApi.post).not.toHaveBeenCalled();
     });
+  });
+
+  it("collapses people-invite by default and expands on toggle click", async () => {
+    const user = userEvent.setup();
+
+    mockedApi.get.mockImplementation(async (path: string) => {
+      if (path === "/assets/asset-1/shares") return [];
+      if (path === "/assets/asset-1/direct-shares") return [];
+      if (path === "/organizations/project-1/teams") return { teams: [] };
+      return [];
+    });
+    mockedApi.post.mockImplementation(async (path: string) => {
+      if (path === "/assets/asset-1/share") return createdShareLink();
+      return {};
+    });
+
+    render(
+      <SharePanel
+        target={{ kind: "asset", id: "asset-1" }}
+        projectId="project-1"
+        withPeople
+      />,
+    );
+
+    expect(await screen.findByText("Anyone with the link")).toBeInTheDocument();
+
+    expect(screen.queryByPlaceholderText("user@example.com")).not.toBeInTheDocument();
+
+    const toggleBtn = screen.getByRole("button", { name: /invite specific people/i });
+    expect(toggleBtn).toBeInTheDocument();
+
+    await user.click(toggleBtn);
+
+    expect(screen.getByPlaceholderText("user@example.com")).toBeInTheDocument();
   });
 });
