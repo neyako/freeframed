@@ -4,12 +4,10 @@ import * as React from "react";
 import { usePathname } from "next/navigation";
 import { useAuthStore } from "@/stores/auth-store";
 import { useUploadStore } from "@/stores/upload-store";
-import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { CommandPalette } from "@/components/layout/command-palette";
 import { UploadsPanel } from "@/components/layout/uploads-panel";
 import { UploadSSEBridge } from "@/components/layout/upload-sse-bridge";
-import { cn } from "@/lib/utils";
 
 export default function DashboardLayout({
   children,
@@ -17,7 +15,6 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const [sidebarCollapsed, setSidebarCollapsed] = React.useState(true);
   const [commandOpen, setCommandOpen] = React.useState(false);
   const { fetchUser } = useAuthStore();
   const { fetchHistory } = useUploadStore();
@@ -44,18 +41,7 @@ export default function DashboardLayout({
 
   return (
     <div className="flex h-screen overflow-hidden bg-bg-primary">
-      <Sidebar
-        collapsed={sidebarCollapsed}
-        onToggle={() => setSidebarCollapsed((c) => !c)}
-      />
-
-      {/* Main content area */}
-      <main
-        className={cn(
-          "flex flex-1 flex-col overflow-hidden transition-[margin] duration-200 ease-spring",
-          sidebarCollapsed ? "ml-[52px]" : "ml-[220px]",
-        )}
-      >
+      <main className="flex flex-1 flex-col overflow-hidden">
         {!isAssetViewer && <Header onSearchOpen={() => setCommandOpen(true)} />}
 
         <div className="relative flex-1 overflow-y-auto">{children}</div>
