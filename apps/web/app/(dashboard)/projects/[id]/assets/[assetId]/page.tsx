@@ -22,11 +22,13 @@ import { useUploadStore } from '@/stores/upload-store'
 import { useBreadcrumbStore } from '@/stores/breadcrumb-store'
 import {
   ArrowLeft,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Info,
   Loader2,
   Columns2,
+  MessageSquare,
   Upload,
 } from 'lucide-react'
 import Link from 'next/link'
@@ -399,7 +401,7 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
           <button
             onClick={() => setSidebarOpen((p) => !p)}
             className={cn(
-              'flex items-center justify-center h-8 w-8 rounded-md transition-colors',
+              'hidden md:flex items-center justify-center h-8 w-8 rounded-md transition-colors',
               sidebarOpen
                 ? 'bg-bg-hover text-text-primary'
                 : 'text-text-tertiary hover:text-text-primary hover:bg-bg-hover',
@@ -422,6 +424,14 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
         {/* Right: comments sidebar */}
         {sidebarOpen && (
           <div className="w-full h-[55vh] md:h-auto md:w-[360px] flex flex-col border-t md:border-t-0 border-l-0 md:border-l border-border bg-bg-secondary shrink-0 animate-in slide-in-from-bottom-2 md:slide-in-from-right-2 duration-150">
+            <button
+              onClick={() => setSidebarOpen(false)}
+              className="md:hidden flex items-center justify-center gap-1.5 w-full py-2 text-xs text-text-tertiary border-b border-border"
+            >
+              <ChevronDown className="h-4 w-4" />
+              Hide comments
+            </button>
+
             {/* Tabs (Frame.io pill style) */}
             <div className="px-4 pt-3 pb-2 shrink-0">
               <div className="flex items-center bg-bg-tertiary rounded-lg p-0.5">
@@ -512,6 +522,16 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
           </div>
         )}
       </div>
+
+      {!sidebarOpen && (
+        <button
+          onClick={() => setSidebarOpen(true)}
+          className="md:hidden absolute bottom-4 left-1/2 -translate-x-1/2 z-30 inline-flex items-center gap-2 rounded-full bg-bg-hover backdrop-blur px-4 py-2.5 text-sm font-medium text-text-primary shadow-lg border border-border"
+        >
+          <MessageSquare className="h-4 w-4" />
+          Comments{comments.length ? ` (${comments.length})` : ''}
+        </button>
+      )}
     </div>
   )
 }
