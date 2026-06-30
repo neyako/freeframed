@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { cn, formatRelativeTime, formatBytes } from "@/lib/utils";
 import { api } from "@/lib/api";
+import { findVersionCandidate } from "@/lib/version-match";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar } from "@/components/shared/avatar";
@@ -54,6 +55,12 @@ type ActiveShare =
   | { kind: "asset"; id: string; name: string }
   | { kind: "bulk"; assetIds: string[]; folderIds: string[]; title: string };
 
+type VersionPrompt = {
+  file: File;
+  candidate: AssetResponse;
+  newAssetName: string;
+};
+
 export default function ProjectDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -87,10 +94,11 @@ export default function ProjectDetailPage() {
   } | null>(null);
   const [assetToRename, setAssetToRename] = React.useState<AssetResponse | null>(null);
   const [assetToDelete, setAssetToDelete] = React.useState<AssetResponse | null>(null);
+  const [versionPrompt, setVersionPrompt] = React.useState<VersionPrompt | null>(null);
   const [isDraggingFiles, setIsDraggingFiles] = React.useState(false);
   const dragDepth = React.useRef(0);
 
-  const { files: uploadFiles, startUpload } = useUploadStore();
+  const { files: uploadFiles, startUpload, startVersionUpload } = useUploadStore();
   const { user } = useAuthStore();
 
   const {
@@ -287,12 +295,28 @@ export default function ProjectDetailPage() {
     if (files.length > 0) setAssetName(files[0].name.replace(/\.[^/.]+$/, ""));
   };
 
-  const handleStartUpload = () => {
-    pendingFiles.forEach((file) => {
-      const name =
-        pendingFiles.length === 1 ? assetName || file.name : file.name;
+  const startSmartUpload = React.useCallback(
+    (file: File, name: string) => {
+      const candidate = findVersionCandidate(file.name, assets ?? []);
+      if (candidate) {
+        setVersionPrompt({ file, candidate, newAssetName: name });
+        return;
+      }
+
       startUpload(file, projectId, name, project?.name, currentFolderId);
-    });
+    },
+    [assets, startUpload, projectId, project?.name, currentFolderId],
+  );
+
+  const handleStartUpload = () => {
+    const [file] = pendingFiles;
+    if (pendingFiles.length === 1 && file) {
+      startSmartUpload(file, assetName || file.name);
+    } else {
+      pendingFiles.forEach((pendingFile) => {
+        startUpload(pendingFile, projectId, pendingFile.name, project?.name, currentFolderId);
+      });
+    }
     setPendingFiles([]);
     setAssetName("");
     setUploadOpen(false);
@@ -303,12 +327,18 @@ export default function ProjectDetailPage() {
       const files = Array.from(fileList ?? []);
       if (files.length === 0) return;
 
-      files.forEach((file) => {
-        const name = file.name.replace(/\.[^/.]+$/, "");
-        startUpload(file, projectId, name, project?.name, currentFolderId);
+      const [file] = files;
+      if (files.length === 1 && file) {
+        startSmartUpload(file, file.name.replace(/\.[^/.]+$/, ""));
+        return;
+      }
+
+      files.forEach((droppedFile) => {
+        const name = droppedFile.name.replace(/\.[^/.]+$/, "");
+        startUpload(droppedFile, projectId, name, project?.name, currentFolderId);
       });
     },
-    [startUpload, projectId, project?.name, currentFolderId],
+    [startUpload, startSmartUpload, projectId, project?.name, currentFolderId],
   );
 
   const handleSelectFolder = React.useCallback(
@@ -1039,6 +1069,67 @@ export default function ProjectDetailPage() {
                   title={activeShare.title}
                 />
               )}
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+
+      <Dialog.Root
+        open={versionPrompt !== null}
+        onOpenChange={(open) => {
+          if (!open) setVersionPrompt(null);
+        }}
+      >
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-bg-secondary p-5 shadow-xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95">
+            <Dialog.Close className="absolute right-4 top-4 text-text-tertiary hover:text-text-primary transition-colors">
+              <X className="h-4 w-4" />
+            </Dialog.Close>
+            <Dialog.Title className="text-base font-semibold text-text-primary">
+              Upload as a new version?
+            </Dialog.Title>
+            <Dialog.Description className="mt-1 text-sm text-text-secondary">
+              &quot;{versionPrompt?.file.name}&quot; looks like a version of &quot;{versionPrompt?.candidate.name}&quot;.
+            </Dialog.Description>
+            <div className="mt-4 flex flex-col gap-2">
+              <Button
+                size="sm"
+                onClick={() => {
+                  if (!versionPrompt) return;
+                  startVersionUpload(
+                    versionPrompt.file,
+                    versionPrompt.candidate.id,
+                    versionPrompt.candidate.name,
+                    projectId,
+                  );
+                  setVersionPrompt(null);
+                }}
+              >
+                New version of &quot;{versionPrompt?.candidate.name}&quot;
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  if (!versionPrompt) return;
+                  startUpload(
+                    versionPrompt.file,
+                    projectId,
+                    versionPrompt.newAssetName,
+                    project?.name,
+                    currentFolderId,
+                  );
+                  setVersionPrompt(null);
+                }}
+              >
+                Upload as a new asset
+              </Button>
+              <Dialog.Close asChild>
+                <Button variant="ghost" size="sm">
+                  Cancel
+                </Button>
+              </Dialog.Close>
             </div>
           </Dialog.Content>
         </Dialog.Portal>
