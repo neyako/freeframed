@@ -23,6 +23,7 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { GuestCommentInput } from '@/components/review/guest-comment-input'
 import { FolderShareViewer } from '@/components/share/folder-share-viewer'
+import { ShareVideoPlayer } from '@/components/share/share-video-player'
 import type { Asset, SharePermission, ProjectBranding, ShareLinkAppearance } from '@/types'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -474,14 +475,7 @@ function ShareMediaViewer({ asset, token, streamUrl, streamLoading }: ShareMedia
           {streamLoading ? (
             <Loader2 className="h-8 w-8 animate-spin text-zinc-500" />
           ) : streamUrl ? (
-            <video
-              src={streamUrl}
-              controls
-              className="max-h-full max-w-full"
-              preload="metadata"
-            >
-              Your browser does not support video playback.
-            </video>
+            <ShareVideoPlayer src={streamUrl} className="min-h-0" />
           ) : (
             <div className="flex flex-col items-center gap-2">
               <Video className="h-10 w-10 text-zinc-700" />
@@ -720,9 +714,6 @@ function ShareViewer({
   const [commentCount, setCommentCount] = React.useState<number | null>(null)
   const autoOpened = React.useRef(false)
 
-  // Fetch the comment count for this share so we can (a) label the mobile button and
-  // (b) auto-open the panel ONCE only when there are comments (#5). Empty cuts start
-  // with the panel collapsed so the video fills the screen.
   React.useEffect(() => {
     let cancelled = false
     fetch(`${API_URL}/share/${token}/comments`)
@@ -731,7 +722,11 @@ function ShareViewer({
         if (cancelled) return
         const n = Array.isArray(data) ? data.length : 0
         setCommentCount(n)
-        if (n > 0 && !autoOpened.current) {
+        const canComment = permission === 'comment' || permission === 'approve'
+        const isDesktop =
+          typeof window !== 'undefined' &&
+          window.matchMedia('(min-width: 768px)').matches
+        if (!autoOpened.current && canComment && isDesktop) {
           setSidebarOpen(true)
           autoOpened.current = true
         }
@@ -743,7 +738,7 @@ function ShareViewer({
         if (!cancelled) setCommentCount(0)
       })
     return () => { cancelled = true }
-  }, [token, commentKey])
+  }, [token, commentKey, permission])
 
   // For video/audio assets, get a stream URL if not already provided
   React.useEffect(() => {
