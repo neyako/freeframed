@@ -47,6 +47,12 @@ do not modify the other repo from within a plan unless the plan's Scope says so.
 | 015 | Single Drive-style share link per asset; remove multi-link UI (#3, full cleanup, keep people-share) | FreeFrame `apps/web` | P1 | L | — | DONE ✓ verified 06-30 — single-link asset Share UI + management cleanup |
 | 016 | Open an asset on a single click/tap instead of double-click (#4) | FreeFrame `apps/web` | P2 | S | — | DONE ✓ verified 06-30 — single click opens; share mode still selects |
 | 019 | Extend single-link sharing to folders/projects/bulk; retire ShareCreateDialog (#3 completion) | FreeFrame `apps/web` | P2 | L | 015 | DONE ✓ verified 06-30 |
+| 020 | Guest share video actually plays (HLS via hls.js) + auto-open comments for commentable guests | FreeFrame `apps/web` | P1 | M | — | TODO — ready (no drift) |
+| 021 | Editor/review page mobile rework — full-bleed viewer + bottom-sheet comments (no nav rail) | FreeFrame `apps/web` | P1 | M–L | — | TODO — ready (interacts w/ 025) |
+| 022 | Offer "upload as new version" when a dropped/selected file matches an existing asset | FreeFrame `apps/web` | P2 | M | — | TODO — ready (no drift) |
+| 023 | Simplify the share popup — collapse people-invite behind progressive disclosure | FreeFrame `apps/web` | P2 | S–M | — | TODO — ready (no drift) |
+| 024 | Hide comments panel until an asset is selected + collapsible assets panel | FreeFrame `apps/web` | P2 | S–M | — | TODO — ready (no drift) |
+| 025 | Move global nav from the left rail into the top header (remove the rail) | FreeFrame `apps/web` | P2 | L | — | TODO — ready (interacts w/ 021) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED (with one-line rationale)
 
@@ -194,6 +200,37 @@ All three loose ends from the reconcile run are closed. `main` is now `6774f4b`:
 - **Plan files committed.** `plans/011..016` are now tracked (`6774f4b`); record matches the index.
 
 All `advisor/*` branches are now ancestors of `main` (`git branch --no-merged main` → empty). Not pushed.
+
+## Review-UX requests — round 2 (2026-06-30, live testing of merged `main` @4d0c20f)
+
+The maintainer tested the merged all-in-one image and raised six items (with
+screenshots). All captured as plans (advisor lane — none fixed in-session), planned
+against FreeFrame HEAD `4d0c20f`. Frontend-only; no backend or DB changes.
+
+| Request | Plan | Notes / root cause |
+|---------|------|--------------------|
+| #1 — guest can't play video; auto-open comments so guests know they can comment | **020** | **Real bug, root-caused.** The share stream endpoint returns a *relative* HLS manifest (`/stream/hls/master.m3u8`, `share.py:1459`); the guest page feeds it to a plain `<video src>` (`share/[token]/page.tsx:477`), which Chromium can't play (HLS needs hls.js) and which doesn't resolve to the API origin. Editor works because it uses `<VideoPlayer>`/`useVideoPlayer` (hls.js). Fix = a small guest player reusing `useVideoPlayer`. Plus auto-open the comments panel on desktop for commentable links (deliberate, guest-only divergence from 011/013). |
+| #2 — editor page mobile UX still bad, needs rework | **021** | Stop reserving the global nav rail on the full-screen viewer route; port 013's mobile comment affordances (floating "Comments" button, in-panel "Hide comments" handle, hide top-bar toggle on mobile) into the editor page. Interacts with 025. |
+| #3 — easy "upload version 2" (detect filename / ask) | **022** | When a single uploaded file's normalized name matches an existing asset in the current folder, prompt: new version (`startVersionUpload`) vs new asset (`startUpload`). Conservative exact-stem match; pure helper unit-tested. |
+| #4 — share popup too much info / overwhelming | **023** | Progressive disclosure in `SharePanel`: link + permission + copy + allow-download stay; the entire "share with people" (user/team/current-shares) block collapses behind an "Invite specific people" toggle, default closed. `BulkSharePanel` already minimal. |
+| #5 — comment panel open with nothing selected; can't collapse assets panel | **024** | Gate the right comments panel on `rightPanelOpen && selectedAsset` (drop the dead "Select an asset" empty state); add a persisted collapse toggle for the left assets panel. **Distinct from #1**: #1 wants the *guest* panel more visible; #5 wants the *project page* panel less so. |
+| #6 — menu bar rework: migrate beside the search bar, drop the delicate zone | **025** | Move logo + Notifications + Uploads + user menu from `sidebar.tsx` into `header.tsx`; remove the rail and its margin from the dashboard shell; delete `sidebar.tsx`. App-shell change, MED risk. Interacts with 021. |
+
+**Key assumptions (flagged for the maintainer — redirect if wrong):**
+- 020 auto-opens the guest comments panel only on **desktop** (mobile keeps the
+  always-visible bottom "Comments" button) so the panel doesn't cover the video on
+  phones. This intentionally diverges from 011/013 for guests only.
+- 025 reads "beside the search bar" as **fully removing the left rail** and putting
+  nav in the header (not just collapsing the rail). If the intent was a collapsible
+  rail instead, 025 needs reframing before execution.
+- 023/024 keep every existing control reachable (one click / when an asset is
+  selected) — nothing is deleted, only relocated/gated.
+
+**Recommended order for round 2:** 020 (broken core flow) → 024 (quick win) →
+023 (quick win) → 022 → 021 + 025 last (both touch the shell; do 025 then 021, or
+land one and reconcile the other's `layout.tsx` step per their cross-notes). All
+six are independent at the file level **except** the 021↔025 `layout.tsx` overlap,
+which each plan's STOP/Maintenance notes call out.
 
 ## Recommended sequencing
 
