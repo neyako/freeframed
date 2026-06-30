@@ -41,7 +41,7 @@ do not modify the other repo from within a plan unless the plan's Scope says so.
 | 009 | True all-in-one Docker image (one container, GPU-ready, jellyfin-ffmpeg) | FreeFrame `Dockerfile.allinone` + `deploy/` | P1 | L | 008 | DONE ✓ verified 06-29 (build+run smoke passed, committed) |
 | 010 | CI/CD — publish images to GHCR on release (test-gated) + build all-in-one in CI | FreeFrame `.github/workflows` | P1 | M | 009 | DONE ✓ verified 06-29 — ⚠ uncommitted |
 | 011 | Responsive mobile layout for the **editor** review page (stack viewer + comments, mirror 001) | FreeFrame `apps/web` | P1 | S–M | — | DONE ✓ verified 06-30 — mobile stack + comment-gated sidebar |
-| 012 | Fix browser uploads **and guest video playback** in the all-in-one image (MinIO 0.0.0.0 + S3_PUBLIC_ENDPOINT + CORS) | FreeFrame `Dockerfile.allinone` + `deploy/` | P1 | S–M | 009 | DONE ✓ verified 06-29 — branch `advisor/012-allinone-upload-endpoint-fix`, commit pending |
+| 012 | Fix browser uploads **and guest video playback** in the all-in-one image (MinIO 0.0.0.0 + S3_PUBLIC_ENDPOINT + CORS) | FreeFrame `Dockerfile.allinone` + `deploy/` | P1 | S–M | 009 | DONE ✓ verified 06-29 — ⚠ **unmerged**: lives only on branch `advisor/012` (`90350ad`); not in `main` or HEAD |
 | 013 | Share viewer comment panel — bottom toggle on mobile + open only when comments exist (#1b, #5) | FreeFrame `apps/web` | P2 | S–M | — | DONE ✓ verified 06-30 — bottom mobile toggle + comment-gated sidebar |
 | 014 | Drag-and-drop upload onto the project grid (#2) | FreeFrame `apps/web` | P2 | S–M | — | DONE ✓ verified 06-30 — grid drop uploads to current folder |
 | 015 | Single Drive-style share link per asset; remove multi-link UI (#3, full cleanup, keep people-share) | FreeFrame `apps/web` | P1 | L | — | DONE ✓ verified 06-30 — single-link asset Share UI + management cleanup |
@@ -151,6 +151,48 @@ The maintainer raised five UX/bug items while testing. Mapping to plans (HEAD `d
 | #5 — hide comment panel when no comments | **011 (editor) + 013 (share viewer)** | Panel auto-opens once only when comments exist; otherwise collapsed, user opens via toggle. |
 
 Decisions captured via AskUserQuestion: share rework = **full cleanup**; **keep** direct people-share.
+
+## Reconcile log — 2026-06-30
+
+Run against FreeFrame HEAD `039e2fb` (branch `advisor/019`) and projmgmt HEAD `1905a0b`. Covers the
+web-UX batch **011/013/014/015/016/019**, which the table marked DONE but no prior log had verified.
+
+- **011 — DONE, verified @039e2fb.** Editor review page
+  `apps/web/app/(dashboard)/projects/[id]/assets/[assetId]/page.tsx`: sidebar default closed
+  (`sidebarOpen=false`, line 57), comment-gated auto-open (`if (comments.length > 0) setSidebarOpen(true)`,
+  134–138), manual toggle (400), responsive stack `flex flex-col md:flex-row` (415). (Implementation uses
+  a `sidebarOpen` state gate rather than 001's `matchMedia`; stacking + comment-gate criteria both hold.)
+- **013 — DONE, verified @039e2fb.** Share viewer `apps/web/app/share/[token]/page.tsx`: mobile
+  bottom-anchored toggle `md:hidden absolute bottom-4 …` (811), in-panel collapse handle `md:hidden …`
+  (572), comment-gated panel.
+- **014 — DONE, verified @039e2fb.** `apps/web/app/(dashboard)/projects/[id]/page.tsx`: `handleDropFiles`
+  → `startUpload(file, projectId, name, project?.name, currentFolderId)` (301–311); grid
+  `onDrop`/`onDragOver`/`onDragLeave` guarded by `canUpload && !showTrash && dataTransfer.types.includes("Files")`
+  (425–440). Uploads land in the current folder.
+- **015 — DONE, verified @039e2fb.** Single-link asset share components present
+  (`components/review/share-link-section.tsx`, `share-link-controls.tsx`); multi-link management UI gone.
+- **016 — DONE, verified @039e2fb.** `components/projects/asset-grid.tsx:338` — single `onClick` opens via
+  `onAssetOpen?.(asset)`; in `shareMode` it `stopPropagation()` + `toggleAssetSelect`. Double-click retained
+  as a harmless alias. Matches "single click opens; share mode still selects."
+- **019 — DONE, verified @039e2fb.** Folder/project/bulk single-link components present
+  (`share-bulk-panel.tsx`, `components/share/folder-share-viewer.tsx`); **`ShareCreateDialog` fully
+  retired** — `find`/`grep` for `ShareCreate*` across `apps/web` returns nothing.
+- **004 — TODO, re-confirmed: no drift.** projmgmt still at `1905a0b`; drift diff on
+  `src/actions/projects.ts` + `src/lib/nextcloud.ts` empty; `src/lib/freeframe.ts` absent (unexecuted).
+  Code deps 002/003 are DONE and committed in FreeFrame. **Executable now**; end-to-end still needs a
+  deployed, reachable FreeFrame (runtime precondition, not a code blocker).
+- **005 — TODO, re-confirmed: no drift.** Same projmgmt SHA; drift diff empty; no deps. Executable now.
+- **Nothing rejected or blocked.** No stale IN PROGRESS rows. No findings retired.
+
+### ⚠ Merge & tracking hygiene (action for the maintainer — advisor does not commit)
+
+- **Batch unmerged to `main`.** `main` = `d229011`; HEAD `advisor/019` = `039e2fb` is **4 commits ahead**
+  carrying 015 (`274baa1`), 019 (`000a211`), 011+013 (`d97c78b`), 014+016 (`039e2fb`). None merged yet.
+- **012 stranded.** Its fix lives only on `advisor/012` (`90350ad`) — not in `main`, not in `advisor/019`.
+  Merge it, or its upload/playback fix never reaches the all-in-one image users build from `main`.
+- **Plan files 011–016 untracked.** They exist on disk but are not in git (`git status` → `??`), while the
+  README and plan 019 *are* committed. Merging `advisor/019` to `main` would carry the README rows for
+  011–016 but not their plan files. Commit `plans/011..016` so the record matches the index.
 
 ## Recommended sequencing
 
