@@ -46,6 +46,58 @@ interface ReviewContextValue {
 
 const ReviewContext = createContext<ReviewContextValue | null>(null);
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isAssetVersionStatus(
+  value: unknown,
+): value is AssetVersion["processing_status"] {
+  return (
+    value === "uploading" ||
+    value === "processing" ||
+    value === "ready" ||
+    value === "failed"
+  );
+}
+
+function isAssetVersion(value: unknown): value is AssetVersion {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.asset_id === "string" &&
+    typeof value.version_number === "number" &&
+    isAssetVersionStatus(value.processing_status) &&
+    typeof value.created_by === "string" &&
+    typeof value.created_at === "string" &&
+    (value.deleted_at === null || typeof value.deleted_at === "string")
+  );
+}
+
+function parseAssetVersions(payload: unknown): AssetVersion[] {
+  const values =
+    Array.isArray(payload)
+      ? payload
+      : isRecord(payload) && Array.isArray(payload.versions)
+        ? payload.versions
+        : [];
+  return values.filter(isAssetVersion);
+}
+
+function getPreferredVersion(
+  allVersions: AssetVersion[],
+  fallback: AssetVersion | null,
+): AssetVersion | null {
+  const newestFirst = [...allVersions].sort(
+    (a, b) => b.version_number - a.version_number,
+  );
+  return (
+    newestFirst.find((version) => version.processing_status === "ready") ??
+    newestFirst[0] ??
+    fallback
+  );
+}
+
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
 interface ReviewProviderProps {
@@ -80,7 +132,8 @@ export function ReviewProvider({
     };
   }, []);
 
-  const shareSessionParam = shareSession ? `&share_session=${encodeURIComponent(shareSession)}` : '';
+  const shareSessionParam = shareSession ? `&share_session=${encodeURIComponent(shareSession)}` : "";
+  const shareSessionQuery = shareSession ? `?share_session=${encodeURIComponent(shareSession)}` : "";
 
   const fetchAsset = useCallback(async () => {
     try {
@@ -100,6 +153,15 @@ export function ReviewProvider({
           { headers },
         );
         const streamData = streamRes.ok ? await streamRes.json() : null;
+        let shareVersions: AssetVersion[] = [];
+        const versionsRes = await fetch(
+          `${API_URL}/share/${shareToken}/versions/${assetId}${shareSessionQuery}`,
+          { headers },
+        );
+        if (versionsRes.ok) {
+          const versionsData: unknown = await versionsRes.json();
+          shareVersions = parseAssetVersions(versionsData);
+        }
         // Build pseudo asset from available data
         data = {
           id: assetId,
@@ -132,6 +194,22 @@ export function ReviewProvider({
               }
             : null,
         } as AssetResponse;
+        if (!mountedRef.current) return;
+        setVersions(shareVersions);
+
+        const currentVersion = useReviewStore.getState().currentVersion;
+        const keepCurrentVersion =
+          currentVersion?.asset_id === assetId &&
+          shareVersions.some((version) => version.id === currentVersion.id);
+        if (!keepCurrentVersion) {
+          const preferredVersion = getPreferredVersion(
+            shareVersions,
+            data.latest_version,
+          );
+          if (preferredVersion) {
+            setCurrentVersion(preferredVersion);
+          }
+        }
       } else {
         // Normal mode: authenticated API
         data = await api.get<AssetResponse>(`/assets/${assetId}`);
@@ -149,22 +227,25 @@ export function ReviewProvider({
         if (!mountedRef.current) return;
         setVersions(allVersions ?? []);
 
-        const readyVersion = (allVersions ?? [])
-          .sort((a, b) => b.version_number - a.version_number)
-          .find((v) => v.processing_status === "ready");
-        if (readyVersion) {
-          setCurrentVersion(readyVersion);
-        } else if (data.latest_version) {
-          setCurrentVersion(data.latest_version);
+        const currentVersion = useReviewStore.getState().currentVersion;
+        const keepCurrentVersion =
+          currentVersion?.asset_id === assetId &&
+          (allVersions ?? []).some((version) => version.id === currentVersion.id);
+        if (!keepCurrentVersion) {
+          const preferredVersion = getPreferredVersion(
+            allVersions ?? [],
+            data.latest_version,
+          );
+          if (preferredVersion) {
+            setCurrentVersion(preferredVersion);
+          }
         }
-      } else if (data.latest_version) {
-        setCurrentVersion(data.latest_version);
       }
     } catch (err) {
       if (!mountedRef.current) return;
       setError(err instanceof Error ? err.message : "Failed to load asset");
     }
-  }, [assetId, shareToken, shareSessionParam, setCurrentAsset, setCurrentVersion]);
+  }, [assetId, shareToken, shareSessionParam, shareSessionQuery, setCurrentAsset, setCurrentVersion]);
 
   const fetchComments = useCallback(async () => {
     try {
@@ -190,22 +271,41 @@ export function ReviewProvider({
     } catch {
       // Comments failing silently — asset is still viewable
     }
-  }, [assetId, shareToken]);
+  }, [assetId, shareToken, shareSessionParam]);
 
   const refetchComments = useCallback(async () => {
     await fetchComments();
   }, [fetchComments]);
 
   const refetchVersions = useCallback(async () => {
-    if (shareToken) return;
     try {
-      const allVersions = await api.get<AssetVersion[]>(`/assets/${assetId}/versions`);
+      let allVersions: AssetVersion[];
+      if (shareToken) {
+        const API_URL =
+          process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+        const res = await fetch(
+          `${API_URL}/share/${shareToken}/versions/${assetId}${shareSessionQuery}`,
+        );
+        if (!res.ok) return;
+        const json: unknown = await res.json();
+        allVersions = parseAssetVersions(json);
+      } else {
+        allVersions = await api.get<AssetVersion[]>(`/assets/${assetId}/versions`);
+      }
       if (!mountedRef.current) return;
       setVersions(allVersions ?? []);
+      const currentVersion = useReviewStore.getState().currentVersion;
+      const keepCurrentVersion =
+        currentVersion?.asset_id === assetId &&
+        (allVersions ?? []).some((version) => version.id === currentVersion.id);
+      if (!keepCurrentVersion) {
+        const preferredVersion = getPreferredVersion(allVersions ?? [], null);
+        if (preferredVersion) setCurrentVersion(preferredVersion);
+      }
     } catch {
       // ignore
     }
-  }, [assetId, shareToken]);
+  }, [assetId, shareToken, shareSessionQuery, setCurrentVersion]);
 
   useEffect(() => {
     setIsLoading(true);
@@ -256,7 +356,7 @@ export function ReviewProvider({
       }
       return comment;
     },
-    [assetId],
+    [assetId, shareSessionParam, shareToken],
   );
 
   const resolveComment = useCallback(
@@ -309,6 +409,8 @@ export function ReviewProvider({
     [
       assetId,
       asset,
+      shareToken,
+      shareSession,
       versions,
       comments,
       isLoading,

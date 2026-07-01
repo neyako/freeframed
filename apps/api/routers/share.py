@@ -1424,11 +1424,51 @@ def get_folder_share_assets(
     )
 
 
+@router.get("/share/{token}/versions/{asset_id}")
+def list_share_versions(
+    token: str,
+    asset_id: uuid.UUID,
+    share_session: Optional[str] = Query(None, alias="share_session"),
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user),
+):
+    link = validate_share_link_with_session(db, token, share_session=share_session, current_user=current_user)
+    asset = _get_asset(db, asset_id)
+    _validate_asset_in_share(db, link, asset)
+
+    versions = db.query(AssetVersion).filter(
+        AssetVersion.asset_id == asset.id,
+        AssetVersion.deleted_at.is_(None),
+        AssetVersion.processing_status == ProcessingStatus.ready,
+    ).order_by(AssetVersion.version_number.desc()).all()
+
+    if not link.show_versions:
+        versions = versions[:1]
+
+    return [
+        {
+            "id": str(version.id),
+            "asset_id": str(asset.id),
+            "version_number": version.version_number,
+            "processing_status": (
+                version.processing_status.value
+                if hasattr(version.processing_status, "value")
+                else str(version.processing_status)
+            ),
+            "created_by": str(version.created_by),
+            "created_at": version.created_at.isoformat() if version.created_at else None,
+            "deleted_at": version.deleted_at.isoformat() if version.deleted_at else None,
+        }
+        for version in versions
+    ]
+
+
 @router.get("/share/{token}/stream/{asset_id}")
 def get_share_stream_url(
     token: str,
     asset_id: uuid.UUID,
     share_session: Optional[str] = Query(None, alias="share_session"),
+    version_id: Optional[uuid.UUID] = Query(None),
     download: bool = Query(default=False),
     db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(get_optional_user),
@@ -1445,7 +1485,19 @@ def get_share_stream_url(
     # Validate asset belongs to this share
     _validate_asset_in_share(db, link, asset)
 
-    media_file = _get_latest_media_file(db, asset.id)
+    media_file = None
+    if version_id and link.show_versions:
+        version = db.query(AssetVersion).filter(
+            AssetVersion.id == version_id,
+            AssetVersion.asset_id == asset.id,
+            AssetVersion.deleted_at.is_(None),
+            AssetVersion.processing_status == ProcessingStatus.ready,
+        ).first()
+        if version:
+            media_file = db.query(MediaFile).filter(MediaFile.version_id == version.id).first()
+
+    if not media_file:
+        media_file = _get_latest_media_file(db, asset.id)
     if not media_file:
         raise HTTPException(status_code=404, detail="No ready media file found")
 

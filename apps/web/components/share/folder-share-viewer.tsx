@@ -18,6 +18,7 @@ import {
   ArrowLeft,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { VersionSwitcher } from '@/components/review/version-switcher'
 import type {
   SharePermission,
   ShareLinkAppearance,
@@ -797,6 +798,10 @@ function ShareReviewInner({
 
   const canComment = permission === 'comment' || permission === 'approve'
   const versionReady = currentVersion?.processing_status === 'ready'
+  const shareSessionParam = shareSession ? `&share_session=${encodeURIComponent(shareSession)}` : ''
+  const videoStreamUrl = asset && currentVersion?.id
+    ? `/share/${token}/stream/${asset.id}?_=1&version_id=${currentVersion.id}${shareSessionParam}`
+    : null
 
   // Guest identity flow for non-authenticated users
   const [guestIdentity, setGuestIdentity] = React.useState<{ name: string; email: string } | null>(null)
@@ -851,6 +856,9 @@ function ShareReviewInner({
           <span className="text-[13px] font-medium text-text-primary truncate">{assetName}</span>
         </div>
         <div className="flex items-center gap-2">
+          {versions.length > 1 && (
+            <VersionSwitcher versions={versions} />
+          )}
           {allowDownload && (
             <button className="flex items-center gap-1.5 h-7 px-3 rounded-md text-xs font-medium text-text-inverse bg-accent hover:bg-accent-hover transition-colors" onClick={() => handleDownload(token, asset.id, shareSession)}>
               <Download className="h-3 w-3" /> Download
@@ -869,9 +877,10 @@ function ShareReviewInner({
           {asset.asset_type === 'video' && versionReady && VideoPlayer ? (
             <VideoPlayer
               assetId={asset.id}
+              key={videoStreamUrl ?? asset.id}
               comments={comments}
               className="flex-1"
-              initialStreamUrl={(asset as any).stream_url}
+              initialStreamUrl={videoStreamUrl}
               overlay={
                 <>
                   {AnnotationOverlay && <AnnotationOverlay key={focusedCommentId ?? 'none'} />}
