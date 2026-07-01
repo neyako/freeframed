@@ -99,6 +99,7 @@ export default function ProjectDetailPage() {
   const [versionPrompt, setVersionPrompt] = React.useState<VersionPrompt | null>(null);
   const [isDraggingFiles, setIsDraggingFiles] = React.useState(false);
   const dragDepth = React.useRef(0);
+  const uploadInputRef = React.useRef<HTMLInputElement>(null);
 
   const { files: uploadFiles, startUpload, startVersionUpload } = useUploadStore();
   const { user } = useAuthStore();
@@ -593,7 +594,7 @@ export default function ProjectDetailPage() {
               authorNames={authorNames}
               fileSizes={fileSizes}
               selectedAssetId={selectedAsset?.id}
-              onUpload={() => setUploadOpen(true)}
+              onUpload={() => uploadInputRef.current?.click()}
               onAssetSelect={(asset, e) => {
                 e?.stopPropagation();
                 setSelectedAsset(asset as AssetResponse);
@@ -730,7 +731,7 @@ export default function ProjectDetailPage() {
                     </button>
                   )}
                   {canUpload && (
-                    <Button size="sm" onClick={() => setUploadOpen(true)}>
+                    <Button size="sm" onClick={() => uploadInputRef.current?.click()}>
                       <Upload className="h-4 w-4" />
                       Upload
                     </Button>
@@ -739,6 +740,17 @@ export default function ProjectDetailPage() {
               }
             />
           )}
+
+          <input
+            ref={uploadInputRef}
+            type="file"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              handleDropFiles(e.target.files);
+              e.target.value = "";
+            }}
+          />
 
           {/* Upload dialog */}
           <Dialog.Root open={uploadOpen} onOpenChange={setUploadOpen}>

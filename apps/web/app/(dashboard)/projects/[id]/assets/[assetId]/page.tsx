@@ -28,7 +28,6 @@ import {
   Info,
   Loader2,
   Columns2,
-  MessageSquare,
   Upload,
 } from 'lucide-react'
 import Link from 'next/link'
@@ -128,12 +127,14 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
     removeReaction,
   } = useComments(asset?.id || '', currentVersion?.id || '')
 
-  // Auto-open the comments panel once, only when the asset actually has comments (#5).
-  // Empty assets start with the panel hidden so the media fills the screen; the user
-  // can open it any time via the top-bar toggle, and their choice then sticks.
+  // Open the comments panel by default on desktop; on mobile keep it hidden
+  // unless the asset already has comments. Runs once; the user's later choice sticks.
   useEffect(() => {
     if (autoOpenedRef.current) return
-    if (comments.length > 0) {
+    const isDesktop =
+      typeof window !== 'undefined' &&
+      window.matchMedia('(min-width: 768px)').matches
+    if (isDesktop || comments.length > 0) {
       setSidebarOpen(true)
       autoOpenedRef.current = true
     }
@@ -401,7 +402,7 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
           <button
             onClick={() => setSidebarOpen((p) => !p)}
             className={cn(
-              'hidden md:flex items-center justify-center h-8 w-8 rounded-md transition-colors',
+              'flex items-center justify-center h-8 w-8 rounded-md transition-colors',
               sidebarOpen
                 ? 'bg-bg-hover text-text-primary'
                 : 'text-text-tertiary hover:text-text-primary hover:bg-bg-hover',
@@ -523,15 +524,6 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
         )}
       </div>
 
-      {!sidebarOpen && (
-        <button
-          onClick={() => setSidebarOpen(true)}
-          className="md:hidden absolute bottom-4 left-1/2 -translate-x-1/2 z-30 inline-flex items-center gap-2 rounded-full bg-bg-hover backdrop-blur px-4 py-2.5 text-sm font-medium text-text-primary shadow-lg border border-border"
-        >
-          <MessageSquare className="h-4 w-4" />
-          Comments{comments.length ? ` (${comments.length})` : ''}
-        </button>
-      )}
     </div>
   )
 }

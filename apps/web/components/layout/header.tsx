@@ -4,9 +4,8 @@ import * as React from 'react'
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
-import { Search, ChevronRight, PanelRightClose, PanelRightOpen, Bell, Upload, Settings, LogOut, User } from 'lucide-react'
+import { Search, ChevronRight, Bell, Upload, Settings, LogOut, User } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useViewStore } from '@/stores/view-store'
 import { useBreadcrumbStore } from '@/stores/breadcrumb-store'
 import { useAuthStore } from '@/stores/auth-store'
 import { useUploadStore } from '@/stores/upload-store'
@@ -62,7 +61,6 @@ function buildBreadcrumbs(pathname: string, dynamicLabels: Record<string, string
 
 export function Header({ onSearchOpen }: HeaderProps) {
   const pathname = usePathname()
-  const { rightPanelOpen, toggleRightPanel } = useViewStore()
   const { labels, extraCrumbs } = useBreadcrumbStore()
   const { user, logout } = useAuthStore()
   const { files: uploadFiles, togglePanel, panelOpen } = useUploadStore()
@@ -192,26 +190,6 @@ export function Header({ onSearchOpen }: HeaderProps) {
               <span>⌘</span>K
             </kbd>
           </button>
-
-          {/* Panel toggle — only on project detail pages, not the listing */}
-          {pathname !== '/projects' && (
-            <button
-              onClick={toggleRightPanel}
-              className={cn(
-                'flex h-7 w-7 items-center justify-center rounded-md transition-colors',
-                rightPanelOpen
-                  ? 'text-accent bg-accent-muted'
-                  : 'text-text-tertiary hover:bg-bg-hover hover:text-text-primary',
-              )}
-              title={rightPanelOpen ? 'Hide panel' : 'Show panel'}
-            >
-              {rightPanelOpen ? (
-                <PanelRightClose className="h-4 w-4" />
-              ) : (
-                <PanelRightOpen className="h-4 w-4" />
-              )}
-            </button>
-          )}
 
           {/* User dropdown */}
           <DropdownMenu.Root>

@@ -112,11 +112,10 @@ export function NotificationDrawer({ open, onClose }: NotificationDrawerProps) {
 
   return (
     <>
-      {/* Backdrop — offset to not cover sidebar */}
-      <div className="fixed top-0 right-0 bottom-0 left-[52px] z-40" onClick={onClose} />
+      <div className="fixed inset-0 z-40" onClick={onClose} />
 
       {/* Drawer */}
-      <div className="fixed left-[52px] top-0 z-50 h-full w-[380px] border-r border-border bg-bg-primary shadow-2xl flex flex-col animate-in slide-in-from-left-2 duration-150">
+      <div className="fixed right-0 top-11 z-50 h-[calc(100vh-2.75rem)] w-[380px] max-w-[calc(100vw-1rem)] border-l border-border bg-bg-primary shadow-2xl flex flex-col animate-in slide-in-from-right-2 duration-150">
         {/* Header */}
         <div className="flex items-center justify-between px-4 h-12 border-b border-border shrink-0">
           <span className="text-sm font-semibold text-text-primary">Notifications</span>
