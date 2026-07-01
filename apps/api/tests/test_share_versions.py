@@ -61,7 +61,7 @@ def _version_query(versions: list[MagicMock]) -> MagicMock:
     return query
 
 
-@patch("apps.api.routers.share._validate_asset_in_share")
+@patch("apps.api.routers.share.validate_asset_in_share")
 @patch("apps.api.routers.share._get_asset")
 @patch("apps.api.routers.share.validate_share_link_with_session")
 def test_share_versions_returns_ready_versions_newest_first_when_enabled(
@@ -90,7 +90,7 @@ def test_share_versions_returns_ready_versions_newest_first_when_enabled(
     assert body[0]["deleted_at"] is None
 
 
-@patch("apps.api.routers.share._validate_asset_in_share")
+@patch("apps.api.routers.share.validate_asset_in_share")
 @patch("apps.api.routers.share._get_asset")
 @patch("apps.api.routers.share.validate_share_link_with_session")
 def test_share_versions_returns_latest_only_when_versions_hidden(
@@ -116,7 +116,7 @@ def test_share_versions_returns_latest_only_when_versions_hidden(
     assert [item["version_number"] for item in body] == [2]
 
 
-@patch("apps.api.routers.share._validate_asset_in_share")
+@patch("apps.api.routers.share.validate_asset_in_share")
 @patch("apps.api.routers.share._log_share_activity")
 @patch("apps.api.routers.share._get_latest_media_file")
 @patch("apps.api.routers.share._get_asset")
@@ -156,7 +156,7 @@ def test_share_stream_serves_requested_version_when_versions_enabled(
     assert payload["pfx"] == "processed/project/older-version"
 
 
-@patch("apps.api.routers.share._validate_asset_in_share")
+@patch("apps.api.routers.share.validate_asset_in_share")
 @patch("apps.api.routers.share._log_share_activity")
 @patch("apps.api.routers.share._get_latest_media_file")
 @patch("apps.api.routers.share._get_asset")
@@ -192,7 +192,7 @@ def test_share_stream_falls_back_to_latest_when_versions_hidden(
     mock_db.query.assert_not_called()
 
 
-@patch("apps.api.routers.share._validate_asset_in_share")
+@patch("apps.api.routers.share.validate_asset_in_share")
 @patch("apps.api.routers.share._log_share_activity")
 @patch("apps.api.routers.share._get_latest_media_file")
 @patch("apps.api.routers.share._get_asset")
