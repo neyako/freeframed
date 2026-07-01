@@ -66,7 +66,7 @@ the order below. Bug numbers map to the user's report.
 | Plan | Title | Bugs | Priority | Effort | Depends on | Status |
 |------|-------|------|----------|--------|------------|--------|
 | 027 | Reposition uploads/notification drawers to the right; remove dead header panel-toggle | #1, #2 | P2 | S | — | DONE ✓ verified 07-01 — drawers open right under header; dead toggle removed |
-| 028 | Project detail page mobile responsive (navigator wrap + grid cols + compact actions) | #3 | P2 | M | — | TODO |
+| 028 | Project detail page mobile responsive (navigator wrap + grid cols + compact actions) | #3 | P2 | M | — | DONE ✓ verified 07-01 — navigator wraps, mobile grid starts at 2 cols, action labels collapse below `sm` |
 | 029 | Editor review page: default-open comments on desktop; mobile toggle no longer overlaps player controls | #4, #5 | P2 | S | — | DONE ✓ verified 07-01 — desktop comments default-open; mobile top-bar toggle replaces bottom pill |
 | 030 | Restore share popup controls — visibility, passphrase, expiry, watermark, revoke — in the old configure-panel style | #6 | P1 | L | — | DONE ✓ verified 07-01 — controls restored + revoke/create state |
 | 031 | Project "Upload" button opens native file picker instead of a modal | #7 | P2 | S | — | DONE ✓ verified 07-01 — native picker opens from project upload actions |

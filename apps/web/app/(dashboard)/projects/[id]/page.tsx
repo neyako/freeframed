@@ -715,7 +715,7 @@ export default function ProjectDetailPage() {
                       onClick={() => setActiveShare({ kind: "project" })}
                     >
                       <Share2 className="h-4 w-4" />
-                      Share
+                      <span className="hidden sm:inline">Share</span>
                     </Button>
                   )}
                   {canCreateFolder && (
@@ -727,13 +727,13 @@ export default function ProjectDetailPage() {
                       }}
                     >
                       <FolderPlus className="h-4 w-4" />
-                      New Folder
+                      <span className="hidden sm:inline">New Folder</span>
                     </button>
                   )}
                   {canUpload && (
                     <Button size="sm" onClick={() => uploadInputRef.current?.click()}>
                       <Upload className="h-4 w-4" />
-                      Upload
+                      <span className="hidden sm:inline">Upload</span>
                     </Button>
                   )}
                 </>

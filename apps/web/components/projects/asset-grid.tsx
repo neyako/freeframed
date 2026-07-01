@@ -70,9 +70,9 @@ interface AssetGridProps {
 
 // Grid column classes based on card size
 const gridColsMap = {
-  S: 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5',
-  M: 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3',
-  L: 'grid-cols-1 sm:grid-cols-1 lg:grid-cols-2',
+  S: 'grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6',
+  M: 'grid-cols-2 sm:grid-cols-2 lg:grid-cols-3',
+  L: 'grid-cols-2 sm:grid-cols-1 lg:grid-cols-2',
 }
 
 // Aspect ratio classes
@@ -244,7 +244,7 @@ export function AssetGrid({
 
       {/* ─── Navigator Bar (Frame.io style) ─────────────────────────────── */}
       {!shareMode && (
-        <div className="flex items-center gap-1 border-b border-border pb-2.5">
+        <div className="flex flex-wrap items-center gap-1 border-b border-border pb-2.5">
           {/* Left group: Appearance + Fields + Sort */}
           <AppearancePopover />
 
@@ -252,7 +252,7 @@ export function AssetGrid({
 
           <SortPopover />
 
-          <div className="flex-1" />
+          <div className="grow" />
 
           {/* Right group: action buttons passed from parent */}
           {actions && (
