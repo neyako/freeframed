@@ -57,6 +57,45 @@ do not modify the other repo from within a plan unless the plan's Scope says so.
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED (with one-line rationale)
 
+## Round 2 — post-025 regression fixes (added 2026-07-01, planned at `30e5364`)
+
+Ten bugs reported after the 020–026 rework merged to `main`. All FreeFrame
+`apps/web` (033 also touches `apps/api`). Each plan is self-contained; execute in
+the order below. Bug numbers map to the user's report.
+
+| Plan | Title | Bugs | Priority | Effort | Depends on | Status |
+|------|-------|------|----------|--------|------------|--------|
+| 027 | Reposition uploads/notification drawers to the right; remove dead header panel-toggle | #1, #2 | P2 | S | — | TODO |
+| 028 | Project detail page mobile responsive (navigator wrap + grid cols + compact actions) | #3 | P2 | M | — | TODO |
+| 029 | Editor review page: default-open comments on desktop; mobile toggle no longer overlaps player controls | #4, #5 | P2 | S | — | TODO |
+| 030 | Restore share popup controls — visibility, passphrase, expiry, watermark, revoke — in the old configure-panel style | #6 | P1 | L | — | TODO |
+| 031 | Project "Upload" button opens native file picker instead of a modal | #7 | P2 | S | — | TODO |
+| 032 | Route single-asset guest shares through the rich review screen (custom player + timecoded/annotated comments + fixes the charAt crash) | #8, #9, #10 | P1 | M | — | TODO |
+| 033 | Guest version switching on share links (backend versions endpoint + version-aware stream + switcher) | #8 (change-version), #10 (multi-version) | P2 | M | 032 | TODO |
+
+### Recommended execution order
+
+1. **032** (P1) — fixes the guest crash (#9/#10 "Application error") and the
+   browser-default player (#8). Highest user pain; unblocks 033.
+2. **030** (P1) — restores share-link revoke + visibility (#6); a functional/
+   privacy gap (links are currently un-revokable and always public).
+3. **027, 029, 031** (P2, small) — quick shell/UX fixes, independent.
+4. **028** (P2) — project page mobile responsiveness.
+5. **033** (P2) — guest version switching; do after 032.
+
+### Dependency notes (round 2)
+
+- 033 requires 032 because it renders the `VersionSwitcher` inside the
+  `ShareReviewScreen`/`ShareReviewInner` that 032 exports and reuses for the single
+  guest screen.
+- 027 and 029 both remove leftover panel-toggle UI but in different files
+  (`header.tsx` vs the asset review page); no ordering constraint between them.
+
+### Findings considered and rejected (round 2)
+
+- None. All ten reported bugs were reproduced from the code and turned into plans
+  027–033.
+
 ## Reconcile log — 2026-06-29
 
 Run against FreeFrame HEAD `c6eb4db` and projmgmt HEAD `1905a0b`.
