@@ -79,10 +79,13 @@ export function ShareDialog({
       const isSelectPortal =
         target instanceof HTMLElement &&
         target.closest("[data-radix-popper-content-wrapper]");
+      const isDialogPortal =
+        target instanceof HTMLElement && target.closest('[role="dialog"]');
       if (
         dropdownRef.current &&
         !dropdownRef.current.contains(target) &&
-        !isSelectPortal
+        !isSelectPortal &&
+        !isDialogPortal
       ) {
         setDropdownOpen(false);
       }
