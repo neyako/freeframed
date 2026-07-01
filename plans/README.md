@@ -70,7 +70,7 @@ the order below. Bug numbers map to the user's report.
 | 029 | Editor review page: default-open comments on desktop; mobile toggle no longer overlaps player controls | #4, #5 | P2 | S | — | TODO |
 | 030 | Restore share popup controls — visibility, passphrase, expiry, watermark, revoke — in the old configure-panel style | #6 | P1 | L | — | TODO |
 | 031 | Project "Upload" button opens native file picker instead of a modal | #7 | P2 | S | — | TODO |
-| 032 | Route single-asset guest shares through the rich review screen (custom player + timecoded/annotated comments + fixes the charAt crash) | #8, #9, #10 | P1 | M | — | TODO |
+| 032 | Route single-asset guest shares through the rich review screen (custom player + timecoded/annotated comments + fixes the charAt crash) | #8, #9, #10 | P1 | M | — | DONE ✓ verified 07-01 — single-asset shares reuse rich review screen |
 | 033 | Guest version switching on share links (backend versions endpoint + version-aware stream + switcher) | #8 (change-version), #10 (multi-version) | P2 | M | 032 | TODO |
 
 ### Recommended execution order
