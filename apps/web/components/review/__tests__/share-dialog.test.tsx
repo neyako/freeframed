@@ -21,6 +21,7 @@ vi.mock("@/lib/api", () => ({
     get: vi.fn(),
     post: vi.fn(),
     patch: vi.fn(),
+    delete: vi.fn(),
   },
 }));
 
@@ -69,7 +70,16 @@ describe("ShareDialog", () => {
 
     expect(await screen.findByText("Anyone with the link")).toBeInTheDocument();
     expect(screen.getByText(/\/share\/token$/)).toBeInTheDocument();
-    expect(screen.getByLabelText(/allow download/i)).not.toBeChecked();
+    expect(screen.getByText("Access")).toBeInTheDocument();
+    expect(screen.getByText("Visibility")).toBeInTheDocument();
+    expect(screen.getByText("Passphrase")).toBeInTheDocument();
+    expect(screen.getByText("Expiration")).toBeInTheDocument();
+    expect(screen.getByText("Watermark")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /revoke link/i })).toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: /allow download/i })).toHaveAttribute(
+      "aria-checked",
+      "false",
+    );
     expect(screen.getByRole("button", { name: /copy/i })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /invite specific people/i }));
@@ -83,9 +93,9 @@ describe("ShareDialog", () => {
       allow_download: false,
     });
 
-    const linkControls = screen.getByText("Anyone with the link").closest("div");
-    expect(linkControls).not.toBeNull();
-    await user.click(within(linkControls as HTMLElement).getByRole("combobox"));
+    const permissionSelect = screen.getAllByRole("combobox")[0];
+    expect(permissionSelect).toBeInTheDocument();
+    await user.click(permissionSelect);
     const option = await screen.findByRole("option", { name: "view" });
     await user.click(option);
 
@@ -170,7 +180,10 @@ describe("ShareDialog", () => {
 
     expect(await screen.findByText("Anyone with the link")).toBeInTheDocument();
     expect(screen.getByText(/\/share\/project-token$/)).toBeInTheDocument();
-    expect(screen.getByLabelText(/allow download/i)).toBeChecked();
+    expect(screen.getByRole("switch", { name: /allow download/i })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
     expect(screen.queryByText(/share with people/i)).not.toBeInTheDocument();
 
     expect(mockedApi.get).toHaveBeenCalledWith(
@@ -240,7 +253,7 @@ describe("ShareDialog", () => {
       />,
     );
 
-    expect(await screen.findByText("Anyone with the link")).toBeInTheDocument();
+    expect(await screen.findByText("Access")).toBeInTheDocument();
     expect(screen.getByText(/\/share\/bulk-token$/)).toBeInTheDocument();
 
     await waitFor(() => {
@@ -254,13 +267,83 @@ describe("ShareDialog", () => {
       allow_download: false,
     });
 
-    await user.click(screen.getByLabelText(/allow download/i));
+    await user.click(screen.getByRole("switch", { name: /allow download/i }));
 
     await waitFor(() => {
       expect(mockedApi.patch).toHaveBeenCalledWith("/share/bulk-token", {
         allow_download: true,
       });
     });
+  });
+
+  it("reveals a passphrase input and sends a write-only password patch", async () => {
+    const user = userEvent.setup();
+    const link = createdShareLink();
+
+    mockedApi.get.mockImplementation(async (path: string) => {
+      if (path === "/assets/asset-1/shares") return [link];
+      return [];
+    });
+    mockedApi.patch.mockResolvedValue({ ...link, has_password: true });
+
+    render(
+      <SharePanel
+        target={{ kind: "asset", id: "asset-1" }}
+        projectId="project-1"
+        withPeople={false}
+      />,
+    );
+
+    expect(await screen.findByText("Passphrase")).toBeInTheDocument();
+    expect(screen.queryByLabelText(/link passphrase/i)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("switch", { name: /passphrase/i }));
+
+    const input = screen.getByLabelText(/link passphrase/i);
+    expect(input).toBeInTheDocument();
+    await user.type(input, "secret123");
+    await user.tab();
+
+    await waitFor(() => {
+      expect(mockedApi.patch).toHaveBeenCalledWith("/share/token", {
+        password: "secret123",
+      });
+    });
+  });
+
+  it("revokes a single share link and offers to create a new one", async () => {
+    const user = userEvent.setup();
+    const link = createdShareLink();
+
+    mockedApi.get.mockImplementation(async (path: string) => {
+      if (path === "/assets/asset-1/shares") return [link];
+      return [];
+    });
+    mockedApi.delete.mockResolvedValue(undefined);
+
+    render(
+      <SharePanel
+        target={{ kind: "asset", id: "asset-1" }}
+        projectId="project-1"
+        withPeople={false}
+      />,
+    );
+
+    expect(
+      await screen.findByRole("button", { name: /revoke link/i }),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /revoke link/i }));
+
+    expect(await screen.findByText("Revoke share link?")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /revoke link/i }));
+
+    await waitFor(() => {
+      expect(mockedApi.delete).toHaveBeenCalledWith("/share/token");
+    });
+    expect(
+      screen.getByRole("button", { name: /create share link/i }),
+    ).toBeInTheDocument();
   });
 
   it("does not create a bulk link when no items are selected", async () => {

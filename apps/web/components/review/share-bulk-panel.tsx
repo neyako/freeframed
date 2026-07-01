@@ -7,7 +7,12 @@ import { api } from "@/lib/api";
 import type { SharePermission } from "@/types";
 import { LinkControls } from "./share-link-controls";
 import { withLinkDefaults } from "./share-link-section";
-import type { ManagedShareLink, ShareLinkCandidate } from "./share-targets";
+import { previewShareLinkPatch } from "./share-targets";
+import type {
+  ManagedShareLink,
+  ShareLinkCandidate,
+  ShareLinkPatch,
+} from "./share-targets";
 
 const bulkShareRequests = new Map<string, Promise<ManagedShareLink>>();
 
@@ -82,14 +87,12 @@ export function BulkSharePanel({
     };
   }, [assetIds, folderIds, itemCount, projectId, requestKey, shareTitle]);
 
-  async function patchLink(
-    updates: Partial<Pick<ManagedShareLink, "permission" | "allow_download">>,
-  ) {
+  async function patchLink(updates: ShareLinkPatch) {
     if (!link) return;
     const previous = link;
     setSaving(true);
     setError(null);
-    setLink({ ...link, ...updates });
+    setLink(previewShareLinkPatch(link, updates));
     try {
       const updated = await api.patch<ShareLinkCandidate>(
         `/share/${link.token}`,

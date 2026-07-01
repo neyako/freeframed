@@ -9,9 +9,11 @@ import { LinkControls } from "./share-link-controls";
 import type {
   ManagedShareLink,
   ShareLinkCandidate,
+  ShareLinkPatch,
   ShareListEnvelope,
   ShareTarget,
 } from "./share-targets";
+import { previewShareLinkPatch } from "./share-targets";
 
 const LIST_PATH: Record<
   Exclude<ShareTarget["kind"], "project">,
@@ -45,6 +47,24 @@ function normaliseShareLinks(
 function getListPath(target: ShareTarget) {
   if (target.kind !== "project") return LIST_PATH[target.kind](target.id);
   return getProjectListPath(target, Boolean(target.name));
+}
+
+function getRequestTarget(
+  kind: ShareTarget["kind"],
+  id: string,
+  name?: string,
+): ShareTarget {
+  if (kind === "project") return { kind, id, name };
+  if (kind === "asset") return { kind, id };
+  return { kind, id };
+}
+
+function getRequestKey(target: ShareTarget) {
+  return [
+    target.kind,
+    target.id,
+    target.kind === "project" ? target.name ?? "" : "",
+  ].join(":");
 }
 
 function getProjectListPath(
@@ -136,6 +156,18 @@ async function loadOrCreateLink(target: ShareTarget): Promise<ManagedShareLink> 
   return withLinkDefaults(created);
 }
 
+function requestLink(target: ShareTarget) {
+  const requestKey = getRequestKey(target);
+  let request = linkRequests.get(requestKey);
+  if (!request) {
+    request = loadOrCreateLink(target).finally(() => {
+      linkRequests.delete(requestKey);
+    });
+    linkRequests.set(requestKey, request);
+  }
+  return request;
+}
+
 interface SingleLinkSectionProps {
   readonly target: ShareTarget;
 }
@@ -146,35 +178,25 @@ export function SingleLinkSection({ target }: SingleLinkSectionProps) {
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const targetName = target.kind === "project" ? target.name : undefined;
+  const requestTarget = React.useMemo(
+    () => getRequestTarget(target.kind, target.id, targetName),
+    [target.id, target.kind, targetName],
+  );
 
   React.useEffect(() => {
-    if (!target.id) return;
+    if (!requestTarget.id) return;
     let cancelled = false;
-    let requestTarget: ShareTarget;
-    if (target.kind === "project") {
-      requestTarget = { kind: "project", id: target.id, name: targetName };
-    } else if (target.kind === "asset") {
-      requestTarget = { kind: "asset", id: target.id };
-    } else {
-      requestTarget = { kind: "folder", id: target.id };
-    }
-    const requestKey = [target.kind, target.id, targetName ?? ""].join(":");
     setLoading(true);
     setError(null);
     void (async () => {
       try {
-        let request = linkRequests.get(requestKey);
-        if (!request) {
-          request = loadOrCreateLink(requestTarget).finally(() => {
-            linkRequests.delete(requestKey);
-          });
-          linkRequests.set(requestKey, request);
-        }
-        const nextLink = await request;
+        const nextLink = await requestLink(requestTarget);
         if (!cancelled) setLink(nextLink);
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Failed to load share link");
+          setError(
+            err instanceof Error ? err.message : "Failed to load share link",
+          );
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -184,16 +206,29 @@ export function SingleLinkSection({ target }: SingleLinkSectionProps) {
     return () => {
       cancelled = true;
     };
-  }, [target.id, target.kind, targetName]);
+  }, [requestTarget]);
 
-  async function patchLink(
-    updates: Partial<Pick<ManagedShareLink, "permission" | "allow_download">>,
-  ) {
+  async function createLink() {
+    setLoading(true);
+    setError(null);
+    try {
+      const nextLink = await requestLink(requestTarget);
+      setLink(nextLink);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to create share link",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function patchLink(updates: ShareLinkPatch) {
     if (!link) return;
     const previous = link;
     setSaving(true);
     setError(null);
-    setLink({ ...link, ...updates });
+    setLink(previewShareLinkPatch(link, updates));
     try {
       const updated = await api.patch<ShareLinkCandidate>(
         `/share/${link.token}`,
@@ -203,6 +238,22 @@ export function SingleLinkSection({ target }: SingleLinkSectionProps) {
     } catch (err) {
       setLink(previous);
       setError(err instanceof Error ? err.message : "Failed to update");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function revokeLink() {
+    if (!link) return;
+    const previous = link;
+    setSaving(true);
+    setError(null);
+    try {
+      await api.delete(`/share/${link.token}`);
+      setLink(null);
+    } catch (err) {
+      setLink(previous);
+      setError(err instanceof Error ? err.message : "Failed to revoke link");
     } finally {
       setSaving(false);
     }
@@ -221,9 +272,17 @@ export function SingleLinkSection({ target }: SingleLinkSectionProps) {
 
   if (!link) {
     return (
-      <p className="py-2 text-xs text-status-error">
-        {error ?? "No share link"}
-      </p>
+      <div className="rounded-lg border border-border bg-bg-tertiary p-3">
+        <p className="text-sm font-medium text-text-primary">No share link</p>
+        {error && <p className="mt-1 text-xs text-status-error">{error}</p>}
+        <button
+          type="button"
+          onClick={() => void createLink()}
+          className="mt-3 inline-flex h-9 items-center rounded-md border border-border bg-bg-secondary px-3 text-sm font-medium text-text-primary transition-colors hover:bg-bg-hover"
+        >
+          Create share link
+        </button>
+      </div>
     );
   }
 
@@ -233,6 +292,8 @@ export function SingleLinkSection({ target }: SingleLinkSectionProps) {
       saving={saving}
       error={error}
       onPatch={(updates) => void patchLink(updates)}
+      onRevoke={() => void revokeLink()}
+      showAdvancedControls
     />
   );
 }
