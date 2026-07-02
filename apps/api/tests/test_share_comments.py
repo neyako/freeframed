@@ -56,11 +56,13 @@ def _comment_response(
 
 @patch("apps.api.routers.comments.validate_asset_in_share", create=True)
 @patch("apps.api.routers.comments._get_asset")
-@patch("apps.api.routers.comments._build_comment_response")
+@patch("apps.api.routers.comments._assemble_comment_response")
+@patch("apps.api.routers.comments._fetch_comment_tree_data")
 @patch("apps.api.routers.comments.validate_share_link_with_session", create=True)
 def test_share_comments_returns_array_for_asset_share(
     mock_session_validate,
-    mock_build_comment_response,
+    mock_fetch_comment_tree_data,
+    mock_assemble_comment_response,
     mock_get_asset,
     mock_validate_asset,
     client,
@@ -79,22 +81,27 @@ def test_share_comments_returns_array_for_asset_share(
     mock_validate_asset.return_value = None
     mock_db.order_by.return_value = mock_db
     mock_db.all.return_value = [comment]
-    mock_build_comment_response.return_value = expected
+    comment_data = {"comments_by_parent": {}}
+    mock_fetch_comment_tree_data.return_value = comment_data
+    mock_assemble_comment_response.return_value = expected
 
     response = client.get("/share/some-token/comments")
 
     assert response.status_code == 200
     assert response.json() == [expected]
-    mock_build_comment_response.assert_called_once_with(comment, mock_db)
+    mock_fetch_comment_tree_data.assert_called_once_with(mock_db, [comment])
+    mock_assemble_comment_response.assert_called_once_with(comment, comment_data)
 
 
 @patch("apps.api.routers.comments.validate_asset_in_share", create=True)
 @patch("apps.api.routers.comments._get_asset")
-@patch("apps.api.routers.comments._build_comment_response")
+@patch("apps.api.routers.comments._assemble_comment_response")
+@patch("apps.api.routers.comments._fetch_comment_tree_data")
 @patch("apps.api.routers.comments.validate_share_link_with_session", create=True)
 def test_share_comments_returns_array_for_folder_or_project_share_asset(
     mock_session_validate,
-    mock_build_comment_response,
+    mock_fetch_comment_tree_data,
+    mock_assemble_comment_response,
     mock_get_asset,
     mock_validate_asset,
     client,
@@ -113,13 +120,16 @@ def test_share_comments_returns_array_for_folder_or_project_share_asset(
     mock_validate_asset.return_value = None
     mock_db.order_by.return_value = mock_db
     mock_db.all.return_value = [comment]
-    mock_build_comment_response.return_value = expected
+    comment_data = {"comments_by_parent": {}}
+    mock_fetch_comment_tree_data.return_value = comment_data
+    mock_assemble_comment_response.return_value = expected
 
     response = client.get(f"/share/some-token/comments?asset_id={asset_id}")
 
     assert response.status_code == 200
     assert response.json() == [expected]
-    mock_build_comment_response.assert_called_once_with(comment, mock_db)
+    mock_fetch_comment_tree_data.assert_called_once_with(mock_db, [comment])
+    mock_assemble_comment_response.assert_called_once_with(comment, comment_data)
 
 
 @patch("apps.api.routers.comments.validate_share_link_with_session", create=True)

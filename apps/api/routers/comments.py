@@ -2,7 +2,7 @@ import re
 import uuid
 from collections import defaultdict
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, TypedDict
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
@@ -86,59 +86,123 @@ def _build_reaction_responses(
     ]
 
 
+class _CommentTreeData(TypedDict):
+    comments_by_parent: dict[uuid.UUID, list[Comment]]
+    annotations: dict[uuid.UUID, Annotation]
+    attachments: dict[uuid.UUID, list[CommentAttachment]]
+    reactions: dict[uuid.UUID, list[CommentReaction]]
+    users: dict[uuid.UUID, User]
+    guests: dict[uuid.UUID, GuestUser]
+
+
 def _build_comment_response(
     comment: Comment,
     db: Session,
     current_user_id: uuid.UUID | None = None,
     depth: int = 5,
 ) -> CommentResponse:
-    annotation = db.query(Annotation).filter(Annotation.comment_id == comment.id).first()
-    replies_raw = []
-    if depth > 0:
-        replies_raw = db.query(Comment).filter(
-            Comment.parent_id == comment.id,
+    data = _fetch_comment_tree_data(db, [comment], depth=depth)
+    return _assemble_comment_response(comment, data, current_user_id=current_user_id)
+
+
+def _fetch_comment_tree_data(
+    db: Session,
+    top_level: list[Comment],
+    depth: int = 5,
+) -> _CommentTreeData:
+    all_comments = list(top_level)
+    frontier = [comment.id for comment in top_level]
+    comments_by_parent: dict[uuid.UUID, list[Comment]] = {}
+
+    for _ in range(depth):
+        if not frontier:
+            break
+        replies = db.query(Comment).filter(
+            Comment.parent_id.in_(frontier),
             Comment.deleted_at.is_(None),
         ).order_by(Comment.created_at).all()
+        if not replies:
+            break
+        for reply in replies:
+            comments_by_parent.setdefault(reply.parent_id, []).append(reply)
+        all_comments.extend(replies)
+        frontier = [reply.id for reply in replies]
 
-    # Load attachments
-    attachments_raw = db.query(CommentAttachment).filter(
-        CommentAttachment.comment_id == comment.id,
-    ).all()
-    attachments = [_build_attachment_response(a) for a in attachments_raw]
+    comment_ids = [comment.id for comment in all_comments]
+    attachments: dict[uuid.UUID, list[CommentAttachment]] = {}
+    reactions: dict[uuid.UUID, list[CommentReaction]] = {}
+    if comment_ids:
+        for attachment in db.query(CommentAttachment).filter(
+            CommentAttachment.comment_id.in_(comment_ids),
+        ).all():
+            attachments.setdefault(attachment.comment_id, []).append(attachment)
+        for reaction in db.query(CommentReaction).filter(
+            CommentReaction.comment_id.in_(comment_ids),
+        ).all():
+            reactions.setdefault(reaction.comment_id, []).append(reaction)
 
-    # Load reactions
-    reactions_raw = db.query(CommentReaction).filter(
-        CommentReaction.comment_id == comment.id,
-    ).all()
-    reactions = _build_reaction_responses(reactions_raw, current_user_id)
+    author_ids = {comment.author_id for comment in all_comments if comment.author_id}
+    users = (
+        {user.id: user for user in db.query(User).filter(User.id.in_(author_ids)).all()}
+        if author_ids
+        else {}
+    )
+    guest_ids = {
+        comment.guest_author_id
+        for comment in all_comments
+        if comment.guest_author_id
+    }
+    guests = (
+        {guest.id: guest for guest in db.query(GuestUser).filter(GuestUser.id.in_(guest_ids)).all()}
+        if guest_ids
+        else {}
+    )
 
-    # Load author info
+    return {
+        "comments_by_parent": comments_by_parent,
+        "annotations": _get_annotations_map(comment_ids, db),
+        "attachments": attachments,
+        "reactions": reactions,
+        "users": users,
+        "guests": guests,
+    }
+
+
+def _assemble_comment_response(
+    comment: Comment,
+    data: _CommentTreeData,
+    current_user_id: uuid.UUID | None = None,
+) -> CommentResponse:
     author_info = None
-    if comment.author_id:
-        author = db.query(User).filter(User.id == comment.author_id).first()
-        if author:
-            author_info = AuthorInfo(id=author.id, name=author.name, avatar_url=author.avatar_url)
-
+    author = data["users"].get(comment.author_id) if comment.author_id else None
+    if author:
+        author_info = AuthorInfo(id=author.id, name=author.name, avatar_url=author.avatar_url)
     guest_author_info = None
-    if comment.guest_author_id:
-        guest = db.query(GuestUser).filter(GuestUser.id == comment.guest_author_id).first()
-        if guest:
-            guest_author_info = GuestAuthorInfo(id=guest.id, name=guest.name, email=guest.email)
+    guest = data["guests"].get(comment.guest_author_id) if comment.guest_author_id else None
+    if guest:
+        guest_author_info = GuestAuthorInfo(id=guest.id, name=guest.name, email=guest.email)
 
+    annotation = data["annotations"].get(comment.id)
     resp = CommentResponse.model_validate(comment)
     resp.author = author_info
     resp.guest_author = guest_author_info
     resp.annotation = AnnotationResponse.model_validate(annotation) if annotation else None
     resp.replies = [
-        _build_comment_response(r, db, current_user_id=current_user_id, depth=depth - 1)
-        for r in replies_raw
+        _assemble_comment_response(reply, data, current_user_id=current_user_id)
+        for reply in data["comments_by_parent"].get(comment.id, [])
     ]
-    resp.attachments = attachments
-    resp.reactions = reactions
+    resp.attachments = [
+        _build_attachment_response(attachment)
+        for attachment in data["attachments"].get(comment.id, [])
+    ]
+    resp.reactions = _build_reaction_responses(
+        data["reactions"].get(comment.id, []),
+        current_user_id,
+    )
     return resp
 
 
-def _get_annotations_map(comment_ids: list[uuid.UUID], db: Session) -> dict:
+def _get_annotations_map(comment_ids: list[uuid.UUID], db: Session) -> dict[uuid.UUID, Annotation]:
     """Batch-load annotations for a list of comment IDs."""
     if not comment_ids:
         return {}
@@ -217,7 +281,11 @@ def list_comments(
     if visibility and visibility in ("public", "internal"):
         query = query.filter(Comment.visibility == visibility)
     top_level = query.order_by(Comment.created_at).all()
-    return [_build_comment_response(c, db, current_user_id=current_user.id) for c in top_level]
+    data = _fetch_comment_tree_data(db, top_level)
+    return [
+        _assemble_comment_response(comment, data, current_user_id=current_user.id)
+        for comment in top_level
+    ]
 
 
 @router.post("/assets/{asset_id}/comments", response_model=CommentResponse, status_code=status.HTTP_201_CREATED)
@@ -576,7 +644,8 @@ def list_share_comments(
         Comment.deleted_at.is_(None),
     ).order_by(Comment.created_at).all()
 
-    return [_build_comment_response(c, db) for c in top_level]
+    data = _fetch_comment_tree_data(db, top_level)
+    return [_assemble_comment_response(comment, data) for comment in top_level]
 
 
 @router.post("/share/{token}/comment", response_model=CommentResponse, status_code=status.HTTP_201_CREATED)
