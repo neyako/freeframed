@@ -392,7 +392,7 @@ function ManageView({
                     type="button"
                     onClick={() => handleRemove(m.user_id)}
                     disabled={removing === m.user_id}
-                    className="opacity-0 group-hover:opacity-100 h-6 w-6 rounded flex items-center justify-center text-text-tertiary hover:text-status-error hover:bg-status-error/10 transition-all"
+                    className="opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 h-6 w-6 rounded flex items-center justify-center text-text-tertiary hover:text-status-error hover:bg-status-error/10 transition-all"
                   >
                     {removing === m.user_id ? (
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />

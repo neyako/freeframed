@@ -118,7 +118,8 @@ export function ShareDialog({
       {dropdownOpen && (
         <div
           className={cn(
-            "fixed left-2 right-2 top-12 z-50 w-auto sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-1.5 sm:w-80",
+            "fixed left-2 right-2 top-12 z-50 w-auto sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-1.5 sm:w-96",
+            "max-h-[calc(100dvh-4.5rem)] sm:max-h-[min(calc(100dvh-8rem),42rem)] overflow-y-auto overscroll-contain",
             "rounded-xl border border-border bg-bg-elevated p-3 shadow-xl",
             "animate-in fade-in-0 zoom-in-95 duration-150 space-y-4",
           )}

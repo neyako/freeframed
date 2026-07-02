@@ -33,6 +33,7 @@ interface VideoPlayerProps {
   className?: string;
   /** Pre-fetched stream URL (for share mode — skips authenticated API call) */
   initialStreamUrl?: string | null;
+  poster?: string | null;
 }
 
 // ─── Video frame constraint ──────────────────────────────────────────────────
@@ -129,6 +130,7 @@ export function VideoPlayer({
   overlay,
   className,
   initialStreamUrl,
+  poster,
 }: VideoPlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [streamUrl, setStreamUrl] = useState<string | null>(null);
@@ -313,6 +315,7 @@ export function VideoPlayer({
             "absolute inset-0 w-full h-full object-contain",
             isDrawingMode ? "pointer-events-none" : "",
           )}
+          poster={poster ?? undefined}
           playsInline
           preload="metadata"
         />
@@ -352,9 +355,9 @@ export function VideoPlayer({
       </div>
 
       {/* Bottom transport bar (matches audio player style) */}
-      <div className="flex items-center justify-between h-12 px-4 bg-bg-secondary/80 border-t border-border shrink-0">
+      <div className="flex items-center justify-between h-12 px-2 sm:px-4 bg-bg-secondary/80 border-t border-border shrink-0">
         {/* Left: Play, Loop, Speed, Volume */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 sm:gap-2">
           <button
             onClick={togglePlay}
             className="flex h-7 w-7 items-center justify-center rounded text-text-primary hover:bg-bg-hover transition-colors"
@@ -370,7 +373,7 @@ export function VideoPlayer({
           <button
             onClick={() => setLoop((p) => !p)}
             className={cn(
-              "flex h-7 w-7 items-center justify-center rounded transition-colors",
+              "hidden sm:flex h-7 w-7 items-center justify-center rounded transition-colors",
               loop
                 ? "text-accent bg-accent/10"
                 : "text-text-tertiary hover:text-text-secondary hover:bg-bg-hover",
@@ -405,9 +408,9 @@ export function VideoPlayer({
         <div className="relative" ref={timeFormatRef}>
           <button
             onClick={() => setTimeFormatOpen((p) => !p)}
-            className="flex items-center gap-1.5 rounded-md bg-bg-tertiary px-3 py-1 hover:bg-bg-hover transition-colors"
+            className="flex items-center gap-1.5 rounded-md bg-bg-tertiary px-2 sm:px-3 py-1 hover:bg-bg-hover transition-colors"
           >
-            <span className="font-mono text-sm text-text-primary tabular-nums tracking-wide">
+            <span className="font-mono text-xs sm:text-sm text-text-primary tabular-nums tracking-wide">
               {timeFormat === "timecode" ? (
                 displayTime(currentTime)
               ) : (
@@ -461,7 +464,7 @@ export function VideoPlayer({
         </div>
 
         {/* Right: Quality, Fullscreen */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 sm:gap-2">
           {/* Quality selector */}
           {qualityLevels.length > 0 && (
             <select

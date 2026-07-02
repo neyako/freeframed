@@ -155,7 +155,7 @@ function FolderNode({
 
         {/* Context menu button */}
         <button
-          className="opacity-0 group-hover:opacity-100 shrink-0 h-5 w-5 flex items-center justify-center rounded hover:bg-bg-hover transition-opacity"
+          className="opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 shrink-0 h-5 w-5 flex items-center justify-center rounded hover:bg-bg-hover transition-opacity"
           onClick={(e) => {
             e.stopPropagation()
             setMenuOpen((p) => !p)

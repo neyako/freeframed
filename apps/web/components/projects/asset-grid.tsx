@@ -414,7 +414,7 @@ export function AssetGrid({
                   <button
                     className={cn(
                       'absolute inset-0 flex items-center justify-center transition-all',
-                      isFolderSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
+                      isFolderSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100',
                     )}
                     onClick={(e) => { e.stopPropagation(); toggleFolderSelect(folder.id) }}
                   >
@@ -453,7 +453,7 @@ export function AssetGrid({
                 <div className="w-8 shrink-0" />
 
                 {/* Context menu */}
-                <div className="w-8 shrink-0 flex justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="w-8 shrink-0 flex justify-center opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity">
                   <DropdownMenu.Root>
                     <DropdownMenu.Trigger asChild>
                       <button
@@ -540,7 +540,7 @@ export function AssetGrid({
                   <button
                     className={cn(
                       'absolute inset-0 flex items-center justify-center transition-all',
-                      selectedAssetIds.has(asset.id) ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
+                      selectedAssetIds.has(asset.id) ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100',
                     )}
                     onClick={(e) => { e.stopPropagation(); toggleAssetSelect(asset.id) }}
                   >
@@ -583,7 +583,7 @@ export function AssetGrid({
                   {assignee && <Avatar src={assignee.avatar_url} name={assignee.name} size="sm" />}
                 </div>
                 {/* Context menu — hidden until hover */}
-                <div className="w-8 shrink-0 flex justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="w-8 shrink-0 flex justify-center opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity">
                   <DropdownMenu.Root>
                     <DropdownMenu.Trigger asChild>
                       <button

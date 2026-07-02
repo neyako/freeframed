@@ -178,7 +178,7 @@ export function FolderCard({
             <p className="text-sm font-medium text-text-primary truncate">{folder.name}</p>
             <div className="relative" ref={menuRef}>
               <button
-                className="opacity-0 group-hover:opacity-100 flex items-center justify-center h-6 w-6 rounded hover:bg-bg-hover transition-opacity shrink-0"
+                className="opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 flex items-center justify-center h-6 w-6 rounded hover:bg-bg-hover transition-opacity shrink-0"
                 onClick={(e) => {
                   e.stopPropagation()
                   setMenuOpen((p) => !p)

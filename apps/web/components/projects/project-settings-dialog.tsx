@@ -104,7 +104,7 @@ export function ProjectSettingsDialog({
                     <>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={posterPreview} alt="Poster" className="h-full w-full object-cover" />
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity flex items-center justify-center">
                         <ImagePlus className="h-6 w-6 text-white" />
                       </div>
                     </>
@@ -203,4 +203,3 @@ export function ProjectSettingsDialog({
     </Dialog.Root>
   )
 }
-

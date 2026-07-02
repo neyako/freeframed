@@ -146,7 +146,7 @@ function UploadItem({ upload }: { upload: UploadFile }) {
       </div>
 
       {/* Actions */}
-      <div className="shrink-0 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div className="shrink-0 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity">
         {isUploading && (
           <button
             onClick={() => cancelUpload(upload.id)}

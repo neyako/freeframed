@@ -19,6 +19,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { VersionSwitcher } from '@/components/review/version-switcher'
+import { fetchShareStreamInfo, resolveStreamUrl } from './share-stream'
 import type {
   SharePermission,
   ShareLinkAppearance,
@@ -326,7 +327,7 @@ function AssetGridCard({ asset, allowDownload, token, shareSession, isSelected, 
         {/* Download button overlay */}
         {allowDownload && (
           <button
-            className="absolute top-2 right-2 flex items-center justify-center h-6 w-6 rounded-md bg-bg-primary/70 hover:bg-bg-primary/90 text-text-primary backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity"
+            className="absolute top-2 right-2 flex items-center justify-center h-6 w-6 rounded-md bg-bg-primary/70 hover:bg-bg-primary/90 text-text-primary backdrop-blur-sm opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
             onClick={(e) => {
               e.stopPropagation()
               handleDownload(token, asset.id, shareSession)
@@ -748,7 +749,7 @@ export function ShareReviewScreen({
   }, [])
 
   if (!loaded || !ReviewProvider) {
-    return <div className="flex items-center justify-center h-screen bg-bg-primary"><Loader2 className="h-8 w-8 animate-spin text-text-tertiary" /></div>
+    return <div className="flex items-center justify-center h-dvh bg-bg-primary"><Loader2 className="h-8 w-8 animate-spin text-text-tertiary" /></div>
   }
 
   return (
@@ -781,10 +782,11 @@ function ShareReviewInner({
 
   const { asset, versions, isLoading, comments, refetchComments, addComment } = useReview()
   const { currentVersion, isDrawingMode, focusedCommentId } = useReviewStore()
-  const [sidebarOpen, setSidebarOpen] = React.useState(true)
+  const [sidebarOpen, setSidebarOpen] = React.useState(false)
   const [activeTab, setActiveTab] = React.useState<'comments' | 'fields'>('comments')
   const [AnnotationOverlay, setAnnotationOverlay] = React.useState<any>(null)
   const [AnnotationCanvas, setAnnotationCanvas] = React.useState<any>(null)
+  const autoOpenedRef = React.useRef(false)
 
   React.useEffect(() => {
     Promise.all([
@@ -798,10 +800,38 @@ function ShareReviewInner({
 
   const canComment = permission === 'comment' || permission === 'approve'
   const versionReady = currentVersion?.processing_status === 'ready'
-  const shareSessionParam = shareSession ? `&share_session=${encodeURIComponent(shareSession)}` : ''
-  const videoStreamUrl = asset && currentVersion?.id
-    ? `/share/${token}/stream/${asset.id}?_=1&version_id=${currentVersion.id}${shareSessionParam}`
-    : null
+  React.useEffect(() => {
+    if (autoOpenedRef.current) return
+    const isDesktop =
+      typeof window !== 'undefined' &&
+      window.matchMedia('(min-width: 768px)').matches
+    if (isDesktop || comments.length > 0) {
+      setSidebarOpen(true)
+      autoOpenedRef.current = true
+    }
+  }, [comments.length])
+
+  const assetId = asset?.id
+  const assetType = asset?.asset_type
+  const [streamInfo, setStreamInfo] = React.useState<{ url: string; poster: string | null } | null>(null)
+  React.useEffect(() => {
+    if (!assetId || assetType !== 'video' || !versionReady) return
+    let cancelled = false
+    setStreamInfo(null)
+    fetchShareStreamInfo(token, assetId, {
+      versionId: currentVersion?.id ?? null,
+      shareSession,
+    })
+      .then((info) => {
+        if (!cancelled) {
+          setStreamInfo({ url: resolveStreamUrl(info.url), poster: info.thumbnail_url ?? null })
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setStreamInfo(null)
+      })
+    return () => { cancelled = true }
+  }, [token, assetId, assetType, currentVersion?.id, shareSession, versionReady])
 
   // Guest identity flow for non-authenticated users
   const [guestIdentity, setGuestIdentity] = React.useState<{ name: string; email: string } | null>(null)
@@ -840,11 +870,11 @@ function ShareReviewInner({
   }, [submitComment])
 
   if (isLoading || !asset) {
-    return <div className="flex items-center justify-center h-screen bg-bg-primary"><Loader2 className="h-8 w-8 animate-spin text-text-tertiary" /></div>
+    return <div className="flex items-center justify-center h-dvh bg-bg-primary"><Loader2 className="h-8 w-8 animate-spin text-text-tertiary" /></div>
   }
 
   return (
-    <div className="flex flex-col h-screen bg-bg-primary text-text-primary">
+    <div className="flex flex-col h-dvh bg-bg-primary text-text-primary">
       {/* Top bar — same style as project review */}
       <div className="flex items-center justify-between border-b border-border px-3 h-12 bg-bg-secondary shrink-0">
         <div className="flex items-center gap-1 min-w-0 flex-1">
@@ -871,16 +901,17 @@ function ShareReviewInner({
       </div>
 
       {/* Main: viewer + sidebar */}
-      <div className="flex flex-1 overflow-hidden min-h-0">
+      <div className="flex flex-col md:flex-row flex-1 overflow-hidden min-h-0">
         {/* Media viewer — reuses project components */}
         <div className="flex-1 flex flex-col bg-bg-primary overflow-hidden min-w-0">
-          {asset.asset_type === 'video' && versionReady && VideoPlayer ? (
+          {asset.asset_type === 'video' && versionReady && VideoPlayer && streamInfo ? (
             <VideoPlayer
               assetId={asset.id}
-              key={videoStreamUrl ?? asset.id}
+              key={streamInfo.url}
               comments={comments}
               className="flex-1"
-              initialStreamUrl={videoStreamUrl}
+              initialStreamUrl={streamInfo.url}
+              poster={streamInfo.poster}
               overlay={
                 <>
                   {AnnotationOverlay && <AnnotationOverlay key={focusedCommentId ?? 'none'} />}
@@ -912,7 +943,14 @@ function ShareReviewInner({
 
         {/* Right sidebar — reuses project comment panel */}
         {sidebarOpen && (
-          <div className="w-[360px] flex flex-col border-l border-border bg-bg-secondary shrink-0">
+          <div className="w-full h-[55vh] md:h-auto md:w-[360px] flex flex-col border-t md:border-t-0 border-l-0 md:border-l border-border bg-bg-secondary shrink-0 animate-in slide-in-from-bottom-2 md:slide-in-from-right-2 duration-150">
+            <button
+              onClick={() => setSidebarOpen(false)}
+              className="md:hidden flex items-center justify-center gap-1.5 w-full py-2 text-xs text-text-tertiary border-b border-border"
+            >
+              <ChevronDown className="h-4 w-4" />
+              Hide comments
+            </button>
             <div className="px-4 pt-3 pb-2 shrink-0">
               <div className="flex items-center bg-bg-tertiary rounded-lg p-0.5">
                 <button onClick={() => setActiveTab('comments')} className={`flex-1 py-1.5 text-[13px] font-medium rounded-md transition-all ${activeTab === 'comments' ? 'bg-bg-hover text-text-primary shadow-sm' : 'text-text-tertiary'}`}>
@@ -1038,14 +1076,34 @@ export function FolderShareViewer({
   const [searchQuery, setSearchQuery] = React.useState('')
   const [foldersExpanded, setFoldersExpanded] = React.useState(true)
   const [assetsExpanded, setAssetsExpanded] = React.useState(true)
-  const [panelOpen, setPanelOpen] = React.useState(true)
+  const [panelOpen, setPanelOpen] = React.useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches,
+  )
   const [viewingAsset, setViewingAsset] = React.useState<FolderShareAssetItem | null>(null)
+  const [isTouch, setIsTouch] = React.useState(false)
+  const [viewerMenuOpen, setViewerMenuOpen] = React.useState(false)
+  const viewerMenuRef = React.useRef<HTMLDivElement>(null)
 
   // Set page title
   React.useEffect(() => {
     document.title = title ? `${title} – FreeFrame` : 'FreeFrame'
     return () => { document.title = 'FreeFrame' }
   }, [title])
+  React.useEffect(() => {
+    setIsTouch(window.matchMedia('(hover: none)').matches)
+  }, [])
+  React.useEffect(() => {
+    if (!viewerMenuOpen) return
+    function handleClick(event: MouseEvent) {
+      const target = event.target
+      if (!(target instanceof Node)) return
+      if (viewerMenuRef.current && !viewerMenuRef.current.contains(target)) {
+        setViewerMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [viewerMenuOpen])
   const [selectedAsset, setSelectedAsset] = React.useState<FolderShareAssetItem | null>(null)
 
   const [assets, setAssets] = React.useState<FolderShareAssetItem[]>([])
@@ -1257,12 +1315,18 @@ export function FolderShareViewer({
         <div className="flex items-center gap-3 min-w-0 flex-1">
           {/* Viewer avatar (logged-in user) or project avatar */}
           {viewerName ? (
-            <div className="relative group shrink-0">
-              <button className="flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold text-text-primary bg-green-600 hover:ring-2 hover:ring-green-400/50 transition-all">
+            <div ref={viewerMenuRef} className="relative group shrink-0">
+              <button
+                onClick={() => setViewerMenuOpen((v) => !v)}
+                className="flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold text-text-primary bg-green-600 hover:ring-2 hover:ring-green-400/50 transition-all"
+              >
                 {viewerName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
               </button>
               {/* Dropdown */}
-              <div className="hidden group-hover:block absolute left-0 top-full mt-1 z-50 w-56 rounded-lg border border-border bg-bg-elevated shadow-xl py-1">
+              <div className={cn(
+                'absolute left-0 top-full mt-1 z-50 w-56 rounded-lg border border-border bg-bg-elevated shadow-xl py-1',
+                viewerMenuOpen ? 'block' : 'hidden md:group-hover:block',
+              )}>
                 <div className="px-3 py-2 border-b border-border">
                   <p className="text-sm font-medium text-text-primary">{viewerName}</p>
                 </div>
@@ -1338,7 +1402,7 @@ export function FolderShareViewer({
       </header>
 
       {/* ─── Content area ──────────────────────────────────────────────── */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
         {/* ─── Left: folder contents ─────────────────────────────────── */}
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* Sub-header: title, summary, breadcrumb, search */}
@@ -1383,14 +1447,14 @@ export function FolderShareViewer({
               </nav>
 
               {/* Search */}
-              <div className="relative flex items-center shrink-0">
+              <div className="relative flex items-center grow sm:grow-0">
                 <Search className="absolute left-2.5 h-3.5 w-3.5 pointer-events-none text-text-tertiary" />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search assets…"
-                  className="h-8 w-52 pl-8 pr-3 rounded-md text-sm border bg-bg-tertiary border-border text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-border-focus"
+                  className="h-8 w-full sm:w-52 pl-8 pr-3 rounded-md text-sm border bg-bg-tertiary border-border text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-border-focus"
                 />
               </div>
             </div>
@@ -1462,7 +1526,10 @@ export function FolderShareViewer({
                                 token={token}
                                 shareSession={shareSession}
                                 isSelected={selectedAsset?.id === asset.id}
-                                onSelect={setSelectedAsset}
+                                onSelect={(a) => {
+                                  if (isTouch && openInViewer) setViewingAsset(a)
+                                  else setSelectedAsset(a)
+                                }}
                                 onOpen={openInViewer ? setViewingAsset : () => {}}
                                 aspectClass={aspectClass}
                                 thumbnailScale={thumbnailScale}
@@ -1490,7 +1557,10 @@ export function FolderShareViewer({
                                     selectedAsset?.id === asset.id && 'bg-accent/5',
                                     i !== filteredAssets.length - 1 && 'border-b border-border',
                                   )}
-                                  onClick={() => setSelectedAsset(asset)}
+                                  onClick={() => {
+                                    if (isTouch && openInViewer) setViewingAsset(asset)
+                                    else setSelectedAsset(asset)
+                                  }}
                                   onDoubleClick={() => openInViewer && setViewingAsset(asset)}
                                 >
                                   {/* Square thumbnail */}
@@ -1514,7 +1584,7 @@ export function FolderShareViewer({
                                   {/* Download */}
                                   {allowDownload && (
                                     <button
-                                      className="w-7 shrink-0 flex items-center justify-center h-7 rounded text-text-tertiary opacity-0 group-hover:opacity-100 hover:text-text-primary transition-all"
+                                      className="w-7 shrink-0 flex items-center justify-center h-7 rounded text-text-tertiary opacity-100 md:opacity-0 md:group-hover:opacity-100 hover:text-text-primary transition-all"
                                       onClick={(e) => { e.stopPropagation(); handleDownload(token, asset.id, shareSession) }}
                                       title="Download"
                                     >
@@ -1567,7 +1637,7 @@ export function FolderShareViewer({
 
         {/* ─── Right Panel ───────────────────────────────────────────── */}
         {panelOpen && (
-          <div className="w-[320px] shrink-0 border-l border-border bg-bg-secondary flex flex-col overflow-hidden">
+          <div className="w-full h-[55vh] md:h-auto md:w-[320px] shrink-0 border-t md:border-t-0 md:border-l border-border bg-bg-secondary flex flex-col overflow-hidden">
             <RightPanel
               selectedAsset={selectedAsset}
               token={token}
