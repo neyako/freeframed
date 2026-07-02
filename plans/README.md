@@ -35,11 +35,11 @@ do not modify the other repo from within a plan unless the plan's Scope says so.
 | 003 | Service-to-service API key + review-ingest endpoint | FreeFrame `apps/api` | P1 | L | 002 | DONE ✓ verified 06-29 |
 | 004 | projmgmt → FreeFrame review bridge (mint guest link on Editing→Review) | projmgmt | P1 | L | 002, 003 | TODO — ready (no drift; code deps landed) |
 | 005 | Project-tree vs final-video upload option | projmgmt | P2 | M | — | TODO — ready (no drift) |
-| 006 | DaVinci Resolve → FreeFrame "Push for Review" (auto-render timeline, upload, get link) | FreeFrame `tools/resolve` | P1 | L | 003 | DONE ✓ verified 06-29 — ⚠ uncommitted |
-| 007 | DaVinci Resolve ← FreeFrame "Sync Comments" (pull comments onto timeline as markers) | FreeFrame `tools/resolve` | P1 | M | 006 | DONE ✓ verified 06-29 — ⚠ uncommitted |
+| 006 | DaVinci Resolve → FreeFrame "Push for Review" (auto-render timeline, upload, get link) | FreeFrame `tools/resolve` | P1 | L | 003 | DONE ✓ committed `b858154`, on main |
+| 007 | DaVinci Resolve ← FreeFrame "Sync Comments" (pull comments onto timeline as markers) | FreeFrame `tools/resolve` | P1 | M | 006 | DONE ✓ committed `b858154`, on main |
 | 008 | Hardware-accelerated transcode (NVENC/QSV/VAAPI + software fallback) | FreeFrame `packages/transcoder` + `apps/api` | P1 | L | — | DONE ✓ verified 06-29 (committed `9d79a92`) |
 | 009 | True all-in-one Docker image (one container, GPU-ready, jellyfin-ffmpeg) | FreeFrame `Dockerfile.allinone` + `deploy/` | P1 | L | 008 | DONE ✓ verified 06-29 (build+run smoke passed, committed) |
-| 010 | CI/CD — publish images to GHCR on release (test-gated) + build all-in-one in CI | FreeFrame `.github/workflows` | P1 | M | 009 | DONE ✓ verified 06-29 — ⚠ uncommitted |
+| 010 | CI/CD — publish images to GHCR on release (test-gated) + build all-in-one in CI | FreeFrame `.github/workflows` | P1 | M | 009 | DONE ✓ committed `8b42714`, on main |
 | 011 | Responsive mobile layout for the **editor** review page (stack viewer + comments, mirror 001) | FreeFrame `apps/web` | P1 | S–M | — | DONE ✓ verified 06-30 — mobile stack + comment-gated sidebar |
 | 012 | Fix browser uploads **and guest video playback** in the all-in-one image (MinIO 0.0.0.0 + S3_PUBLIC_ENDPOINT + CORS) | FreeFrame `Dockerfile.allinone` + `deploy/` | P1 | S–M | 009 | DONE ✓ merged to `main` 06-30 (merge `10983b3`) |
 | 013 | Share viewer comment panel — bottom toggle on mobile + open only when comments exist (#1b, #5) | FreeFrame `apps/web` | P2 | S–M | — | DONE ✓ verified 06-30 — bottom mobile toggle + comment-gated sidebar |
@@ -95,6 +95,197 @@ the order below. Bug numbers map to the user's report.
 
 - None. All ten reported bugs were reproduced from the code and turned into plans
   027–033.
+
+## Round 3 — freeframed design system (added 2026-07-02, planned at `39bdfc6`)
+
+The maintainer designed a new visual identity in Claude Design — project
+**"FreeFrame Design System"**
+(https://claude.ai/design/p/00498290-d48e-4d5b-a733-c0a800031b92): a
+Nothing-OS-inspired **monochrome UI with red `#D71921` as the sole interrupt**,
+Space Grotesk (display/body) + Space Mono (uppercase labels) + Doto (dot-matrix
+numerals; all Vietnamese-capable), 0–4 px radii, hairline borders instead of
+shadows, no stock gradients, and a dot-grid texture motif. The design's token
+names deliberately mirror `apps/web/app/globals.css`'s existing CSS variables,
+so the retheme is largely value-swap + component restyles. All plans are
+FreeFrame `apps/web` only; every needed design spec is inlined in the plan
+files (executors don't need design-project access).
+
+| Plan | Title | Bugs/Design | Priority | Effort | Depends on | Status |
+|------|-------|-------------|----------|--------|------------|--------|
+| 034 | Design tokens foundation — monochrome+red tokens, Space Grotesk/Mono/Doto fonts, squared radii, shadow kill | tokens.dc | P1 | M | — | TODO |
+| 035 | Primitive restyle — button (adds `solid`), input, badge, avatar, empty-state | button/input/badge/avatar/empty-state.dc | P1 | M | 034 | TODO |
+| 036 | New primitives — `ui/switch`, `ui/segmented`, `ui/progress` + migrate inline ancestors (appearance-popover, settings switches, uploads bar) | toggle/segmented/progress.dc | P2 | M | 034 | TODO |
+| 037 | Chrome — header wordmark + red dot, mono breadcrumbs, **theme toggle in header**, drawer/palette shells | chrome.dc | P2 | M | 034, 035 | TODO |
+| 038 | Browse surfaces — flat mono project posters (kills `gradient-utils`), dot-grid fallbacks, data-table asset list | card/table.dc | P2 | M–L | 034, 035 | TODO |
+| 039 | Review & share — Doto timecodes, red playhead (kills hardcoded indigo), mono approvals, guest-viewer token sweep | tokens/badge.dc | P2 | M | 034, 035 | TODO |
+| 040 | Auth screens — wordmark hero with red *d*, dot-grid field, Doto code inputs | index.dc | P3 | S–M | 034, 035 | TODO |
+
+### Recommended execution order (round 3)
+
+1. **034** — everything else references its tokens (`border-strong`,
+   `font-dot`, `ff-dotgrid`, `animate-blink`). Biggest visual delta on its own.
+2. **035** — primitives used by every later plan's surfaces.
+3. **036 / 037 / 038 / 039 / 040** — independent of each other at the file
+   level; any order. Suggested by user impact: 039 (review core) → 038 → 037 →
+   036 → 040.
+
+### Dependency notes (round 3)
+
+- All of 035–040 hard-require 034 (each has a grep STOP for `D71921` in
+  `globals.css`). 037/038/039/040 also require 035 (Button `solid` variant,
+  restyled Input/Badge; 037 uses Avatar's new `accent` prop).
+- 036 is independent of 035 (new files + 4 call sites).
+- 037 must NOT touch `app/(dashboard)/layout.tsx` (025's shell logic);
+  036+038 both touch `components/projects/` but different files — no overlap.
+
+### Decisions & assumptions (redirect before execution if wrong)
+
+- **Status colors collapse to monochrome+red** (034): `--status-error` = the
+  red accent; success/warning/info become monochrome. Approve turns
+  mono-inverted (039), green disappears app-wide. Single-file revert point:
+  `globals.css`.
+- **Shadows are killed globally** via the Tailwind `boxShadow` scale (034);
+  hairline borders do the lifting (per the design: "there are no shadows").
+- **Doto ships as a committed woff2** via `next/font/local` (Next 14.2 has no
+  built-in Doto) — keeps self-hosted/offline deploys free of Google Fonts at
+  runtime.
+- **Header brand becomes a text wordmark** (red dot + mono "freeframed");
+  org-uploaded branding logos still win (037). Auth shows the big wordmark
+  with red *d* (040).
+- **Timeline comment-range markers go monochrome** (039) — red stays reserved
+  for the playhead; the plan's STOP names `bg-accent-line` as the fallback if
+  mono proves illegible.
+- **Project-card red "needs eyes" corner dot is NOT implemented** — needs a
+  backend field; a marker comment is left in `project-card.tsx` (038).
+
+### Deferred (design exists, no plan yet)
+
+- **Hero Stat** (`stat.dc.html` → `components/dashboard/stat.tsx`): no
+  dashboard surface exists in the app; adopt when one does.
+- **Standalone data-table component** (`components/shared/data-table.tsx` in
+  the design): 038 applies the table *treatment* to the existing asset-grid
+  list view instead of introducing a new component.
+- `audio-player.tsx` / `image-viewer.tsx` conformance pass (039's maintenance
+  notes carry the recipe), video-player quality/time-format pickers →
+  `Segmented` (036), and a deep `folder-share-viewer` refactor (039 does a
+  targeted sweep only).
+
+## Round 4 — deep audit: correctness, tests, perf, DX (added 2026-07-02, planned at `39bdfc6`)
+
+Full-repo deep audit (all categories except **security — explicitly skipped at the
+maintainer's instruction**; re-run `/improve security` later if wanted). Audited
+inline (subagent spawning was broken this session — every launch failed on a stale
+`claude-sonnet-4-6-max` model id). All FreeFrame; no projmgmt items this round.
+
+| Plan | Title | Finding | Priority | Effort | Depends on | Status |
+|------|-------|---------|----------|--------|------------|--------|
+| 041 | Repair CI — drop deleted `sidebar.tsx` tripwire, run vitest, enforce tsc | CI red on every push; 136 web tests never gate | P1 | S | — | DONE ✓ verified 07-02 — applied in current checkout (header tripwire + Vitest + enforced tsc) |
+| 042 | Widen `file_size_bytes` to BigInteger (uploads >2.14 GB 500) | INTEGER columns vs 10 GB advertised limit | P1 | S–M | — | DONE ✓ verified 07-02 — BigInteger migration + metadata test |
+| 043 | Repo hygiene — delete dead npm lockfiles, pin turbo, fix stale pnpm/permission docs | lockfile drift; `turbo: latest`; architecture.md documents removed org/team layer | P2 | S | — | DONE ✓ verified 07-02 — lockfiles removed, Turbo pinned, docs repaired |
+| 044 | Author root `CLAUDE.md` agent guide | agent-driven repo with no agent guide | P1 | S | — (softly after 041) | DONE ✓ verified 07-02 — `AGENTS.md` guide + `CLAUDE.md` wrapper |
+| 045 | Real-Postgres integration test baseline (CI service + first 12 tests) | API suite is 100% mock-DB; SQL/migrations/RBAC untested | P1 | M–L | 041, 042 | DONE ✓ verified 07-02 — 16 real-Postgres tests + CI service |
+| 046 | Batch comment-tree loading (5 queries/comment → ~7 total) | recursive N+1 on the hottest read path | P2 | M | 045 (soft) | DONE ✓ verified 07-02 — parity + query-count real-DB tests |
+
+### Recommended execution order (round 4)
+
+1. **041** — unbreaks CI; everything later wants a green gate. 2. **042** — real
+user-facing bug, tiny. 3. **043 / 044** — independent S-effort hygiene, any time.
+4. **045** — the meta-unblocker (proves 042 live, enables honest perf verification).
+5. **046** — after 045 for the parity/query-count tests.
+
+### Dependency notes (round 4)
+
+- 041 and 045 both edit `.github/workflows/ci.yml` (different jobs) — execute in
+  order, don't parallelize.
+- 045's 5 GB regression test requires 042's migration to exist.
+- 046's integration tests import 045's fixtures; without 045 it falls back to
+  unit-only verification (plan says how).
+
+### Findings deferred (real, no plan yet — ask to plan any of these)
+
+- **`transcode_progress` SSE never published** — the whole progress-percent
+  plumbing (`use-sse.ts`, `upload-store.ts:384`) is dead; bars sit at 0% then jump
+  to 100%. Needs ffmpeg `-progress` parsing in `packages/transcoder` + a publisher
+  in `tasks/transcode_tasks.py`. M effort, cosmetic vs. the planned set.
+- **Guest folder-listing N+1** (`routers/share.py:1321-1402`) — same recipe as 046;
+  do it as the next perf plan once 046's pattern is proven.
+- **`share.py` god module split** (1558 lines, no service layer) — deliberately NOT
+  now: rounds 034–040 (retheme) and 046 both touch adjacent surface; splitting mid-
+  flight maximizes conflict risk. Revisit after the retheme lands.
+- **Guest share comment listing ignores `visibility`** (`comments.py:573-579`
+  returns internal comments to guests; the authed endpoint filters). Flagged to the
+  maintainer 2026-07-02 alongside the security-category skip — plan on request.
+- **`processed/*` S3 public-read policy** (`s3_service.py:125-145`) contradicts the
+  hls_proxy design note ("eliminates the need for a public bucket policy"). Security-
+  adjacent; explicitly left unplanned per the maintainer's "skip security" instruction.
+
+### Findings considered and rejected (round 4)
+
+- *architecture.md org/team access steps as a code bug* — the org/team layer was
+  deliberately removed (`c8d9e2f1a3b4_remove_org_and_team_from_projects`); the doc is
+  what's wrong. Fixed via 043, no permissions-code change.
+- *`uuid.UUID(payload["sub"])` 500 on malformed-but-signed JWT* — requires a validly
+  signed token with a non-UUID subject; unreachable without the signing key. Not worth
+  a plan.
+- *Pin `packageManager` field / corepack* — CI already pins pnpm via action; adding a
+  guessed exact version risks corepack friction for zero observed pain.
+
+## Reconcile log — 2026-07-02
+
+Run against FreeFrame HEAD `39bdfc6` (main) and projmgmt HEAD `1905a0b`. HEAD unchanged since the
+07-01 run-2 log, but the working tree is **dirty**: all round-4 executor work (041/042/043/045/046 —
+code, tests, CI, docs, plan files 034–046) sits applied but **UNCOMMITTED**. This run verifies the
+round-4 DONE rows and drift-checks every TODO.
+
+- **041 — DONE, verified (uncommitted).** All cheap criteria hold on the working tree: `sidebar.tsx`
+  absent from `ci.yml`, `components/layout/header.tsx` tripwire ×1, `pnpm test` step ×1,
+  `continue-on-error` ×1, YAML parses. Live gate re-run this session: `pnpm exec tsc --noEmit` → 0,
+  `pnpm test` → **136 passed (136)** across 19 files.
+- **042 — DONE, verified (uncommitted).** `mapped_column(BigInteger` ×1 in `models/asset.py`
+  (`file_size_bytes`, line 77) + ×1 in `models/comment.py`; migration
+  `aa11bb22cc33_widen_file_size_to_bigint.py` present with `down_revision = '8ca3dffea55f'`;
+  `py_compile` clean on all three; `test_model_column_types.py` has 3 tests.
+- **043 — DONE, verified (uncommitted).** `git ls-files | grep package-lock` → 0 (both npm lockfiles
+  deleted); `package-lock.json` in `.gitignore`; `"latest"` gone from `package.json`; no `npm`
+  invocations left in `docs/contributing.md`; `org admin` gone from `docs/architecture.md`,
+  `shared_with_team_id` present. `pnpm install --lockfile-only` NOT re-run (mutates lockfile; the
+  updated `pnpm-lock.yaml` is already in the tree).
+- **045 — DONE, static-verified (uncommitted).** `tests/integration/` has conftest + 4 test files
+  (plan said 3; executor delivered 4 — `comments_batching_db`, `permissions_db`, `share_links_db`,
+  `versions_db`); `integration:` marker ×1 in `pytest.ini`; `postgres:15-alpine` service +
+  `TEST_DATABASE_URL` in `ci.yml`, YAML valid. **The real-Postgres run and the skip-without-env run
+  were NOT re-executed** — no local pytest env (unchanged since 07-01; installing deps would mutate
+  the tree). Verified-by-executor, re-confirmed static-only.
+- **046 — DONE, verified (uncommitted).** Per-comment annotation query gone (`db.query(Annotation)
+  .filter(Annotation.comment_id ==` → 0 matches); `_fetch_comment_tree_data` +
+  `_assemble_comment_response` defined and used at the wrapper + both list endpoints
+  (`comments.py:104/284/647`); `py_compile` clean. Batching/parity tests present
+  (`test_comment_batching.py`, `integration/test_comments_batching_db.py`); not run (no pytest env).
+- **034–040 — TODO, no drift.** Planned at `39bdfc6` = current HEAD; the dirty files touch only
+  API/CI/docs/lockfiles, not `apps/web` source. `D71921` absent from `globals.css` → 034 unexecuted
+  as expected. **034 is the next executable plan in round 3** (everything else depends on it).
+- **044 — DONE, verified later this same day (07-02).** Executed after this log's first pass.
+  Guide shipped as root `AGENTS.md` with `CLAUDE.md` as an `@AGENTS.md` pointer — a documented,
+  approved deviation (serves both agent ecosystems; content identical to the plan's template intent).
+  All Step-2 anchor greps re-run and match (`deleted_at` in `services/permissions.py`,
+  `use-video-player` import in `share-video-player.tsx`, `validate_asset_in_share` in
+  `routers/share.py`, `pnpm` in `ci.yml`, `stores/upload-store.ts` exists); web gate green
+  (136/136 + tsc 0, run this session). Command table honest (correctly says no local venv,
+  CI is the API gate).
+- **004 / 005 — TODO, re-confirmed: no drift.** projmgmt still at `1905a0b`; drift diff on
+  `src/actions/projects.ts` + `src/lib/nextcloud.ts` empty; `src/lib/freeframe.ts` absent
+  (004 unexecuted). Both executable now; 004's end-to-end test still needs a deployed, reachable
+  FreeFrame (runtime precondition, not a code blocker).
+- **Nothing rejected or blocked. No stale IN PROGRESS.** No findings retired.
+
+**⚠ Tracking hygiene (maintainer action):** the entire round-4 batch + plan files 034–046 are
+uncommitted on `main`'s working tree. Recommend committing before executing round 3 — 034–040
+executors dispatch from committed state (worktrees can't see uncommitted plan files), and an
+accidental `git checkout .` would erase five verified plans.
+
+**Executable right now:** FreeFrame **034** (design tokens — unlocks 035–040); projmgmt **004**
+and **005**. (044 executed + verified later on 07-02; round-4 batch committed same day at the
+maintainer's request.)
 
 ## Reconcile log — 2026-06-29
 
@@ -351,6 +542,48 @@ Executed in the recommended order. `main` advanced `6a70c3c` (reconcile doc) →
 **Post-merge full gate (run on `apps/web`):** `tsc --noEmit` → 0; `pnpm lint` → 0 (warnings only, all pre-existing `exhaustive-deps`/`no-img-element`); `pnpm test` → **133 passed (133)** across 18 files (was 123/16 — +10 tests from 020/022/023). Working tree clean. **Not pushed** — merging to remote is the maintainer's call.
 
 All `advisor/*` branches are now ancestors of `main`. 021's plan body still describes the pre-025 layout approach; if 021 is ever revisited, refresh it — but its shipped value (mobile affordances) is already on main.
+
+## Reconcile log — 2026-07-01 (run 2)
+
+Run against FreeFrame HEAD `39bdfc6` (main, clean tree) and projmgmt HEAD `1905a0b`. Prior log stopped
+at `57fa5c4`; main has since advanced through the **round-2 batch 027–033**, which the table marked
+`DONE ✓ verified 07-01` but no reconcile log had confirmed on the merged HEAD. Now verified.
+
+- **Round-2 (027–033) — all DONE, merged, verified @`39bdfc6`.** They landed on main directly (no
+  surviving `advisor/*` branch): `37d4080` (plan docs) → `3137959` (032) → `c2a7e8e` (030) →
+  `040febf` (027/029 shell) → `51be3ed` (028) → `64f7a16` (033) → `47b61b2` (030 revoke-dialog) →
+  `47c2f7f` (API comment gates) → `39bdfc6` (030/023 split share-link controls). Per-plan anchors on HEAD:
+  - **027** — `header.tsx` has no `panel-toggle`/`toggleRightPanel`/`PanelRight` (dead toggle removed).
+  - **028** — `projects/[id]/page.tsx`: `hidden sm:inline` action labels + `grid-cols-2` mobile grid.
+  - **029** — `assets/[assetId]/page.tsx`: `matchMedia('(min-width: 768px)')` default-open on desktop,
+    `Columns2` toggle, `md:hidden` mobile handle.
+  - **030/023** — split into `share-link-section.tsx` + `share-link-controls.tsx`; controls expose
+    Visibility/Passphrase/expiry/watermark/`onRevoke` (revoke dialog kept mounted, `47b61b2`).
+  - **031** — `projects/[id]/page.tsx` upload opens native picker via `uploadInputRef.current?.click()`.
+  - **032** — `share/[token]/page.tsx` renders `ShareReviewScreen` for single-asset guests (fixes the
+    `charAt` crash by routing through the rich review screen).
+  - **033** — `apps/api/routers/share.py:1413` `@router.get("/share/{token}/versions/{asset_id}")` gated
+    on `link.show_versions`; guest switcher in `components/share/folder-share-viewer.tsx`.
+- **Web gate (real, run this session):** `pnpm exec tsc --noEmit` → **0**; `pnpm test` (vitest) →
+  **136 passed (136)** across 19 files (was 133/18 at the 07-01 merge — +3 from 032/033). `pnpm lint`
+  not re-run (prior gate was warnings-only).
+- **API gate (static only):** no venv/pytest available and installing deps would mutate the tree
+  (out of scope for reconcile), so the **full `pytest` was NOT run**. `py_compile` of
+  `routers/share.py`, `routers/comments.py`, `main.py` → clean; round-2 test files present
+  (`test_share_versions.py` 228 lines for 033; `test_share_comments.py` +209 and `permissions.py` +54
+  for the `47c2f7f` comment-gate). Treat the API suite as verified-by-executor, re-confirmed static-only.
+- **Stale annotations corrected.** Table rows for **006/007** ("⚠ uncommitted") → `committed b858154, on main`;
+  **010** ("⚠ uncommitted") → `committed 8b42714, on main`. All three (plus 008 `hwaccel.py`, 009
+  `Dockerfile.allinone`) are tracked on main; `git branch --no-merged main` is empty (every `advisor/*`
+  branch is an ancestor of main). Not pushed — remote is the maintainer's call.
+- **004 / 005 — TODO, re-confirmed: no drift.** projmgmt still `1905a0b`; `src/lib/freeframe.ts` absent
+  (004 unexecuted); drift diff on `src/actions/projects.ts` + `src/lib/nextcloud.ts` empty. 004's code deps
+  (002/003) are DONE+merged in FreeFrame. **Both executable now** — 004 still needs a deployed, reachable
+  FreeFrame for the end-to-end test (runtime precondition, not a code blocker).
+- **Nothing rejected or blocked. No stale IN PROGRESS.** No findings retired.
+
+**Executable right now:** projmgmt **004** (mint guest link on Editing→Review) and **005** (project-tree
+vs final-video upload). Everything else (001–033) is DONE and on `main`.
 
 ## Recommended sequencing
 
