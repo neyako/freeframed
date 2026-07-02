@@ -12,6 +12,14 @@
 > If any in-scope file changed since this plan was written, compare the
 > "Current state" excerpts against the live code before proceeding; on a
 > mismatch, treat it as a STOP condition.
+>
+> **Known, expected drift (reconciled 2026-07-03):** plan 051 appended
+> `pointer-coarse:opacity-100` to hover-reveal class lines in
+> `project-card.tsx` (~114), `folder-card.tsx` (~181), `asset-card.tsx`
+> (~170), `asset-grid.tsx` (~417/456/543/586), and
+> `project-settings-dialog.tsx` (~107). Structural only; NOT a STOP.
+> **Preserve the `pointer-coarse:opacity-100` token** on every hover-reveal
+> control you restyle — touch users depend on it.
 
 ## Status
 

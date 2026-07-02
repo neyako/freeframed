@@ -12,6 +12,13 @@
 > If any of these files changed since this plan was written, compare the
 > "Current state" excerpts against the live code before proceeding; on a
 > mismatch, treat it as a STOP condition.
+>
+> **Known, expected drift (reconciled 2026-07-03):** plan 051 added a
+> `pointer-coarse` variant plugin to `tailwind.config.ts` (`plugins` is no
+> longer `[]`; there is an `import plugin from 'tailwindcss/plugin'` at the
+> top). This is NOT a STOP. **Preserve the plugin and the import** — this
+> plan's Step 4 overrides `theme` scales only and must leave `plugins`
+> untouched.
 
 ## Status
 

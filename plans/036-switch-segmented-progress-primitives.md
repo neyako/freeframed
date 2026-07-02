@@ -12,6 +12,12 @@
 > If any in-scope file changed since this plan was written, compare the
 > "Current state" excerpts against the live code before proceeding; on a
 > mismatch, treat it as a STOP condition.
+>
+> **Known, expected drift (reconciled 2026-07-03):** plan 051 appended
+> `pointer-coarse:opacity-100` to one hover-reveal class line each in
+> `uploads-panel.tsx` (~line 149) and `project-settings-dialog.tsx` (~line
+> 107). Structural only; this plan's excerpts are unaffected — NOT a STOP.
+> Preserve the `pointer-coarse:opacity-100` token in any line you restyle.
 
 ## Status
 

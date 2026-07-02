@@ -12,6 +12,11 @@
 > If any in-scope file changed since this plan was written, compare the
 > "Current state" excerpts against the live code before proceeding; on a
 > mismatch, treat it as a STOP condition.
+>
+> **Known, expected drift (reconciled 2026-07-03):** plan 051 appended
+> `pointer-coarse:opacity-100` to the upload-row hover-reveal class in
+> `uploads-panel.tsx` (~line 149 — row actions, not the shell/header this
+> plan restyles). Structural only; NOT a STOP. Preserve that token.
 
 ## Status
 

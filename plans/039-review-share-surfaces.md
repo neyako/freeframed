@@ -12,6 +12,21 @@
 > If any in-scope file changed since this plan was written, compare the
 > "Current state" excerpts against the live code before proceeding; on a
 > mismatch, treat it as a STOP condition.
+>
+> **Known, expected drift (reconciled 2026-07-03, round-5 plans 047–052):**
+> - `video-player.tsx`: plan 047 added a `poster` prop (props interface +
+>   `<video poster=…>`); plan 052 compressed the transport bar below `sm`
+>   (`px-2 sm:px-4`, `gap-1 sm:gap-2`, `px-2 sm:px-3`, and the timecode span
+>   is now `font-mono text-xs sm:text-sm …`, ~line 413). The excerpts below
+>   are updated. **Preserve the `sm:` responsive classes and the `poster`
+>   prop** in anything you restyle.
+> - `folder-share-viewer.tsx`: plans 047/048/049 added mobile layout +
+>   touch behavior (~120 lines: stream-info fetch, stacked bottom-sheet
+>   panels, `h-dvh`, tap-to-open, `md:group-hover` download reveals,
+>   click-toggled avatar menu). Line refs like `branding?.logo_url` "~1299"
+>   have shifted (~+45); re-locate by grep. The Step-5 grep sweep is
+>   unaffected. **Layout classes from 047–049 must survive your token
+>   sweep.** None of this is a STOP.
 
 ## Status
 
@@ -57,11 +72,11 @@ player-logic changes.
 All excerpts at commit `39bdfc6`.
 
 - `apps/web/components/review/video-player.tsx`:
-  - Timecode display (line ~410):
+  - Timecode display (line ~413; `text-xs sm:text-sm` from plan 052 — keep):
     ```tsx
-    <span className="font-mono text-sm text-text-primary tabular-nums tracking-wide">
+    <span className="font-mono text-xs sm:text-sm text-text-primary tabular-nums tracking-wide">
     ```
-  - Time-format dropdown (line ~429): `rounded-xl border border-white/10
+  - Time-format dropdown (line ~432): `rounded-xl border border-white/10
     bg-[#2a2a30] shadow-2xl ...`; option hover `hover:bg-white/5`; active
     check `text-accent` (fine — red after 034).
 - `apps/web/components/review/progress-bar.tsx` (the timeline scrubber):

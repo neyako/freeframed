@@ -230,6 +230,144 @@ user-facing bug, tiny. 3. **043 / 044** — independent S-effort hygiene, any ti
 - *Pin `packageManager` field / corepack* — CI already pins pnpm via action; adding a
   guessed exact version risks corepack friction for zero observed pain.
 
+## Round 5 — mobile UX + guest playback (added 2026-07-03, planned at `364e798`)
+
+Focused audit of mobile UI/UX after the maintainer reported the app "unusable"
+on phones (6 screenshots). Findings verified two ways: code-level, and live at
+a 390×844 viewport against the running dev stack (iframe viewport simulation,
+logged-in session). Headline: **plan 032 regressed the guest share screen** —
+it routed guests to `ShareReviewInner`, which (a) feeds the stream JSON
+*endpoint URL* to `<video src>` so guest video never plays, and (b) has no
+mobile layout (fixed 360px sidebar, default-open → video is a ~25px sliver).
+All FreeFrame `apps/web`; layout/behavior only — **no visual restyling**
+(rounds 034–040 own that).
+
+| Plan | Title | Finding | Priority | Effort | Depends on | Status |
+|------|-------|---------|----------|--------|------------|--------|
+| 047 | Guest share video playback — fetch stream JSON before feeding player (+ poster) | endpoint-as-src regression from 032; CONFIRMED live | P1 | S | — | DONE ✓ verified 07-03 (uncommitted) |
+| 048 | Guest single-asset share mobile layout (stack + bottom sheet + dvh) | 360px sidebar sliver; CONFIRMED live at 390px | P1 | M | 047 (same file, order only) | DONE ✓ verified 07-03 (uncommitted) |
+| 049 | Folder/project guest viewer mobile (stack, tap-to-open, touch download, click avatar menu) | 320px panel default-open; dblclick-only open on touch | P2 | M | 048 (same file, order only) | DONE ✓ verified 07-03 (uncommitted) |
+| 050 | Share popover fit — `sm:w-96` + max-height/scroll (popover + project-page dialog) | "Visibilit" label clip; unreachable Revoke below fold | P2 | S | — | DONE ✓ verified 07-03 (uncommitted) |
+| 051 | Touch-affordance sweep — `pointer-coarse:opacity-100` variant, 12 spots / 9 files | hover-only controls invisible on touch | P2 | S–M | — | DONE ✓ verified 07-03 (uncommitted, build re-run) |
+| 052 | Video transport bar fits narrow viewports (compress below `sm`) | controls clip ≤375px — measured 390px content in 356px at 360w (Codex report, confirmed live) | P2 | S | — (soft: after 047, same file) | DONE ✓ verified 07-03 (uncommitted, static anchors) |
+| ~~053~~ | ~~Author `DESIGN.md` design contract~~ | REJECTED 2026-07-03 by maintainer — design overhaul (034–040) imminent; a contract written now would be stale on arrival. Plan file deleted. | — | — | — | REJECTED |
+
+### Recommended execution order (round 5)
+
+1. **047** — restores the core guest flow (video plays again); smallest, highest pain.
+2. **048** — guest asset screen usable on phones. 3. **049** — folder shares.
+(047→048→049 all edit `folder-share-viewer.tsx`; execute sequentially, never in
+parallel.) 4. **050 / 051** — independent, any time, parallel-safe.
+5. **052** — after 047 (both edit `video-player.tsx`; different lines, order only).
+
+**Round 5 before round 3 (retheme):** these are functional fixes with purely
+structural diffs; landing them first keeps 034–040's token sweeps
+(especially 039's guest-viewer pass) on top of correct layouts instead of
+conflicting mid-flight.
+
+### Verified fine at 390px (no plan needed)
+
+Project page grid + actions (028), editor review page stacking + playback
+(021/029), uploads/notification drawers (`max-w-[calc(100vw-1rem)]`),
+appearance popover, command palette.
+
+### Findings deferred (round 5)
+
+- **Annotation drawing on touch** — `hooks/use-drawing.ts` registers fabric
+  mouse handlers; fabric may normalize touch events. Unverified on a real
+  device; investigate before planning.
+- **Duplicate guest stream fetch + double `viewed_asset` activity logging**
+  (`review-provider.tsx:151` + per-player fetches) — noted in 047's
+  maintenance notes.
+- **`share-video-player.tsx` dead code** (orphaned by 032) — delete after 039
+  lands.
+- **Uploads drawer backdrop has no dim** (`uploads-panel.tsx:239-242`) —
+  cosmetic; retheme (037) territory anyway.
+
+### Findings considered and rejected (round 5)
+
+- *Video black before play (no poster)* — folded into 047 (`poster` prop from
+  the share stream JSON's `thumbnail_url`) instead of its own plan.
+- *Editor review page mobile* — reported by the user's screenshots but already
+  fixed by 021/029; verified working live at 390px this session.
+
+### Codex second-opinion audit (2026-07-03) — reconciliation
+
+An external Codex pass reviewed desktop/tablet/mobile. Disposition of its 8 points:
+
+- **Accepted → plans**: video controls clip at right edge (→ **052**, confirmed
+  by live measurement); no DESIGN.md / design contract (→ was **053**, then
+  REJECTED by the maintainer — retheme lands first; revisit a design contract
+  AFTER 034–040 so it documents the live system, not a moving target).
+- **Rejected — collide with decided direction**: "dark theme too flat, no depth
+  separation" (the monochrome/hairline-border/no-shadow look IS the round-3
+  decision; current theme is replaced wholesale by 034); "share dialog is a
+  dense settings sheet" (023 simplified it, maintainer explicitly restored the
+  controls in 030 — settled); "comments make media secondary on mobile" (the
+  55vh bottom sheet is the decided pattern from 013/021/029).
+- **Deferred to retheme owners, not re-planned**: header action hierarchy
+  (→ 037 chrome), desktop void on Projects page (mostly a 1-project
+  empty-state artifact; → 038 browse surfaces — 038's executor should consider
+  a content max-width + richer empty state), 2-col mobile grid density and
+  icon-only toolbar labels (both deliberate 028 choices; revisit after 038 if
+  still bothersome — labels-on-primary-action is a 5-line tweak on request).
+
+## Reconcile log — 2026-07-03
+
+Run against FreeFrame HEAD `364e798` (main) and projmgmt HEAD `1905a0b`. HEAD unchanged since
+round 5 was planned, but the working tree is **dirty**: the entire round-5 batch (047–052 —
+14 modified web files + `share-stream.ts` + its test + plan files 047–052) sits applied but
+**UNCOMMITTED**. This run verifies the six round-5 DONE rows and drift-checks every TODO.
+
+- **047 — DONE, verified (uncommitted).** Old endpoint-as-src gone (`stream/${asset.id}?_=1` → 0);
+  `fetchShareStreamInfo` ×2 in `folder-share-viewer.tsx`; `poster` ×3 in `video-player.tsx`;
+  `share-stream.ts` + test present with 5 tests (plan asked ≥4).
+- **048 — DONE, verified (uncommitted).** `matchMedia('(min-width: 768px)')` in `ShareReviewInner`;
+  stacking container ×1; "Hide comments" handle ×1; `h-dvh` ×3; only `min-h-screen` remains (line
+  1311); the sole `w-[360px]` is `md:`-prefixed (line 946).
+- **049 — DONE, verified (uncommitted).** `panelOpen` matchMedia lazy initializer (line 1079);
+  content stacks below `md`; panel is `md:w-[320px]` bottom-sheet (line 1640); `hover: none` touch
+  flag ×1; `md:group-hover:opacity-100` ×2; `hidden group-hover:block` → 0 (avatar menu click-toggled);
+  `w-full sm:w-52` search ×1.
+- **050 — DONE, verified (uncommitted).** `sm:w-80` → 0, `sm:w-96` + `overflow-y-auto` in
+  `share-dialog.tsx`; `max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain` on the
+  project-page `Dialog.Content` (line 1045).
+- **051 — DONE, verified (uncommitted).** `pointer-coarse` plugin in `tailwind.config.ts`; all 12
+  occurrences across the 9 files carry `pointer-coarse:opacity-100` (uploads-panel 1, members-dialog 1,
+  folder-tree 1, settings-dialog 1, asset-grid 4, comment-attachment 1, asset-card 1, project-card 1,
+  folder-card 1); the sweep grep (`opacity-0 group-hover:opacity-100` minus folder-share-viewer minus
+  pointer-coarse) → 0. **`pnpm build` re-run this session → exit 0** (plugin compiles).
+- **052 — DONE, verified (uncommitted).** Transport bar carries the `sm:` compression classes
+  (5 anchor matches); timecode span now `text-xs sm:text-sm` (line 413). The 360px live measurement
+  was the executor's; not re-run (no dev stack) — static anchors + arithmetic hold.
+- **Full gate (real, run this session):** `tsc --noEmit` → **0 errors** (direct binary exit 0; the
+  rtk wrapper's exit 1 is a wrapper artifact — its own output says "No errors found");
+  `pnpm test` → **141 passed (141)** across 20 files (was 136/19 — +5 from 047's share-stream tests);
+  `pnpm build` → exit 0. Live browser checks (390px viewports) not re-run; they were done at plan
+  time and by executors.
+- **034–040 — TODO, drift processed.** Round 5 dirtied files that rounds 3's drift checks cover.
+  Disposition per plan: **035/040 — no drift** (their files untouched). **034/036/037/038 — expected
+  structural drift only** (051's `pointer-coarse` plugin + class appends; no excerpt invalidated) —
+  each plan now carries a "Known, expected drift" note telling the executor it's not a STOP and to
+  preserve the `pointer-coarse:opacity-100` tokens. **039 — real excerpt drift, refreshed in place**:
+  the video-player timecode excerpt updated to `text-xs sm:text-sm` (052), the 047 `poster` prop and
+  047–049 folder-share-viewer mobile layout documented as must-survive; line refs corrected.
+  034 remains the next executable round-3 plan.
+- **004 / 005 — TODO, re-confirmed: no drift.** projmgmt still at `1905a0b`; drift diff on
+  `src/actions/projects.ts` + `src/lib/nextcloud.ts` empty; `src/lib/freeframe.ts` absent (004
+  unexecuted). Both executable now; 004's end-to-end case still needs a deployed, reachable FreeFrame
+  (runtime precondition, not a code blocker).
+- **Nothing newly rejected or blocked. No stale IN PROGRESS.** 053 stays REJECTED (07-03, maintainer).
+
+**⚠ Tracking hygiene (maintainer action):** the whole round-5 batch + plan files 047–052 + this
+run's plan refreshes (034/036/037/038/039, README) are uncommitted on `main`'s working tree.
+Recommend committing before executing round 3 — 034–040 executors dispatch from committed state
+(worktrees can't see uncommitted files), and an accidental `git checkout .` would erase six verified
+plans' work.
+
+**Executable right now:** FreeFrame **034** (design tokens — unlocks 035–040, commit round 5 first);
+projmgmt **004** and **005**.
+
 ## Reconcile log — 2026-07-02
 
 Run against FreeFrame HEAD `39bdfc6` (main) and projmgmt HEAD `1905a0b`. HEAD unchanged since the
