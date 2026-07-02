@@ -10,7 +10,7 @@ Thanks for your interest in contributing! This guide will help you get set up fo
 
 - [Docker](https://docs.docker.com/get-docker/) and Docker Compose
 - [Git](https://git-scm.com/)
-- [Node.js 18+](https://nodejs.org/) (optional, for running frontend outside Docker)
+- [Node.js 20+](https://nodejs.org/) and pnpm-10 (matches CI; optional, for running frontend outside Docker)
 - [Python 3.11+](https://python.org/) (optional, for running backend outside Docker)
 
 ### Getting Started
@@ -91,10 +91,10 @@ docker compose -f docker-compose.dev.yml exec api pytest apps/api/tests/test_aut
 
 ```bash
 # Run all tests
-docker compose -f docker-compose.dev.yml exec web npm test
+docker compose -f docker-compose.dev.yml exec web pnpm test
 
 # Run in watch mode
-docker compose -f docker-compose.dev.yml exec web npm run test:watch
+docker compose -f docker-compose.dev.yml exec web pnpm test:watch
 ```
 
 ---
@@ -130,7 +130,7 @@ Always review auto-generated migrations before committing.
 - Follow Next.js App Router conventions
 - Use Tailwind CSS for styling
 - Use Zustand for client state, SWR for server state
-- Run linting: `npm run lint`
+- Run linting: `pnpm lint`
 
 ---
 

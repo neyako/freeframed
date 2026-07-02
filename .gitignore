@@ -53,6 +53,10 @@ cover/
 /node_modules
 /node_modules/*
 node_modules/
+
+# npm artifacts -- this repo is pnpm-only (CI: pnpm install --frozen-lockfile)
+package-lock.json
+
 # Translations
 *.mo
 *.pot
@@ -219,6 +223,7 @@ skills-lock.json
 # Internal dev planning docs
 docs/superpowers/
 CLAUDE.md
+!CLAUDE.md
 
 .DS_Store
 .worktrees/
@@ -228,3 +233,6 @@ CLAUDE.md
 .playwright-cli/
 output/
 test-results/
+
+# Claude Code personal project settings
+.claude/settings.local.json

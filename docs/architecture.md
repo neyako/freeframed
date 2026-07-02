@@ -127,36 +127,29 @@ Reviewer approves / rejects ──▶ SSE: approval_updated
 
 ## Permission Model
 
-Permissions are layered. Each level inherits downward:
+Enforced asset access is project-scoped. Organization/team tables and
+`shared_with_team_id` remnants still exist in migrations/API edges, but
+`can_access_asset` does not grant access through a team or org-admin path.
+Clean up those remnants in a separate API plan.
 
 ```
-Organization
-├── owner    ── full control
-├── admin    ── manage members, teams, projects
-└── member   ── access assigned projects
+Project
+├── owner    ── full control over project
+├── editor   ── upload, edit assets
+├── reviewer ── comment, approve/reject
+└── viewer   ── read-only access
     │
-    Team
-    ├── lead    ── manage team members
-    └── member  ── access team projects
-        │
-        Project
-        ├── owner    ── full control over project
-        ├── editor   ── upload, edit assets
-        ├── reviewer ── comment, approve/reject
-        └── viewer   ── read-only access
-            │
-            Share Link
-            ├── approve  ── can approve/reject
-            ├── comment  ── can add comments
-            └── view     ── read-only
+    Share Link
+    ├── approve  ── can approve/reject
+    ├── comment  ── can add comments
+    └── view     ── read-only
 ```
 
 **Asset access is checked in this order:**
 1. Is the user the asset creator?
 2. Is the user a project member (any role)?
 3. Was the asset shared directly with the user (`AssetShare`)?
-4. Was the asset shared with the user's team?
-5. Is the user an org admin?
+4. Is the project public (`Project.is_public`)? Any authenticated user can view.
 
 Guest users (via share links) use the `GuestUser` table — they provide email + name only, no account required.
 
@@ -192,20 +185,16 @@ All tables use **soft delete** (`deleted_at` column). Records are never hard-del
 Key entity relationships:
 
 ```
-Organization ──┬── Teams ──── TeamMembers
-               └── OrgMembers
-                     │
-                     ▼
-               Projects ──── ProjectMembers
-                     │
-                     ├── Folders
-                     ├── Assets ──┬── AssetVersions ──── MediaFiles
-                     │            ├── Comments ──┬── Annotations
-                     │            │              ├── Attachments
-                     │            │              └── Reactions
-                     │            ├── Approvals
-                     │            └── AssetShares
-                     └── Collections
+Projects ──── ProjectMembers
+    │
+    ├── Folders
+    ├── Assets ──┬── AssetVersions ──── MediaFiles
+    │            ├── Comments ──┬── Annotations
+    │            │              ├── Attachments
+    │            │              └── Reactions
+    │            ├── Approvals
+    │            └── AssetShares
+    └── Collections
 ```
 
 **ORM:** SQLAlchemy 2.0 with Alembic for migrations.
