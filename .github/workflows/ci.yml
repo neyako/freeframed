@@ -31,12 +31,27 @@ jobs:
   backend-test:
     name: Backend Tests
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: user
+          POSTGRES_PASSWORD: pass
+          POSTGRES_DB: freeframe_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     defaults:
       run:
         working-directory: .
 
     env:
       DATABASE_URL: postgresql://user:pass@localhost:5432/freeframe_test
+      TEST_DATABASE_URL: postgresql://user:pass@localhost:5432/freeframe_test
       REDIS_URL: redis://localhost:6379/0
       S3_BUCKET: freeframe-test
       S3_ENDPOINT: http://localhost:9000
@@ -70,12 +85,13 @@ jobs:
 
       - name: Run tests
         run: |
+          set -o pipefail
           python -m pytest apps/api/tests/ -v --tb=short 2>&1 | tee test-output.txt
           # Extract passed count and enforce minimum
           PASSED=$(grep -oP '\d+ passed' test-output.txt | grep -oP '\d+')
           echo "Tests passed: $PASSED"
-          if [ -z "$PASSED" ] || [ "$PASSED" -lt 40 ]; then
-            echo "::error::Expected at least 40 tests to pass but got ${PASSED:-0} — tests may have been deleted or gutted"
+          if [ -z "$PASSED" ] || [ "$PASSED" -lt 50 ]; then
+            echo "::error::Expected at least 50 tests to pass but got ${PASSED:-0} — tests may have been deleted or gutted"
             exit 1
           fi
 
@@ -135,7 +151,7 @@ jobs:
             package.json \
             app/layout.tsx \
             app/share/\[token\]/page.tsx \
-            components/layout/sidebar.tsx \
+            components/layout/header.tsx \
             components/review/review-provider.tsx \
             components/review/comment-panel.tsx \
             components/share/folder-share-viewer.tsx \
@@ -150,9 +166,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Test
+        run: pnpm test
+
       - name: Type check
         run: pnpm exec tsc --noEmit
-        continue-on-error: true
 
       - name: Build
         run: pnpm build
