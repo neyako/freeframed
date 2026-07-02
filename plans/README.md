@@ -312,6 +312,46 @@ An external Codex pass reviewed desktop/tablet/mobile. Disposition of its 8 poin
   icon-only toolbar labels (both deliberate 028 choices; revisit after 038 if
   still bothersome — labels-on-primary-action is a 5-line tweak on request).
 
+## Round 6 — manual-testing feedback (added 2026-07-03, planned at `bf3d541`)
+
+Four items from the maintainer's manual test of the merged round-5 build
+(screenshots). Item #7 ("share popup ugly as hell") produced **no new plan**
+by maintainer decision: it's pure aesthetics and squarely retheme territory —
+the answer is to **execute 034 next** (037/039 re-skin the share surfaces).
+All plans FreeFrame `apps/web`, layout/behavior only, retheme-safe.
+
+| Plan | Title | Item | Priority | Effort | Depends on | Status |
+|------|-------|------|----------|--------|------------|--------|
+| 054 | Align comment-input timecode chip with first text line | #8 | P2 | S | — | TODO |
+| 055 | Uploads & notifications become compact anchored popovers | #9 | P2 | S–M | — | TODO |
+| 056 | Mobile "Show comments" bar below player (editor + guest); hide top icon on mobile | #10 | P1 | S–M | — | TODO |
+
+### Recommended execution order (round 6)
+
+1. **056** (P1) — mobile commenting is undiscoverable; both audiences hit it.
+2. **054 / 055** — independent, any order, parallel-safe (three disjoint file
+   sets: 054 `comment-input.tsx`; 055 `uploads-panel.tsx` +
+   `notification-drawer.tsx`; 056 editor asset page + `folder-share-viewer.tsx`).
+
+### Dependency notes (round 6)
+
+- 055 reshapes shells that 037 (retheme chrome) restyles — land 055 **before**
+  037, then refresh 037's expected-drift note (055's maintenance note says how).
+- 054 touches `comment-input.tsx` and 056 touches `folder-share-viewer.tsx` +
+  the editor asset page — all in 039's drift-check list; same "land before the
+  retheme, keep diffs structural" rule as round 5.
+- 056 must not run in parallel with anything else editing
+  `folder-share-viewer.tsx`.
+
+### Disposition of the 4 items
+
+| Item | Disposition |
+|------|-------------|
+| #7 share popup aesthetics | No plan — maintainer chose "start retheme now"; 034 is the next executable plan, 037/039 own the popup's new look |
+| #8 timecode chip misaligned | **054** — chip `mt-[9px]`/`leading-none` vs textarea `py-2.5`/19.5px line box |
+| #9 uploads/notif full-height drawers | **055** — `h-[calc(100vh-2.75rem)]` drawers → anchored `max-h-[min(70dvh,560px)]` popovers |
+| #10 mobile comments toggle not ergonomic | **056** — "Show comments (N)" bar below player, top icon hidden below `md` |
+
 ## Reconcile log — 2026-07-03
 
 Run against FreeFrame HEAD `364e798` (main) and projmgmt HEAD `1905a0b`. HEAD unchanged since
