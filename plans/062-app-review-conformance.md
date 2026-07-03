@@ -27,6 +27,14 @@
   plan 057's alpha tokens, genuinely translucent after. Step 4b now authorizes
   the two one-token fixes; the corresponding STOP condition is retired. All
   other steps from the first execution were verified and stand.
+- **Re-execution note (commit `1d1ffeb`)**: Steps 1–3, 5, 6 are DONE and
+  committed on branch `advisor/062-app-review-conformance`. If you are
+  executing this plan now, do ONLY Step 4b, then Step 7 (gate + anchor audit)
+  and the Done criteria. The "Current state" excerpts for the completed steps
+  intentionally no longer match the live code — that is NOT drift and NOT a
+  STOP. The only excerpts that must still match are Step 4b's two lines
+  (`video-player.tsx:358`, `audio-player.tsx:281`). Work on this branch; the
+  working tree being clean at start is expected.
 
 ## Why this matters
 
