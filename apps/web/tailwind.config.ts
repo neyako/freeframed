@@ -32,10 +32,10 @@ const config: Config = {
     extend: {
       colors: {
         bg: {
-          primary: 'var(--bg-primary)',
-          secondary: 'var(--bg-secondary)',
-          tertiary: 'var(--bg-tertiary)',
-          elevated: 'var(--bg-elevated)',
+          primary: 'rgb(var(--bg-primary-rgb) / <alpha-value>)',
+          secondary: 'rgb(var(--bg-secondary-rgb) / <alpha-value>)',
+          tertiary: 'rgb(var(--bg-tertiary-rgb) / <alpha-value>)',
+          elevated: 'rgb(var(--bg-elevated-rgb) / <alpha-value>)',
           hover: 'var(--bg-hover)',
         },
         border: {
@@ -45,23 +45,26 @@ const config: Config = {
           strong: 'var(--border-strong)',
         },
         text: {
-          primary: 'var(--text-primary)',
+          primary: 'rgb(var(--text-primary-rgb) / <alpha-value>)',
           secondary: 'var(--text-secondary)',
           tertiary: 'var(--text-tertiary)',
           inverse: 'var(--text-inverse)',
         },
         accent: {
-          DEFAULT: 'var(--accent)',
+          DEFAULT: 'rgb(var(--accent-rgb) / <alpha-value>)',
           hover: 'var(--accent-hover)',
           muted: 'var(--accent-muted)',
           line: 'var(--accent-line)',
         },
         status: {
-          success: 'var(--status-success)',
+          success: 'rgb(var(--status-success-rgb) / <alpha-value>)',
           warning: 'var(--status-warning)',
-          error: 'var(--status-error)',
+          error: 'rgb(var(--status-error-rgb) / <alpha-value>)',
           info: 'var(--status-info)',
         },
+      },
+      ringColor: {
+        DEFAULT: 'rgb(var(--accent-rgb) / 1)',
       },
       fontFamily: {
         sans: ['var(--font-sans)'],

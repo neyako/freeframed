@@ -3,6 +3,7 @@
 import * as React from "react";
 import { Loader2 } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import { LinkControls } from "./share-link-controls";
 import {
@@ -22,9 +23,10 @@ export { withLinkDefaults } from "./share-link-requests";
 
 interface SingleLinkSectionProps {
   readonly target: ShareTarget;
+  readonly children?: React.ReactNode;
 }
 
-export function SingleLinkSection({ target }: SingleLinkSectionProps) {
+export function SingleLinkSection({ target, children }: SingleLinkSectionProps) {
   const [link, setLink] = React.useState<ManagedShareLink | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
@@ -113,27 +115,27 @@ export function SingleLinkSection({ target }: SingleLinkSectionProps) {
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 py-3">
+      <div className="flex items-center gap-2 px-5 py-4 font-mono text-xs text-text-secondary">
         <Loader2 className="h-4 w-4 animate-spin text-text-tertiary" />
-        <span className="text-xs text-text-tertiary">
-          Preparing share link...
-        </span>
+        <span>Preparing share link...</span>
       </div>
     );
   }
 
   if (!link) {
     return (
-      <div className="rounded-lg border border-border bg-bg-tertiary p-3">
+      <div className="px-5 py-4">
         <p className="text-sm font-medium text-text-primary">No share link</p>
         {error && <p className="mt-1 text-xs text-status-error">{error}</p>}
-        <button
+        <Button
           type="button"
+          variant="secondary"
+          size="sm"
           onClick={() => void createLink()}
-          className="mt-3 inline-flex h-9 items-center rounded-md border border-border bg-bg-secondary px-3 text-sm font-medium text-text-primary transition-colors hover:bg-bg-hover"
+          className="mt-3"
         >
           Create share link
-        </button>
+        </Button>
       </div>
     );
   }
@@ -146,6 +148,7 @@ export function SingleLinkSection({ target }: SingleLinkSectionProps) {
       onPatch={(updates) => void patchLink(updates)}
       onRevoke={() => void revokeLink()}
       showAdvancedControls
+      beforeFooter={children}
     />
   );
 }

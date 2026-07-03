@@ -49,7 +49,7 @@ describe("ShareDialog dropdown", () => {
     await user.click(screen.getByRole("button", { name: /^share$/i }));
     expect(await screen.findByText("Anyone with the link")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /^revoke link$/i }));
+    await user.click(screen.getByRole("button", { name: /^revoke$/i }));
 
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByText("Revoke share link?")).toBeInTheDocument();

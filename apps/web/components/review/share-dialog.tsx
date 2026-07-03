@@ -28,32 +28,33 @@ export function SharePanel({
     target.kind === "project" ? null : target;
 
   return (
-    <div className="space-y-4">
-      <SingleLinkSection target={target} />
+    <SingleLinkSection target={target}>
       {withPeople && peopleTarget && (
-        <div className="border-t border-border pt-3">
+        <>
           <button
             type="button"
             onClick={() => setShowPeople((v) => !v)}
-            className="flex w-full items-center gap-2 text-xs font-medium text-text-secondary hover:text-text-primary transition-colors"
+            className="flex w-full items-center justify-between gap-3 border-b border-border-secondary px-5 py-[15px] font-mono text-[11px] uppercase tracking-[0.16em] text-text-secondary transition-colors hover:text-text-primary"
           >
-            <Users className="h-3.5 w-3.5" />
-            Invite specific people
+            <span className="inline-flex items-center gap-2">
+              <Users className="h-3.5 w-3.5" />
+              Invite people · Mời
+            </span>
             <ChevronDown
               className={cn(
-                "ml-auto h-3.5 w-3.5 transition-transform",
+                "h-3.5 w-3.5 transition-transform",
                 showPeople && "rotate-180",
               )}
             />
           </button>
           {showPeople && (
-            <div className="mt-3">
+            <div className="border-b border-border-secondary px-5 py-4">
               <DirectTab target={peopleTarget} orgId={projectId} />
             </div>
           )}
-        </div>
+        </>
       )}
-    </div>
+    </SingleLinkSection>
   );
 }
 
@@ -118,12 +119,17 @@ export function ShareDialog({
       {dropdownOpen && (
         <div
           className={cn(
-            "fixed left-2 right-2 top-12 z-50 w-auto sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-1.5 sm:w-96",
+            "fixed left-2 right-2 top-12 z-50 w-auto sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-1.5 sm:w-[460px]",
             "max-h-[calc(100dvh-4.5rem)] sm:max-h-[min(calc(100dvh-8rem),42rem)] overflow-y-auto overscroll-contain",
-            "rounded-xl border border-border bg-bg-elevated p-3 shadow-xl",
-            "animate-in fade-in-0 zoom-in-95 duration-150 space-y-4",
+            "rounded-xl border border-border bg-bg-secondary overflow-x-hidden",
+            "animate-in fade-in-0 zoom-in-95 duration-150",
           )}
         >
+          <div className="flex items-center justify-between gap-3 border-b border-border bg-bg-tertiary px-5 py-3.5">
+            <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-text-primary">
+              Share · Chia sẻ
+            </span>
+          </div>
           <SharePanel
             target={{ kind: "asset", id: assetId }}
             projectId={projectId}

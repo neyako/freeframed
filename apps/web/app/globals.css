@@ -33,6 +33,17 @@
   --status-error: #D71921;
   --status-info: #9b9b9b;
 
+  /* RGB channel twins: keep in sync with the hex tokens above.
+     Only tokens used with Tailwind opacity modifiers need a twin. */
+  --bg-primary-rgb: 0 0 0;
+  --bg-secondary-rgb: 10 10 10;
+  --bg-tertiary-rgb: 19 19 19;
+  --bg-elevated-rgb: 24 24 24;
+  --text-primary-rgb: 244 244 244;
+  --accent-rgb: 215 25 33;
+  --status-success-rgb: 244 244 244;
+  --status-error-rgb: 215 25 33;
+
   --font-sans: var(--font-space-grotesk), system-ui, -apple-system, sans-serif;
   --font-mono: var(--font-space-mono), ui-monospace, 'SFMono-Regular', monospace;
   --font-dot: var(--font-doto), var(--font-space-grotesk), sans-serif;
@@ -76,6 +87,15 @@
   --status-warning: #57544c;
   --status-error: #D71921;
   --status-info: #57544c;
+
+  --bg-primary-rgb: 241 239 233;
+  --bg-secondary-rgb: 234 231 223;
+  --bg-tertiary-rgb: 226 222 212;
+  --bg-elevated-rgb: 247 245 240;
+  --text-primary-rgb: 10 10 10;
+  --accent-rgb: 215 25 33;
+  --status-success-rgb: 10 10 10;
+  --status-error-rgb: 215 25 33;
 }
 
 @layer base {

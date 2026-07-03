@@ -26,10 +26,17 @@ vi.mock("@/lib/api", () => ({
 }));
 
 const mockedApi = vi.mocked(api);
+const writeText = vi.fn<(text: string) => Promise<void>>();
 
 describe("ShareDialog", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    writeText.mockReset();
+    writeText.mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
     Element.prototype.hasPointerCapture ??= vi.fn(() => false);
     Element.prototype.setPointerCapture ??= vi.fn();
     Element.prototype.releasePointerCapture ??= vi.fn();
@@ -51,7 +58,7 @@ describe("ShareDialog", () => {
       if (path === "/assets/asset-1/share") return link;
       return {};
     });
-    mockedApi.patch.mockResolvedValue({ ...link, permission: "view" });
+    mockedApi.patch.mockResolvedValue({ ...link, permission: "approve" });
 
     render(
       <ShareDialog
@@ -63,6 +70,7 @@ describe("ShareDialog", () => {
 
     await user.click(screen.getByRole("button", { name: /share/i }));
 
+    expect(screen.getByText("Share · Chia sẻ")).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /new share link/i }),
     ).not.toBeInTheDocument();
@@ -75,14 +83,18 @@ describe("ShareDialog", () => {
     expect(screen.getByText("Passphrase")).toBeInTheDocument();
     expect(screen.getByText("Expiration")).toBeInTheDocument();
     expect(screen.getByText("Watermark")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /revoke link/i })).toBeInTheDocument();
+    expect(screen.getByText("Quyền truy cập")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^revoke$/i })).toHaveClass(
+      "border-accent-line",
+    );
     expect(screen.getByRole("switch", { name: /allow download/i })).toHaveAttribute(
       "aria-checked",
       "false",
     );
-    expect(screen.getByRole("button", { name: /copy/i })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /^copy$/i }));
+    expect(await screen.findByRole("button", { name: /^copied$/i })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /invite specific people/i }));
+    await user.click(screen.getByRole("button", { name: /invite people/i }));
 
     expect(screen.getByText(/share with user/i)).toBeInTheDocument();
 
@@ -93,15 +105,16 @@ describe("ShareDialog", () => {
       allow_download: false,
     });
 
-    const permissionSelect = screen.getAllByRole("combobox")[0];
-    expect(permissionSelect).toBeInTheDocument();
-    await user.click(permissionSelect);
-    const option = await screen.findByRole("option", { name: "view" });
-    await user.click(option);
+    expect(screen.getByRole("button", { name: "View" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Comment" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await user.click(screen.getByRole("button", { name: "Approve" }));
 
     await waitFor(() => {
       expect(mockedApi.patch).toHaveBeenCalledWith("/share/token", {
-        permission: "view",
+        permission: "approve",
       });
     });
 
@@ -137,7 +150,7 @@ describe("ShareDialog", () => {
 
     expect(await screen.findByText("Anyone with the link")).toBeInTheDocument();
     expect(screen.getByText(/\/share\/folder-token$/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /invite specific people/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /invite people/i })).toBeInTheDocument();
 
     expect(mockedApi.get).toHaveBeenCalledWith("/folders/folder-1/shares");
     expect(mockedApi.post).toHaveBeenCalledWith("/folders/folder-1/share", {
@@ -145,7 +158,7 @@ describe("ShareDialog", () => {
       allow_download: false,
     });
 
-    await user.click(screen.getByRole("button", { name: /invite specific people/i }));
+    await user.click(screen.getByRole("button", { name: /invite people/i }));
 
     await waitFor(() => {
       expect(mockedApi.get).toHaveBeenCalledWith("/folders/folder-1/direct-shares");
@@ -284,7 +297,17 @@ describe("ShareDialog", () => {
       if (path === "/assets/asset-1/shares") return [link];
       return [];
     });
-    mockedApi.patch.mockResolvedValue({ ...link, has_password: true });
+    mockedApi.patch.mockImplementation(async (_path: string, updates: unknown) => {
+      if (
+        typeof updates === "object" &&
+        updates !== null &&
+        "password" in updates &&
+        updates.password === ""
+      ) {
+        return { ...link, has_password: false };
+      }
+      return { ...link, has_password: true };
+    });
 
     render(
       <SharePanel
@@ -309,6 +332,15 @@ describe("ShareDialog", () => {
         password: "secret123",
       });
     });
+
+    await user.click(screen.getByRole("switch", { name: /passphrase/i }));
+
+    await waitFor(() => {
+      expect(mockedApi.patch).toHaveBeenCalledWith("/share/token", {
+        password: "",
+      });
+    });
+    expect(screen.queryByLabelText(/link passphrase/i)).not.toBeInTheDocument();
   });
 
   it("revokes a single share link and offers to create a new one", async () => {
@@ -329,13 +361,13 @@ describe("ShareDialog", () => {
       />,
     );
 
-    expect(
-      await screen.findByRole("button", { name: /revoke link/i }),
-    ).toBeInTheDocument();
+    const revokeButton = await screen.findByRole("button", { name: /^revoke$/i });
+    expect(revokeButton).toHaveClass("border-accent-line");
 
-    await user.click(screen.getByRole("button", { name: /revoke link/i }));
+    await user.click(revokeButton);
 
     expect(await screen.findByText("Revoke share link?")).toBeInTheDocument();
+    expect(mockedApi.delete).not.toHaveBeenCalled();
     await user.click(screen.getByRole("button", { name: /revoke link/i }));
 
     await waitFor(() => {
@@ -388,7 +420,7 @@ describe("ShareDialog", () => {
 
     expect(screen.queryByPlaceholderText("user@example.com")).not.toBeInTheDocument();
 
-    const toggleBtn = screen.getByRole("button", { name: /invite specific people/i });
+    const toggleBtn = screen.getByRole("button", { name: /invite people/i });
     expect(toggleBtn).toBeInTheDocument();
 
     await user.click(toggleBtn);

@@ -41,8 +41,8 @@ export function VisibilitySelect({
     >
       <Select.Trigger
         className={cn(
-          "flex h-9 items-center justify-between gap-2 rounded-md border border-border bg-bg-secondary px-3 text-sm text-text-primary",
-          "focus:outline-none focus:border-border-focus",
+          "flex h-[38px] items-center justify-between gap-2 rounded border border-border-strong bg-bg-primary px-3 font-mono text-[11px] uppercase tracking-[0.08em] text-text-primary",
+          "focus:outline-none focus:border-accent",
           "data-[placeholder]:text-text-tertiary disabled:opacity-50 disabled:cursor-not-allowed",
         )}
       >
