@@ -37,6 +37,24 @@ describe('Badge component', () => {
     expect(screen.getByText('Archived')).toBeInTheDocument()
   })
 
+  it('renders rejected as the red interrupt', () => {
+    render(<Badge status="rejected" />)
+    const badge = screen.getByText('Rejected')
+    expect(badge.className).toContain('bg-accent')
+  })
+
+  it('renders approved as mono inversion', () => {
+    render(<Badge status="approved" />)
+    const badge = screen.getByText('Approved')
+    expect(badge.className).toContain('bg-text-primary')
+  })
+
+  it('renders in review with a blinking dot', () => {
+    render(<Badge status="in_review" />)
+    const badge = screen.getByText('In Review')
+    expect(badge.querySelector('span')?.className).toContain('animate-blink')
+  })
+
   it('applies custom className', () => {
     render(<Badge status="draft" className="my-custom-class" />)
     const badge = screen.getByText('Draft')

@@ -8,6 +8,27 @@ const config: Config = {
     './components/**/*.{ts,tsx}',
   ],
   theme: {
+    borderRadius: {
+      none: '0px',
+      sm: 'var(--radius-sm)',
+      DEFAULT: 'var(--radius-md)',
+      md: 'var(--radius-md)',
+      lg: 'var(--radius-lg)',
+      xl: 'var(--radius-xl)',
+      '2xl': 'var(--radius-xl)',
+      '3xl': 'var(--radius-xl)',
+      full: '9999px',
+    },
+    boxShadow: {
+      sm: '0 0 #0000',
+      DEFAULT: '0 0 #0000',
+      md: '0 0 #0000',
+      lg: '0 0 #0000',
+      xl: '0 0 #0000',
+      '2xl': '0 0 #0000',
+      inner: '0 0 #0000',
+      none: '0 0 #0000',
+    },
     extend: {
       colors: {
         bg: {
@@ -21,6 +42,7 @@ const config: Config = {
           DEFAULT: 'var(--border-primary)',
           secondary: 'var(--border-secondary)',
           focus: 'var(--border-focus)',
+          strong: 'var(--border-strong)',
         },
         text: {
           primary: 'var(--text-primary)',
@@ -32,6 +54,7 @@ const config: Config = {
           DEFAULT: 'var(--accent)',
           hover: 'var(--accent-hover)',
           muted: 'var(--accent-muted)',
+          line: 'var(--accent-line)',
         },
         status: {
           success: 'var(--status-success)',
@@ -43,6 +66,7 @@ const config: Config = {
       fontFamily: {
         sans: ['var(--font-sans)'],
         mono: ['var(--font-mono)'],
+        dot: ['var(--font-dot)'],
       },
       fontSize: {
         '2xs': ['0.625rem', { lineHeight: '0.875rem' }],
@@ -57,6 +81,7 @@ const config: Config = {
         'scale-in': 'scale-in 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
         'shimmer': 'shimmer 2s linear infinite',
         'pulse-soft': 'pulse-soft 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+        'blink': 'blink 1.4s steps(1) infinite',
       },
       keyframes: {
         'fade-in': {
@@ -90,6 +115,9 @@ const config: Config = {
         'pulse-soft': {
           '0%, 100%': { opacity: '1' },
           '50%': { opacity: '0.6' },
+        },
+        blink: {
+          '50%': { opacity: '0.25' },
         },
       },
       transitionTimingFunction: {

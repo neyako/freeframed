@@ -383,7 +383,7 @@ export function AssetGrid({
         /* ─── Unified list view (folders + assets) ─────────────────── */
         <div className="rounded-lg border border-border overflow-hidden">
           {/* Column headers */}
-          <div className="flex items-center gap-4 px-3 py-2 border-b border-border bg-bg-secondary/50 text-[10px] text-text-tertiary font-medium uppercase tracking-wider">
+          <div className="flex items-center gap-4 px-3 py-2 border-b border-border bg-bg-tertiary font-mono text-[10px] text-text-tertiary uppercase tracking-[0.16em]">
             <div className="h-10 w-10 shrink-0" />
             <div className="flex-1 min-w-0">Name</div>
             {showUploader && <div className="hidden md:block w-32">Uploader</div>}
@@ -402,14 +402,14 @@ export function AssetGrid({
                 key={folder.id}
                 className={cn(
                   'group flex items-center gap-4 px-3 py-2.5 transition-colors hover:bg-bg-hover cursor-pointer',
-                  i !== folders!.length - 1 || filtered.length > 0 ? 'border-b border-border' : '',
+                  i !== folders!.length - 1 || filtered.length > 0 ? 'border-b border-border-secondary' : '',
                   isFolderSelected && 'bg-accent/5',
                 )}
                 onClick={() => onFolderOpen?.(folder)}
                 onDoubleClick={() => onFolderOpen?.(folder)}
               >
                 {/* Folder icon with checkbox overlay — aligned with asset thumbnail */}
-                <div className="relative h-10 w-10 shrink-0 rounded-md bg-bg-tertiary flex items-center justify-center overflow-hidden">
+                <div className="ff-dotgrid relative h-10 w-10 shrink-0 rounded bg-bg-tertiary flex items-center justify-center overflow-hidden">
                   <FolderIcon className="h-5 w-5 text-text-tertiary/60" />
                   <button
                     className={cn(
@@ -431,21 +431,21 @@ export function AssetGrid({
 
                 {/* Name */}
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-text-primary truncate leading-snug">{folder.name}</p>
-                  <p className="text-xs text-text-tertiary mt-0.5">{folder.item_count ?? 0} item{(folder.item_count ?? 0) !== 1 ? 's' : ''}</p>
+                  <p className="font-mono text-[13px] text-text-primary truncate leading-snug">{folder.name}</p>
+                  <p className="font-mono text-[10px] text-text-tertiary mt-0.5">{folder.item_count ?? 0} item{(folder.item_count ?? 0) !== 1 ? 's' : ''}</p>
                 </div>
 
                 {/* Uploader placeholder */}
-                {showUploader && <div className="hidden md:block w-32 text-xs text-text-tertiary">—</div>}
+                {showUploader && <div className="hidden md:block w-32 font-mono text-xs text-text-secondary">—</div>}
 
                 {/* Size placeholder */}
-                {showFileSize && <div className="hidden sm:block w-24 text-right text-sm text-text-tertiary">—</div>}
+                {showFileSize && <div className="hidden sm:block w-24 text-right font-dot text-[15px] font-bold text-text-primary">—</div>}
 
                 {/* Version placeholder */}
-                <div className="hidden md:block w-10 text-center text-xs text-text-tertiary">—</div>
+                <div className="hidden md:block w-10 text-center font-mono text-xs text-text-secondary">—</div>
 
                 {/* Date */}
-                <div className="hidden sm:block w-28 text-xs text-text-tertiary shrink-0">
+                <div className="hidden sm:block w-28 font-mono text-xs text-text-secondary shrink-0">
                   {new Date(folder.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                 </div>
 
@@ -467,7 +467,7 @@ export function AssetGrid({
                       <DropdownMenu.Content
                         align="end"
                         sideOffset={4}
-                        className="z-[100] min-w-[160px] rounded-xl border border-border bg-bg-elevated shadow-2xl py-1.5 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
+                        className="z-[100] min-w-[160px] rounded border border-border bg-bg-elevated py-1.5 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
                         onClick={(e) => e.stopPropagation()}
                       >
                         {onFolderShare && (
@@ -491,7 +491,7 @@ export function AssetGrid({
                         {onFolderDelete && (
                           <DropdownMenu.Item
                             onSelect={() => onFolderDelete(folder.id)}
-                            className="flex items-center gap-2.5 mx-1 px-2.5 py-2 rounded-lg text-sm text-status-error hover:bg-status-error/10 cursor-pointer outline-none transition-colors"
+                            className="flex items-center gap-2.5 mx-1 px-2.5 py-2 rounded text-sm text-accent hover:bg-accent-muted cursor-pointer outline-none transition-colors"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                             Delete
@@ -525,12 +525,12 @@ export function AssetGrid({
                 onDoubleClick={() => onAssetOpen?.(asset)}
                 className={cn(
                   'group flex items-center gap-4 px-3 py-2 transition-colors hover:bg-bg-hover cursor-pointer',
-                  i !== filtered.length - 1 && 'border-b border-border',
+                  i !== filtered.length - 1 && 'border-b border-border-secondary',
                   selectedAssetId === asset.id ? 'bg-accent/10' : selectedAssetIds.has(asset.id) && 'bg-accent/5',
                 )}
               >
                 {/* Square thumbnail with checkbox overlay */}
-                <div className="relative h-10 w-10 shrink-0 rounded-md bg-bg-tertiary overflow-hidden flex items-center justify-center">
+                <div className="ff-dotgrid relative h-10 w-10 shrink-0 rounded bg-bg-tertiary overflow-hidden flex items-center justify-center">
                   {thumb ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={thumb} alt={asset.name} className="h-full w-full object-cover" />
@@ -556,26 +556,26 @@ export function AssetGrid({
                 </div>
                 {/* Name + status */}
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-text-primary truncate leading-snug">{asset.name}</p>
+                  <p className="font-mono text-[13px] text-text-primary truncate leading-snug">{asset.name}</p>
                 </div>
                 {/* Uploader */}
                 {showUploader && (
-                  <div className="hidden md:block w-32 text-xs text-text-tertiary truncate shrink-0">
+                  <div className="hidden md:block w-32 font-mono text-xs text-text-secondary truncate shrink-0">
                     {author || '—'}
                   </div>
                 )}
                 {/* File size */}
                 {showFileSize && (
-                  <div className="hidden sm:block w-24 text-right text-sm text-text-tertiary tabular-nums shrink-0">
+                  <div className="hidden sm:block w-24 text-right font-dot text-[15px] font-bold text-text-primary shrink-0">
                     {fileSize ? formatBytes(fileSize) : '—'}
                   </div>
                 )}
                 {/* Version */}
-                <div className="hidden md:block w-10 text-center text-xs text-text-tertiary tabular-nums shrink-0">
+                <div className="hidden md:block w-10 text-center font-mono text-xs text-text-secondary shrink-0">
                   {versionCount ? `v${versionCount}` : 'v1'}
                 </div>
                 {/* Date */}
-                <div className="hidden sm:block w-28 text-xs text-text-tertiary shrink-0">
+                <div className="hidden sm:block w-28 font-mono text-xs text-text-secondary shrink-0">
                   {new Date(asset.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                 </div>
                 {/* Assignee */}
@@ -597,7 +597,7 @@ export function AssetGrid({
                       <DropdownMenu.Content
                         align="end"
                         sideOffset={4}
-                        className="z-[100] min-w-[200px] rounded-xl border border-border bg-bg-elevated shadow-2xl py-1.5 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
+                        className="z-[100] min-w-[200px] rounded border border-border bg-bg-elevated py-1.5 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
                         onClick={(e) => e.stopPropagation()}
                       >
                         {onAssetShare && (
@@ -639,7 +639,7 @@ export function AssetGrid({
                         </DropdownMenu.Item>
                         <DropdownMenu.Item
                           onSelect={() => onAssetDelete?.(asset)}
-                          className="flex items-center gap-2.5 mx-1 px-2.5 py-2 rounded-lg text-sm text-status-error hover:bg-status-error/10 cursor-pointer outline-none transition-colors"
+                          className="flex items-center gap-2.5 mx-1 px-2.5 py-2 rounded text-sm text-accent hover:bg-accent-muted cursor-pointer outline-none transition-colors"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                           Delete

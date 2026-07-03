@@ -92,11 +92,10 @@ export function AssetCard({
       draggable
       onDragStart={onDragStart}
       className={cn(
-        'group flex flex-col rounded-lg overflow-hidden transition-all duration-150 cursor-pointer',
-        'border-2',
+        'group flex flex-col rounded-lg overflow-hidden transition-colors duration-150 cursor-pointer border',
         selected
-          ? 'border-accent bg-accent/5 shadow-lg shadow-accent/10'
-          : 'border-transparent hover:border-border-focus',
+          ? 'border-accent bg-accent/5'
+          : 'border-border hover:border-border-strong',
         className,
       )}
     >
@@ -117,8 +116,8 @@ export function AssetCard({
             )}
           />
         ) : (
-          <div className="flex items-center justify-center">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-bg-hover text-text-secondary">
+          <div className="ff-dotgrid absolute inset-0 flex items-center justify-center bg-bg-tertiary">
+            <div className="flex h-14 w-14 items-center justify-center rounded border border-border bg-bg-hover text-text-tertiary">
               <TypeIcon className="h-7 w-7" />
             </div>
           </div>
@@ -176,7 +175,7 @@ export function AssetCard({
                 <DropdownMenu.Content
                   align="end"
                   sideOffset={4}
-                  className="z-[100] min-w-[200px] rounded-xl border border-border bg-bg-elevated shadow-2xl py-1.5 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
+                  className="z-[100] min-w-[200px] rounded border border-border bg-bg-elevated py-1.5 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <DropdownMenu.Item
@@ -214,7 +213,7 @@ export function AssetCard({
                   </DropdownMenu.Item>
                   <DropdownMenu.Item
                     onSelect={onDelete}
-                    className="flex items-center gap-2.5 mx-1 px-2.5 py-2 rounded-lg text-sm text-status-error hover:bg-status-error/10 cursor-pointer outline-none transition-colors"
+                    className="flex items-center gap-2.5 mx-1 px-2.5 py-2 rounded text-sm text-accent hover:bg-accent-muted cursor-pointer outline-none transition-colors"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                     Delete
@@ -225,7 +224,7 @@ export function AssetCard({
           </div>
 
           {/* Author + date + file size row */}
-          <p className="text-2xs text-text-tertiary line-clamp-1">
+          <p className="font-mono text-[10px] text-text-tertiary line-clamp-1">
             {showUploader && authorName && <span>{authorName} &bull; </span>}
             {formatRelativeTime(asset.created_at)}
             {showFileSize && fileSize ? <span> &bull; {formatBytes(fileSize)}</span> : null}

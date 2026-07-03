@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { cn, formatBytes, formatRelativeTime } from '@/lib/utils'
 import { useUploadStore, type UploadFile, type UploadStatus } from '@/stores/upload-store'
+import { ProgressTrack } from '@/components/ui/progress'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -111,21 +112,13 @@ function UploadItem({ upload }: { upload: UploadFile }) {
 
         {/* Progress bar */}
         {showProgress && (
-          <div className="mt-2 h-1.5 w-full rounded-full bg-bg-tertiary overflow-hidden">
-            <div
-              className={cn(
-                'h-full rounded-full transition-all duration-300',
-                isProcessing ? 'bg-amber-400' : 'bg-accent',
-              )}
-              style={{ width: `${progressValue}%` }}
-            />
-          </div>
+          <ProgressTrack value={progressValue} accent className="mt-2" />
         )}
 
         {/* Detail line */}
         <div className="flex items-center gap-1 mt-1">
           {upload.status === 'uploading' && (
-            <span className="text-[11px] text-text-secondary">
+            <span className="font-dot text-[13px] font-bold text-text-secondary">
               Uploading {upload.progress}%
             </span>
           )}
@@ -242,13 +235,13 @@ export function UploadsPanel() {
       />
 
       {/* Panel */}
-      <div className="fixed right-2 top-12 z-50 w-[380px] max-w-[calc(100vw-1rem)] max-h-[min(70dvh,560px)] rounded-xl border border-border bg-bg-secondary shadow-2xl flex flex-col overflow-hidden animate-in fade-in-0 zoom-in-95 slide-in-from-top-1 duration-150">
+      <div className="fixed right-2 top-12 z-50 w-[380px] max-w-[calc(100vw-1rem)] max-h-[min(70dvh,560px)] rounded border border-border bg-bg-secondary flex flex-col overflow-hidden animate-in fade-in-0 zoom-in-95 slide-in-from-top-1 duration-150">
         {/* Header */}
         <div className="flex items-center justify-between px-4 h-12 border-b border-border shrink-0">
-          <h2 className="text-sm font-semibold text-text-primary">
+          <h2 className="font-mono text-[11px] font-normal uppercase tracking-[0.16em] text-text-tertiary">
             Uploads
             {counts.active > 0 && (
-              <span className="ml-1.5 text-xs font-normal text-accent">
+              <span className="ml-1.5 text-[10px] text-text-primary">
                 {counts.active} active
               </span>
             )}

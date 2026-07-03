@@ -186,7 +186,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
         <Dialog.Content className="fixed left-1/2 top-[20%] z-50 w-full max-w-lg -translate-x-1/2 -translate-y-0 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=open]:duration-200">
           <Dialog.Title className="sr-only">Command Palette</Dialog.Title>
           <Command
-            className="overflow-hidden rounded-xl border border-border bg-bg-elevated shadow-2xl"
+            className="overflow-hidden rounded border border-border bg-bg-elevated"
             loop
             shouldFilter={true}
           >
@@ -208,7 +208,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
               {hasQuery && projects && projects.length > 0 && (
                 <Command.Group
                   heading="Projects"
-                  className="[&>[cmdk-group-heading]]:px-2 [&>[cmdk-group-heading]]:py-1.5 [&>[cmdk-group-heading]]:text-2xs [&>[cmdk-group-heading]]:font-medium [&>[cmdk-group-heading]]:text-text-tertiary [&>[cmdk-group-heading]]:uppercase [&>[cmdk-group-heading]]:tracking-wider"
+                  className="[&>[cmdk-group-heading]]:px-2 [&>[cmdk-group-heading]]:py-1.5 [&>[cmdk-group-heading]]:font-mono [&>[cmdk-group-heading]]:text-[10px] [&>[cmdk-group-heading]]:font-normal [&>[cmdk-group-heading]]:text-text-tertiary [&>[cmdk-group-heading]]:uppercase [&>[cmdk-group-heading]]:tracking-[0.16em]"
                 >
                   {projects.map((project) => (
                     <Command.Item
@@ -244,7 +244,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
               {hasQuery && folders && folders.length > 0 && (
                 <Command.Group
                   heading="Folders"
-                  className="[&>[cmdk-group-heading]]:px-2 [&>[cmdk-group-heading]]:py-1.5 [&>[cmdk-group-heading]]:text-2xs [&>[cmdk-group-heading]]:font-medium [&>[cmdk-group-heading]]:text-text-tertiary [&>[cmdk-group-heading]]:uppercase [&>[cmdk-group-heading]]:tracking-wider"
+                  className="[&>[cmdk-group-heading]]:px-2 [&>[cmdk-group-heading]]:py-1.5 [&>[cmdk-group-heading]]:font-mono [&>[cmdk-group-heading]]:text-[10px] [&>[cmdk-group-heading]]:font-normal [&>[cmdk-group-heading]]:text-text-tertiary [&>[cmdk-group-heading]]:uppercase [&>[cmdk-group-heading]]:tracking-[0.16em]"
                 >
                   {folders.map((folder) => (
                     <Command.Item
@@ -277,7 +277,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
               {hasQuery && assets && assets.length > 0 && (
                 <Command.Group
                   heading="Assets"
-                  className="[&>[cmdk-group-heading]]:px-2 [&>[cmdk-group-heading]]:py-1.5 [&>[cmdk-group-heading]]:text-2xs [&>[cmdk-group-heading]]:font-medium [&>[cmdk-group-heading]]:text-text-tertiary [&>[cmdk-group-heading]]:uppercase [&>[cmdk-group-heading]]:tracking-wider"
+                  className="[&>[cmdk-group-heading]]:px-2 [&>[cmdk-group-heading]]:py-1.5 [&>[cmdk-group-heading]]:font-mono [&>[cmdk-group-heading]]:text-[10px] [&>[cmdk-group-heading]]:font-normal [&>[cmdk-group-heading]]:text-text-tertiary [&>[cmdk-group-heading]]:uppercase [&>[cmdk-group-heading]]:tracking-[0.16em]"
                 >
                   {assets.map((asset) => {
                     const Icon = getAssetIcon(asset.asset_type);
@@ -319,7 +319,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
               {/* Navigation */}
               <Command.Group
                 heading="Navigation"
-                className="[&>[cmdk-group-heading]]:px-2 [&>[cmdk-group-heading]]:py-1.5 [&>[cmdk-group-heading]]:text-2xs [&>[cmdk-group-heading]]:font-medium [&>[cmdk-group-heading]]:text-text-tertiary [&>[cmdk-group-heading]]:uppercase [&>[cmdk-group-heading]]:tracking-wider"
+                className="[&>[cmdk-group-heading]]:px-2 [&>[cmdk-group-heading]]:py-1.5 [&>[cmdk-group-heading]]:font-mono [&>[cmdk-group-heading]]:text-[10px] [&>[cmdk-group-heading]]:font-normal [&>[cmdk-group-heading]]:text-text-tertiary [&>[cmdk-group-heading]]:uppercase [&>[cmdk-group-heading]]:tracking-[0.16em]"
               >
                 {navItems.map((item) => (
                   <CommandItemRow
@@ -334,7 +334,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
 
               <Command.Group
                 heading="Actions"
-                className="[&>[cmdk-group-heading]]:px-2 [&>[cmdk-group-heading]]:py-1.5 [&>[cmdk-group-heading]]:text-2xs [&>[cmdk-group-heading]]:font-medium [&>[cmdk-group-heading]]:text-text-tertiary [&>[cmdk-group-heading]]:uppercase [&>[cmdk-group-heading]]:tracking-wider"
+                className="[&>[cmdk-group-heading]]:px-2 [&>[cmdk-group-heading]]:py-1.5 [&>[cmdk-group-heading]]:font-mono [&>[cmdk-group-heading]]:text-[10px] [&>[cmdk-group-heading]]:font-normal [&>[cmdk-group-heading]]:text-text-tertiary [&>[cmdk-group-heading]]:uppercase [&>[cmdk-group-heading]]:tracking-[0.16em]"
               >
                 {actionItems.map((item) => (
                   <CommandItemRow

@@ -31,17 +31,17 @@ export function CollectionCard({
       onClick={onClick}
       className={cn(
         'group flex flex-col gap-3 rounded-lg border border-border bg-bg-secondary p-4 text-left w-full',
-        'hover:border-border-focus hover:bg-bg-tertiary transition-colors',
+        'hover:border-border-strong hover:bg-bg-tertiary transition-colors',
         className,
       )}
     >
       {/* Header */}
       <div className="flex items-start gap-3">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-accent-muted text-accent">
+        <div className="ff-dotgrid flex h-8 w-8 shrink-0 items-center justify-center rounded border border-border bg-bg-tertiary text-text-tertiary">
           <Filter className="h-4 w-4" />
         </div>
         <div className="flex flex-col gap-0.5 min-w-0">
-          <p className="text-sm font-medium text-text-primary line-clamp-1 group-hover:text-accent transition-colors">
+          <p className="text-sm font-medium text-text-primary line-clamp-1 transition-colors">
             {collection.name}
           </p>
           {collection.description && (
@@ -53,7 +53,7 @@ export function CollectionCard({
       </div>
 
       {/* Footer stats */}
-      <div className="flex items-center gap-4 text-xs text-text-tertiary">
+      <div className="flex items-center gap-4 font-mono text-[10px] text-text-tertiary">
         <span className="flex items-center gap-1">
           <Filter className="h-3 w-3" />
           {summarizeFilterRules(collection.filter_rules)}

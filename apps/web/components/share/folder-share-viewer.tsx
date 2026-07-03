@@ -1025,7 +1025,7 @@ function GuestIdentityPrompt({ onSave, onCancel }: { onSave: (name: string, emai
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-sm rounded-xl border border-border bg-bg-secondary p-5 shadow-xl">
+      <div className="w-full max-w-sm rounded border border-border bg-bg-elevated p-5">
         <h3 className="text-sm font-semibold text-text-primary mb-1">Leave a comment</h3>
         <p className="text-xs text-text-tertiary mb-4">Enter your name and email to comment on this shared asset.</p>
         <div className="space-y-3">
@@ -1124,7 +1124,7 @@ export function FolderShareViewer({
   const [loadingMore, setLoadingMore] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
 
-  const accentColor = appearance.accent_color ?? branding?.primary_color ?? '#6366f1'
+  const accentColor = appearance.accent_color ?? branding?.primary_color
   const isDark = appearance.theme !== 'light'
   const cardSize = appearance.card_size ?? 'm'
   const aspectRatio = appearance.aspect_ratio ?? 'landscape'
@@ -1166,9 +1166,12 @@ export function FolderShareViewer({
     }
   }, [isDark])
 
-  // Apply accent color via injected <style> tag — more reliable than inline CSS var override
   React.useEffect(() => {
     const styleId = 'ff-share-accent'
+    if (!accentColor) {
+      document.getElementById(styleId)?.remove()
+      return
+    }
     let el = document.getElementById(styleId) as HTMLStyleElement | null
     if (!el) {
       el = document.createElement('style')
@@ -1334,7 +1337,7 @@ export function FolderShareViewer({
               </button>
               {/* Dropdown */}
               <div className={cn(
-                'absolute left-0 top-full mt-1 z-50 w-56 rounded-lg border border-border bg-bg-elevated shadow-xl py-1',
+                'absolute left-0 top-full mt-1 z-50 w-56 rounded-lg border border-border bg-bg-elevated py-1',
                 viewerMenuOpen ? 'block' : 'hidden md:group-hover:block',
               )}>
                 <div className="px-3 py-2 border-b border-border">
@@ -1378,11 +1381,11 @@ export function FolderShareViewer({
               className="h-7 w-7 rounded-full object-cover shrink-0"
             />
           ) : (
-            <div
-              className="flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold text-text-primary shrink-0"
-              style={{ backgroundColor: accentColor }}
-            >
-              {(branding?.custom_title ?? folderName ?? 'FF').substring(0, 2).toUpperCase()}
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="h-2 w-2 rounded-full bg-accent" />
+              <span className="font-mono text-[15px] font-bold text-text-primary">
+                freeframed
+              </span>
             </div>
           )}
 

@@ -2,56 +2,17 @@
 
 import * as React from 'react'
 import * as Popover from '@radix-ui/react-popover'
-import * as Switch from '@radix-ui/react-switch'
 import {
   LayoutGrid, List, RectangleHorizontal, Square, RectangleVertical,
   ChevronDown, SlidersHorizontal,
 } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { Segmented } from '@/components/ui/segmented'
+import { Switch } from '@/components/ui/switch'
 import {
   useViewStore,
   type ViewLayout, type CardSize, type AspectRatio,
   type ThumbnailScale, type TitleLines,
 } from '@/stores/view-store'
-
-// ─── Segmented control ──────────────────────────────────────────────────────
-
-interface SegmentOption<T extends string> {
-  value: T
-  label?: string
-  icon?: React.ReactNode
-}
-
-function Segment<T extends string>({
-  options,
-  value,
-  onChange,
-}: {
-  options: SegmentOption<T>[]
-  value: T
-  onChange: (v: T) => void
-}) {
-  return (
-    <div className="flex rounded-md border border-white/10 overflow-hidden">
-      {options.map((opt) => (
-        <button
-          key={opt.value}
-          onClick={() => onChange(opt.value)}
-          className={cn(
-            'flex items-center justify-center px-3 py-1.5 text-xs transition-colors min-w-[36px]',
-            value === opt.value
-              ? 'bg-accent text-white'
-              : 'bg-white/5 text-text-tertiary hover:text-text-secondary hover:bg-white/10',
-          )}
-        >
-          {opt.icon ?? opt.label}
-        </button>
-      ))}
-    </div>
-  )
-}
-
-// ─── Toggle switch row ──────────────────────────────────────────────────────
 
 function ToggleRow({
   label,
@@ -65,21 +26,12 @@ function ToggleRow({
   return (
     <div className="flex items-center justify-between">
       <span className="text-sm text-text-secondary">{label}</span>
-      <Switch.Root
+      <Switch
+        size="sm"
+        aria-label={label}
         checked={checked}
         onCheckedChange={onCheckedChange}
-        className={cn(
-          'relative h-5 w-9 rounded-full transition-colors outline-none',
-          checked ? 'bg-accent' : 'bg-white/15',
-        )}
-      >
-        <Switch.Thumb
-          className={cn(
-            'block h-4 w-4 rounded-full bg-white transition-transform',
-            checked ? 'translate-x-[18px]' : 'translate-x-[2px]',
-          )}
-        />
-      </Switch.Root>
+      />
     </div>
   )
 }
@@ -104,10 +56,10 @@ function SelectRow({
         <select
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="appearance-none bg-white/5 border border-white/10 rounded-md pl-2.5 pr-7 py-1 text-xs text-text-primary outline-none cursor-pointer hover:bg-white/10 transition-colors"
+          className="appearance-none bg-bg-tertiary border border-border rounded pl-2.5 pr-7 py-1 text-xs text-text-primary outline-none cursor-pointer hover:bg-bg-hover transition-colors"
         >
           {options.map((o) => (
-            <option key={o.value} value={o.value} className="bg-[#232328]">
+            <option key={o.value} value={o.value} className="bg-bg-elevated">
               {o.label}
             </option>
           ))}
@@ -136,7 +88,7 @@ export function AppearancePopover() {
   return (
     <Popover.Root>
       <Popover.Trigger asChild>
-        <button className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm text-text-secondary hover:text-text-primary hover:bg-white/5 transition-colors">
+        <button className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-sm text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors">
           <SlidersHorizontal className="h-4 w-4" />
           Appearance
         </button>
@@ -147,7 +99,7 @@ export function AppearancePopover() {
           side="bottom"
           align="start"
           sideOffset={6}
-          className="z-50 w-72 rounded-xl border border-white/10 bg-[#1a1a1f] shadow-2xl p-4 space-y-4
+          className="z-50 w-72 rounded border border-border bg-bg-elevated p-4 space-y-4
             data-[state=open]:animate-in data-[state=closed]:animate-out
             data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0
             data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
@@ -155,13 +107,14 @@ export function AppearancePopover() {
           {/* Layout */}
           <div className="flex items-center justify-between">
             <span className="text-sm text-text-secondary">Layout</span>
-            <Segment<ViewLayout>
+            <Segmented<ViewLayout>
               options={[
-                { value: 'grid', icon: <LayoutGrid className="h-3.5 w-3.5" /> },
-                { value: 'list', icon: <List className="h-3.5 w-3.5" /> },
+                { value: 'grid', label: 'Grid', icon: <LayoutGrid className="h-3.5 w-3.5" /> },
+                { value: 'list', label: 'List', icon: <List className="h-3.5 w-3.5" /> },
               ]}
               value={layout}
               onChange={setLayout}
+              optionClassName="px-3 py-1.5"
             />
           </div>
 
@@ -169,7 +122,7 @@ export function AppearancePopover() {
           {layout === 'grid' && (
             <div className="flex items-center justify-between">
               <span className="text-sm text-text-secondary">Card Size</span>
-              <Segment<CardSize>
+              <Segmented<CardSize>
                 options={[
                   { value: 'S', label: 'S' },
                   { value: 'M', label: 'M' },
@@ -177,6 +130,7 @@ export function AppearancePopover() {
                 ]}
                 value={cardSize}
                 onChange={setCardSize}
+                optionClassName="px-3 py-1.5"
               />
             </div>
           )}
@@ -185,14 +139,15 @@ export function AppearancePopover() {
           {layout === 'grid' && (
             <div className="flex items-center justify-between">
               <span className="text-sm text-text-secondary">Aspect Ratio</span>
-              <Segment<AspectRatio>
+              <Segmented<AspectRatio>
                 options={[
-                  { value: 'landscape', icon: <RectangleHorizontal className="h-3.5 w-3.5" /> },
-                  { value: 'square', icon: <Square className="h-3.5 w-3.5" /> },
-                  { value: 'portrait', icon: <RectangleVertical className="h-3.5 w-3.5" /> },
+                  { value: 'landscape', label: 'Landscape', icon: <RectangleHorizontal className="h-3.5 w-3.5" /> },
+                  { value: 'square', label: 'Square', icon: <Square className="h-3.5 w-3.5" /> },
+                  { value: 'portrait', label: 'Portrait', icon: <RectangleVertical className="h-3.5 w-3.5" /> },
                 ]}
                 value={aspectRatio}
                 onChange={setAspectRatio}
+                optionClassName="px-3 py-1.5"
               />
             </div>
           )}
@@ -201,13 +156,14 @@ export function AppearancePopover() {
           {layout === 'grid' && (
             <div className="flex items-center justify-between">
               <span className="text-sm text-text-secondary">Thumbnail Scale</span>
-              <Segment<ThumbnailScale>
+              <Segmented<ThumbnailScale>
                 options={[
                   { value: 'fit', label: 'Fit' },
                   { value: 'fill', label: 'Fill' },
                 ]}
                 value={thumbnailScale}
                 onChange={setThumbnailScale}
+                optionClassName="px-3 py-1.5"
               />
             </div>
           )}
@@ -233,7 +189,7 @@ export function AppearancePopover() {
           <ToggleRow label="Flatten Folders" checked={flattenFolders} onCheckedChange={setFlattenFolders} />
 
           {/* Fields section */}
-          <div className="pt-1 border-t border-white/10">
+          <div className="pt-1 border-t border-border">
             <p className="text-[10px] font-semibold text-text-tertiary uppercase tracking-wider mb-2.5">Fields</p>
             <div className="space-y-3">
               <ToggleRow label="File Size" checked={showFileSize} onCheckedChange={setShowFileSize} />

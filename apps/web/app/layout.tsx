@@ -1,15 +1,29 @@
 import type { Metadata, Viewport } from "next";
-import { DM_Sans } from "next/font/google";
+import { Space_Grotesk, Space_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import { ToastProvider } from "@/components/shared/toast";
 import { ThemeInitializer } from "@/components/shared/theme-initializer";
 import "./globals.css";
 
-const dmSans = DM_Sans({
-  subsets: ["latin"],
+const spaceGrotesk = Space_Grotesk({
+  subsets: ["latin", "vietnamese"],
   display: "swap",
-  variable: "--font-sans",
-  weight: ["400", "500", "600", "700"],
-  preload: true,
+  variable: "--font-space-grotesk",
+});
+
+const spaceMono = Space_Mono({
+  subsets: ["latin", "vietnamese"],
+  weight: ["400", "700"],
+  display: "swap",
+  variable: "--font-space-mono",
+});
+
+const doto = localFont({
+  src: "./fonts/doto-variable.woff2",
+  weight: "100 900",
+  display: "swap",
+  variable: "--font-doto",
+  preload: false,
 });
 
 export const metadata: Metadata = {
@@ -20,7 +34,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#0A0A0B",
+  themeColor: "#000000",
 };
 
 export default function RootLayout({
@@ -38,7 +52,9 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className={`${dmSans.variable} font-sans antialiased`}>
+      <body
+        className={`${spaceGrotesk.variable} ${spaceMono.variable} ${doto.variable} font-sans antialiased`}
+      >
         <ThemeInitializer />
         <ToastProvider>{children}</ToastProvider>
       </body>

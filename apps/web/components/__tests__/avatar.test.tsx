@@ -12,22 +12,22 @@ describe('Avatar component', () => {
   it('applies md size classes by default', () => {
     const { container } = render(<Avatar name="Test" />)
     const root = container.firstChild as HTMLElement
-    expect(root.className).toContain('h-8')
-    expect(root.className).toContain('w-8')
+    expect(root.className).toContain('h-[34px]')
+    expect(root.className).toContain('w-[34px]')
   })
 
   it('applies sm size classes', () => {
     const { container } = render(<Avatar name="Test" size="sm" />)
     const root = container.firstChild as HTMLElement
-    expect(root.className).toContain('h-6')
-    expect(root.className).toContain('w-6')
+    expect(root.className).toContain('h-[26px]')
+    expect(root.className).toContain('w-[26px]')
   })
 
   it('applies lg size classes', () => {
     const { container } = render(<Avatar name="Test" size="lg" />)
     const root = container.firstChild as HTMLElement
-    expect(root.className).toContain('h-10')
-    expect(root.className).toContain('w-10')
+    expect(root.className).toContain('h-11')
+    expect(root.className).toContain('w-11')
   })
 
   it('applies custom className to root element', () => {
@@ -40,6 +40,12 @@ describe('Avatar component', () => {
     const { container } = render(<Avatar name="John Doe" />)
     const root = container.firstChild as HTMLElement
     expect(root.className).toContain('rounded-full')
+  })
+
+  it('renders accent variant', () => {
+    const { container } = render(<Avatar name="You" accent />)
+    const root = container.firstChild as HTMLElement
+    expect(root.className).toContain('bg-accent')
   })
 
   it('renders with a src prop without crashing', () => {

@@ -110,12 +110,12 @@ export function InviteAccept({ token }: InviteAcceptProps) {
   if (inviteError) {
     return (
       <div className="text-center py-8">
-        <div className="mb-4 mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-status-error/15">
-          <svg className="h-6 w-6 text-status-error" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <div className="mb-4 mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-accent-muted">
+          <svg className="h-6 w-6 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
           </svg>
         </div>
-        <h2 className="text-lg font-semibold text-text-primary mb-2">Invalid invite</h2>
+        <h2 className="text-lg font-medium tracking-[-0.02em] text-text-primary mb-2">Invalid invite</h2>
         <p className="text-sm text-text-secondary">{inviteError}</p>
       </div>
     )
@@ -127,7 +127,7 @@ export function InviteAccept({ token }: InviteAcceptProps) {
       {invite && (
         <div className="mb-8 rounded-lg border border-border bg-bg-secondary p-4">
           <p className="text-xs text-text-tertiary uppercase tracking-wider mb-2">You&apos;ve been invited to</p>
-          <p className="text-base font-semibold text-text-primary mb-1">{invite.org_name}</p>
+          <p className="text-base font-medium tracking-[-0.02em] text-text-primary mb-1">{invite.org_name}</p>
           <p className="text-sm text-text-secondary">
             Invited by <span className="text-text-primary">{invite.inviter_name}</span>{' '}
             as <span className="capitalize text-text-primary">{invite.role}</span>
@@ -137,13 +137,13 @@ export function InviteAccept({ token }: InviteAcceptProps) {
       )}
 
       <div className="mb-6">
-        <h1 className="text-xl font-semibold text-text-primary mb-1">Accept invite</h1>
+        <h1 className="text-xl font-medium tracking-[-0.02em] text-text-primary mb-1">Accept invite</h1>
         <p className="text-sm text-text-secondary">Set up your account to get started.</p>
       </div>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         {errors.general && (
-          <div className="rounded-md border border-status-error/30 bg-status-error/10 px-3 py-2.5 text-sm text-status-error">
+          <div className="rounded border border-accent-line bg-accent-muted px-3 py-2.5 font-mono text-[12px] text-accent">
             {errors.general}
           </div>
         )}

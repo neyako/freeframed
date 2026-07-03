@@ -115,10 +115,10 @@ export function NotificationDrawer({ open, onClose }: NotificationDrawerProps) {
       <div className="fixed inset-0 z-40" onClick={onClose} />
 
       {/* Drawer */}
-      <div className="fixed right-2 top-12 z-50 w-[380px] max-w-[calc(100vw-1rem)] max-h-[min(70dvh,560px)] rounded-xl border border-border bg-bg-primary shadow-2xl flex flex-col overflow-hidden animate-in fade-in-0 zoom-in-95 slide-in-from-top-1 duration-150">
+      <div className="fixed right-2 top-12 z-50 w-[380px] max-w-[calc(100vw-1rem)] max-h-[min(70dvh,560px)] rounded border border-border bg-bg-secondary flex flex-col overflow-hidden animate-in fade-in-0 zoom-in-95 slide-in-from-top-1 duration-150">
         {/* Header */}
         <div className="flex items-center justify-between px-4 h-12 border-b border-border shrink-0">
-          <span className="text-sm font-semibold text-text-primary">Notifications</span>
+          <span className="font-mono text-[11px] font-normal uppercase tracking-[0.16em] text-text-tertiary">Notifications</span>
           <div className="flex items-center gap-1">
             <Link
               href="/settings/notifications"

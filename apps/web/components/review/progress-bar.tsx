@@ -238,7 +238,7 @@ function CommentMarker({
             pointerEvents: 'none',
           }}
         >
-          <div className="bg-[#1e1e22] border border-white/10 rounded-lg shadow-2xl p-3">
+          <div className="bg-bg-elevated border border-border rounded-lg p-3">
             <div className="flex items-center gap-2 mb-1.5">
               <div
                 className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0"
@@ -248,7 +248,7 @@ function CommentMarker({
               </div>
               <span className="text-xs font-medium text-white truncate">{authorName}</span>
               {comment.timecode_start !== null && (
-                <span className="ml-auto text-[10px] font-mono text-indigo-400 bg-indigo-500/10 px-1.5 py-0.5 rounded">
+                <span className="ml-auto text-[10px] font-dot font-bold text-accent bg-accent-muted px-1.5 py-0.5 rounded">
                   {formatTimecode(comment.timecode_start)}
                 </span>
               )}
@@ -259,7 +259,7 @@ function CommentMarker({
           </div>
           {/* Arrow */}
           <div className="flex justify-center">
-            <div className="w-2 h-2 bg-[#1e1e22] border-b border-r border-white/10 rotate-45 -mt-1" />
+            <div className="w-2 h-2 bg-bg-elevated border-b border-r border-border rotate-45 -mt-1" />
           </div>
         </div>,
         document.body,
@@ -398,7 +398,7 @@ export function ProgressBar({
           return (
             <div
               key={c.id}
-              className="absolute inset-y-0 bg-yellow-400/40 rounded-full pointer-events-none"
+              className="absolute inset-y-0 bg-text-primary/30 rounded-full pointer-events-none"
               style={{
                 left: `${left}%`,
                 width: `${right - left}%`,
@@ -412,7 +412,7 @@ export function ProgressBar({
           className="absolute inset-y-0 left-0 rounded-full"
           style={{
             width: `${playPercent}%`,
-            background: 'linear-gradient(90deg, #6366f1, #818cf8)',
+            background: 'var(--accent)',
           }}
         />
 
@@ -462,14 +462,14 @@ export function ProgressBar({
         >
           {/* Frame preview */}
           {previewImage && (
-            <div className="mb-1 rounded-md overflow-hidden border border-white/15 shadow-2xl">
+            <div className="mb-1 rounded-md overflow-hidden border border-border-strong">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={previewImage} alt="" className="w-40 object-contain bg-black" />
             </div>
           )}
           {/* Time label */}
           <div className="flex justify-center">
-            <span className="bg-black/90 text-white text-[11px] font-mono px-2 py-0.5 rounded-md">
+            <span className="bg-black/90 text-white text-[11px] font-dot font-bold px-2 py-0.5 rounded-md">
               {formatTimecode(hoverTime)}
             </span>
           </div>

@@ -487,7 +487,7 @@ function CommentItem({
                 </span>
               )}
               {comment.visibility === "internal" ? (
-                <Lock className="h-3.5 w-3.5 text-amber-400" />
+                <Lock className="h-3.5 w-3.5 text-accent" />
               ) : (
                 <Globe className="h-3.5 w-3.5 text-text-tertiary" />
               )}
@@ -499,7 +499,7 @@ function CommentItem({
             {comment.timecode_start !== null &&
               comment.timecode_start !== undefined && (
                 <button
-                  className="inline-flex items-center gap-1 rounded-md bg-accent/15 px-1.5 py-0.5 text-[11px] font-mono text-accent hover:bg-accent/25 transition-colors"
+                  className="inline-flex items-center gap-1 rounded-md bg-accent/15 px-1.5 py-0.5 text-[11px] font-dot font-bold text-accent hover:bg-accent/25 transition-colors"
                   onClick={() => {
                     seekTo(comment.timecode_start!, true);
                     setFocusedCommentId(comment.id);

@@ -4,7 +4,6 @@ import * as React from 'react'
 import { useParams } from 'next/navigation'
 import useSWR, { mutate as globalMutate } from 'swr'
 import * as Tabs from '@radix-ui/react-tabs'
-import * as Switch from '@radix-ui/react-switch'
 import * as Select from '@radix-ui/react-select'
 import * as Dialog from '@radix-ui/react-dialog'
 import {
@@ -22,6 +21,7 @@ import { cn } from '@/lib/utils'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Switch } from '@/components/ui/switch'
 import type {
   ProjectBranding,
   WatermarkSettings,
@@ -318,13 +318,12 @@ function WatermarkTab({ projectId }: { projectId: string }) {
             Burn user identity into shared media
           </p>
         </div>
-        <Switch.Root
+        <Switch
+          size="sm"
+          aria-label="Enable watermark"
           checked={form.enabled ?? false}
           onCheckedChange={(checked) => set('enabled', checked)}
-          className="relative inline-flex h-5 w-9 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-border-focus data-[state=checked]:bg-accent data-[state=unchecked]:bg-bg-tertiary"
-        >
-          <Switch.Thumb className="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition-transform data-[state=checked]:translate-x-4 data-[state=unchecked]:translate-x-0" />
-        </Switch.Root>
+        />
       </div>
 
       <SimpleSelect<WatermarkPosition>
@@ -476,13 +475,12 @@ function CreateFieldDialog({ projectId, onDone }: { projectId: string; onDone: (
             )}
             <div className="flex items-center justify-between rounded-lg border border-border bg-bg-tertiary px-3 py-2">
               <span className="text-sm text-text-secondary">Required</span>
-              <Switch.Root
+              <Switch
+                size="sm"
+                aria-label="Required"
                 checked={required}
                 onCheckedChange={setRequired}
-                className="relative inline-flex h-5 w-9 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none data-[state=checked]:bg-accent data-[state=unchecked]:bg-bg-tertiary"
-              >
-                <Switch.Thumb className="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform data-[state=checked]:translate-x-4 data-[state=unchecked]:translate-x-0" />
-              </Switch.Root>
+              />
             </div>
             {error && <p className="text-xs text-status-error">{error}</p>}
             <div className="flex justify-end gap-2">

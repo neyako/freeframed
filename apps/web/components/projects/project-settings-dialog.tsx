@@ -2,12 +2,11 @@
 
 import * as React from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
-import * as Switch from '@radix-ui/react-switch'
 import { X, ImagePlus, Globe, Lock } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { getGradientForProject } from '@/lib/gradient-utils'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
+import { Switch } from '@/components/ui/switch'
 import type { Project } from '@/types'
 
 interface ProjectSettingsDialogProps {
@@ -15,6 +14,16 @@ interface ProjectSettingsDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onUpdated: () => void
+}
+
+function PosterFallback({ count }: { count: number }) {
+  return (
+    <div className="ff-dotgrid flex h-full w-full items-center justify-center bg-bg-tertiary">
+      <span className="font-dot text-[76px] font-black tracking-[0.04em] text-text-tertiary opacity-50">
+        {String(Math.min(count, 99)).padStart(2, '0')}
+      </span>
+    </div>
+  )
 }
 
 export function ProjectSettingsDialog({
@@ -73,8 +82,6 @@ export function ProjectSettingsDialog({
     }
   }
 
-  const gradient = getGradientForProject(project.id)
-
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
@@ -98,7 +105,7 @@ export function ProjectSettingsDialog({
                 {/* Poster area */}
                 <button
                   onClick={() => fileInputRef.current?.click()}
-                  className="relative w-full aspect-square rounded-xl overflow-hidden border-2 border-dashed border-border hover:border-accent/50 transition-colors group"
+                  className="relative w-full aspect-square rounded-xl overflow-hidden border-2 border-dashed border-border hover:border-border-strong transition-colors group"
                 >
                   {posterPreview ? (
                     <>
@@ -109,11 +116,7 @@ export function ProjectSettingsDialog({
                       </div>
                     </>
                   ) : (
-                    <div className={cn('h-full w-full bg-gradient-to-br flex items-center justify-center', gradient)}>
-                      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-black/20 text-white/80 group-hover:bg-black/30 transition-colors">
-                        <ImagePlus className="h-6 w-6" />
-                      </div>
-                    </div>
+                    <PosterFallback count={project.asset_count ?? 0} />
                   )}
                 </button>
                 <input
@@ -162,20 +165,12 @@ export function ProjectSettingsDialog({
                         <span className="text-sm font-medium text-text-primary">
                           {isPublic ? 'Public Project' : 'Private Project'}
                         </span>
-                        <Switch.Root
+                        <Switch
+                          size="sm"
+                          aria-label="Make project public"
                           checked={isPublic}
                           onCheckedChange={setIsPublic}
-                          className={cn(
-                            'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full transition-colors',
-                            isPublic ? 'bg-accent' : 'bg-bg-tertiary',
-                          )}
-                        >
-                          <Switch.Thumb className={cn(
-                            'pointer-events-none block h-4 w-4 rounded-full bg-white shadow-sm transition-transform',
-                            isPublic ? 'translate-x-[18px]' : 'translate-x-0.5',
-                            'mt-0.5',
-                          )} />
-                        </Switch.Root>
+                        />
                       </div>
                       <p className="text-xs text-text-tertiary mt-0.5">
                         {isPublic

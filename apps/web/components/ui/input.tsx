@@ -21,7 +21,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
         {label && (
           <label
             htmlFor={inputId}
-            className="text-sm font-medium text-text-secondary"
+            className="font-mono text-[11px] font-normal uppercase tracking-[0.14em] text-text-secondary"
           >
             {label}
           </label>
@@ -37,12 +37,12 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
             ref={ref}
             type={isPassword && showPassword ? 'text' : type}
             className={cn(
-              'flex h-10 w-full rounded-md border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary placeholder:text-text-tertiary',
-              'transition-all duration-150 focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20',
-              'disabled:cursor-not-allowed disabled:opacity-50',
+              'flex h-11 w-full rounded border border-border-strong bg-bg-secondary px-3 py-2 text-sm text-text-primary placeholder:text-text-tertiary',
+              'transition-[border-color,box-shadow] duration-150 focus:outline-none focus:border-accent focus:shadow-[inset_0_0_0_1px_var(--accent)]',
+              'disabled:cursor-not-allowed disabled:opacity-45',
               icon && 'pl-9',
               isPassword && 'pr-9',
-              error && 'border-status-error focus:border-status-error focus:ring-status-error/20',
+              error && 'border-accent focus:border-accent',
               className,
             )}
             {...props}
@@ -63,7 +63,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
           )}
         </div>
         {error && (
-          <p className="text-xs text-status-error">{error}</p>
+          <p className="font-mono text-[11px] tracking-[0.04em] text-accent">{error}</p>
         )}
       </div>
     )

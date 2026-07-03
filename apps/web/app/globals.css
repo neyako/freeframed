@@ -4,73 +4,78 @@
 
 :root,
 [data-theme="dark"] {
-  /* Background — dark theme */
-  --bg-primary: #0d0d10;
-  --bg-secondary: #16161a;
-  --bg-tertiary: #1e1e24;
-  --bg-elevated: #24242c;
-  --bg-hover: #2a2a34;
+  --bg-primary: #000000;
+  --bg-secondary: #0a0a0a;
+  --bg-tertiary: #131313;
+  --bg-elevated: #181818;
+  --bg-hover: #1e1e1e;
 
-  /* Borders */
-  --border-primary: #2e2e3a;
-  --border-secondary: #222230;
-  --border-focus: #5b8def;
+  --border-primary: #292929;
+  --border-secondary: #1a1a1a;
+  --border-strong: #3d3d3d;
+  --border-focus: #D71921;
 
-  /* Text */
-  --text-primary: #eaeaed;
-  --text-secondary: #94949e;
-  --text-tertiary: #5e5e6e;
-  --text-inverse: #0d0d10;
+  --text-primary: #f4f4f4;
+  --text-secondary: #9b9b9b;
+  --text-tertiary: #5a5a5a;
+  --text-inverse: #000000;
 
-  /* Accent — blue */
-  --accent: #5b8def;
-  --accent-hover: #7aa3f5;
-  --accent-muted: #253556;
+  --accent: #D71921;
+  --accent-hover: #ff2b35;
+  --accent-muted: rgba(215, 25, 33, 0.14);
+  --accent-line: rgba(215, 25, 33, 0.30);
 
-  /* Status */
-  --status-success: #34d399;
-  --status-warning: #fbbf24;
-  --status-error: #f87171;
-  --status-info: #60a5fa;
+  --dot: #1c1c1c;
+  --scrim: rgba(0, 0, 0, 0.72);
 
-  /* Fonts */
-  --font-sans: var(--font-geist), system-ui, -apple-system, sans-serif;
-  --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+  --status-success: #f4f4f4;
+  --status-warning: #9b9b9b;
+  --status-error: #D71921;
+  --status-info: #9b9b9b;
+
+  --font-sans: var(--font-space-grotesk), system-ui, -apple-system, sans-serif;
+  --font-mono: var(--font-space-mono), ui-monospace, 'SFMono-Regular', monospace;
+  --font-dot: var(--font-doto), var(--font-space-grotesk), sans-serif;
 
   /* Spacing rhythm */
   --space-unit: 4px;
 
   /* Radius */
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
-  --radius-xl: 12px;
+  --radius-sm: 0px;
+  --radius-md: 2px;
+  --radius-lg: 3px;
+  --radius-xl: 4px;
 }
 
 [data-theme="light"] {
-  --bg-primary: #ffffff;
-  --bg-secondary: #f8f8fa;
-  --bg-tertiary: #f0f0f4;
-  --bg-elevated: #ffffff;
-  --bg-hover: #eaeaef;
+  --bg-primary: #f1efe9;
+  --bg-secondary: #eae7df;
+  --bg-tertiary: #e2ded4;
+  --bg-elevated: #f7f5f0;
+  --bg-hover: #ded9cd;
 
-  --border-primary: #e0e0e6;
-  --border-secondary: #d0d0d8;
-  --border-focus: #4a7de8;
+  --border-primary: #cfcabb;
+  --border-secondary: #ddd8cb;
+  --border-strong: #b0aa98;
+  --border-focus: #D71921;
 
-  --text-primary: #1a1a2e;
-  --text-secondary: #5a5a6e;
-  --text-tertiary: #8a8a9e;
-  --text-inverse: #ffffff;
+  --text-primary: #0a0a0a;
+  --text-secondary: #57544c;
+  --text-tertiary: #8b877a;
+  --text-inverse: #f1efe9;
 
-  --accent: #4a7de8;
-  --accent-hover: #3a6dd8;
-  --accent-muted: #e8eef8;
+  --accent: #D71921;
+  --accent-hover: #b3141b;
+  --accent-muted: rgba(215, 25, 33, 0.10);
+  --accent-line: rgba(215, 25, 33, 0.28);
 
-  --status-success: #16a34a;
-  --status-warning: #ca8a04;
-  --status-error: #dc2626;
-  --status-info: #2563eb;
+  --dot: #d4cfc0;
+  --scrim: rgba(20, 18, 14, 0.55);
+
+  --status-success: #0a0a0a;
+  --status-warning: #57544c;
+  --status-error: #D71921;
+  --status-info: #57544c;
 }
 
 @layer base {
@@ -82,7 +87,7 @@
     background-color: var(--bg-primary);
     color: var(--text-primary);
     font-family: var(--font-sans);
--webkit-font-smoothing: antialiased;
+    -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
   }
@@ -99,7 +104,7 @@
 
   ::-webkit-scrollbar-thumb {
     background: var(--border-primary);
-    border-radius: 3px;
+    border-radius: 0;
   }
 
   ::-webkit-scrollbar-thumb:hover {
@@ -108,8 +113,8 @@
 
   /* Selection */
   ::selection {
-    background-color: var(--accent-muted);
-    color: var(--text-primary);
+    background-color: var(--accent);
+    color: #fff;
   }
 }
 
@@ -130,7 +135,13 @@
 
   /* Glass card effect */
   .glass-card {
-    @apply rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] backdrop-blur-md shadow-lg;
+    @apply rounded-lg border border-[var(--border-primary)] bg-[var(--bg-secondary)];
+  }
+
+  .ff-dotgrid {
+    background-image: radial-gradient(var(--dot) 1.1px, transparent 1.2px);
+    background-size: 15px 15px;
+    background-position: -1px -1px;
   }
 
   /* Skeleton shimmer gradient */

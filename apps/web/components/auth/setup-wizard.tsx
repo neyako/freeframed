@@ -105,7 +105,7 @@ export function SetupWizard() {
             <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
           </svg>
         </div>
-        <h2 className="text-lg font-semibold text-text-primary mb-1">Admin account created</h2>
+        <h2 className="text-lg font-medium tracking-[-0.02em] text-text-primary mb-1">Admin account created</h2>
         <p className="text-sm text-text-secondary">Redirecting you to login…</p>
       </div>
     )
@@ -114,7 +114,7 @@ export function SetupWizard() {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-xl font-semibold text-text-primary mb-1">Welcome to FreeFrame</h1>
+        <h1 className="text-xl font-medium tracking-[-0.02em] text-text-primary mb-1">Welcome to FreeFrame</h1>
         <p className="text-sm text-text-secondary">
           Create the super admin account to get started. This can only be done once.
         </p>
@@ -122,7 +122,7 @@ export function SetupWizard() {
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         {errors.general && (
-          <div className="rounded-md border border-status-error/30 bg-status-error/10 px-3 py-2.5 text-sm text-status-error">
+          <div className="rounded border border-accent-line bg-accent-muted px-3 py-2.5 font-mono text-[12px] text-accent">
             {errors.general}
           </div>
         )}

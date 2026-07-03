@@ -406,7 +406,7 @@ export function CommentInput({
           <div className="flex items-start gap-0 rounded-lg border border-border bg-bg-tertiary focus-within:border-accent/50 focus-within:ring-1 focus-within:ring-accent/20">
             {/* Inline timecode badge — show when timecode attached (normal mode) or in drawing mode */}
             {hasTimecode && (timecodeAttached || isDrawingMode) && (
-              <span className="shrink-0 ml-2.5 mt-2.5 rounded bg-amber-500/20 px-1.5 py-0 font-mono text-[11px] text-amber-400 leading-[19.5px] select-none">
+              <span className="shrink-0 ml-2.5 mt-2.5 rounded bg-accent-muted border border-accent-line px-1.5 py-0 font-mono text-[11px] text-accent leading-[19.5px] select-none">
                 {displayTime(playheadTime)}
               </span>
             )}
@@ -520,7 +520,7 @@ export function CommentInput({
                   className={cn(
                     "h-7 w-7 flex items-center justify-center rounded-md transition-colors",
                     timecodeAttached
-                      ? "text-amber-400 bg-amber-400/10"
+                      ? "text-accent bg-accent-muted"
                       : "text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary",
                   )}
                   onClick={() => setTimecodeAttached((p) => !p)}
@@ -587,7 +587,7 @@ export function CommentInput({
                   className={cn(
                     "inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md text-[12px] transition-colors border",
                     commentVisibility === "internal"
-                      ? "text-amber-400 border-amber-400/30 bg-amber-400/10"
+                      ? "text-accent border-accent-line bg-accent-muted"
                       : "text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary border-border",
                   )}
                 >
@@ -620,7 +620,7 @@ export function CommentInput({
                       className={cn(
                         "flex w-full items-center gap-2.5 px-3 py-2 text-[13px] transition-colors",
                         commentVisibility === "internal"
-                          ? "text-amber-400 bg-bg-tertiary"
+                          ? "text-accent bg-bg-tertiary"
                           : "text-text-secondary hover:bg-bg-tertiary",
                       )}
                       onClick={() => {

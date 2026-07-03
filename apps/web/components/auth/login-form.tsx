@@ -231,13 +231,13 @@ export function LoginForm() {
     return (
       <div className="animate-slide-up">
         <div className="mb-8">
-          <h1 className="text-xl font-semibold text-text-primary mb-1">Sign in with password</h1>
+          <h1 className="text-xl font-medium tracking-[-0.02em] text-text-primary mb-1">Sign in with password</h1>
           <p className="text-sm text-text-secondary">Enter your email and password to continue.</p>
         </div>
 
         <form onSubmit={handleClassicLogin} className="flex flex-col gap-4">
           {classicError && (
-            <div className="rounded-md border border-status-error/30 bg-status-error/10 px-3 py-2.5 text-sm text-status-error">
+            <div className="rounded border border-accent-line bg-accent-muted px-3 py-2.5 font-mono text-[12px] text-accent">
               {classicError}
             </div>
           )}
@@ -269,7 +269,7 @@ export function LoginForm() {
           <button
             type="button"
             onClick={() => { setStep('email'); setClassicError('') }}
-            className="text-sm text-text-tertiary hover:text-text-secondary transition-colors"
+            className="font-mono text-[11px] uppercase tracking-[0.1em] text-text-secondary hover:text-text-primary transition-colors"
           >
             Back to magic link
           </button>
@@ -282,7 +282,7 @@ export function LoginForm() {
     return (
       <div className="animate-slide-up">
         <div className="mb-8">
-          <h1 className="text-xl font-semibold text-text-primary mb-1">Create your password</h1>
+          <h1 className="text-xl font-medium tracking-[-0.02em] text-text-primary mb-1">Create your password</h1>
           <p className="text-sm text-text-secondary">
             Set a password to secure your account going forward.
           </p>
@@ -290,7 +290,7 @@ export function LoginForm() {
 
         <form onSubmit={handleSetPassword} className="flex flex-col gap-4">
           {generalError && (
-            <div className="rounded-md border border-status-error/30 bg-status-error/10 px-3 py-2.5 text-sm text-status-error">
+            <div className="rounded border border-accent-line bg-accent-muted px-3 py-2.5 font-mono text-[12px] text-accent">
               {generalError}
             </div>
           )}
@@ -326,7 +326,7 @@ export function LoginForm() {
     return (
       <div className="animate-slide-up">
         <div className="mb-8">
-          <h1 className="text-xl font-semibold text-text-primary mb-1">Check your email</h1>
+          <h1 className="text-xl font-medium tracking-[-0.02em] text-text-primary mb-1">Check your email</h1>
           <p className="text-sm text-text-secondary">
             We sent a 6-digit code to{' '}
             <span className="text-text-primary font-medium">{email}</span>
@@ -348,16 +348,16 @@ export function LoginForm() {
                 onKeyDown={(e) => handleCodeKeyDown(i, e)}
                 onPaste={handleCodePaste}
                 className={cn(
-                  'h-12 w-full max-w-[48px] rounded-md border bg-bg-secondary text-center text-lg font-semibold text-text-primary',
-                  'transition-colors focus:outline-none focus:border-border-focus focus:ring-1 focus:ring-border-focus',
-                  codeError ? 'border-status-error' : 'border-border',
+                  'h-12 w-full max-w-[48px] rounded border bg-bg-secondary text-center font-dot text-2xl font-bold text-text-primary',
+                  'transition-[border-color,box-shadow] focus:outline-none focus:border-accent focus:shadow-[inset_0_0_0_1px_var(--accent)]',
+                  codeError ? 'border-accent' : 'border-border-strong',
                 )}
               />
             ))}
           </div>
 
           {codeError && (
-            <p className="text-sm text-status-error -mt-3">{codeError}</p>
+            <p className="font-mono text-[12px] text-accent -mt-3">{codeError}</p>
           )}
 
           <Button type="submit" size="lg" loading={loading} className="w-full">
@@ -369,7 +369,7 @@ export function LoginForm() {
           <button
             type="button"
             onClick={() => { setStep('email'); setCode(['', '', '', '', '', '']); setCodeError('') }}
-            className="block w-full text-sm text-text-tertiary hover:text-text-secondary transition-colors"
+            className="block w-full font-mono text-[11px] uppercase tracking-[0.1em] text-text-secondary hover:text-text-primary transition-colors"
           >
             Use a different email
           </button>
@@ -382,15 +382,15 @@ export function LoginForm() {
   return (
     <div className="animate-slide-up">
       <div className="mb-8">
-        <h1 className="text-xl font-semibold text-text-primary mb-1">Sign in to FreeFrame</h1>
+        <h1 className="text-xl font-medium tracking-[-0.02em] text-text-primary mb-1">Sign in to FreeFrame</h1>
         <p className="text-sm text-text-secondary">
           Enter your email and we&apos;ll send you a sign-in code.
         </p>
       </div>
 
-      <form onSubmit={handleSendCode} className="flex flex-col gap-4">
+      <form onSubmit={handleSendCode} noValidate className="flex flex-col gap-4">
         {generalError && (
-          <div className="rounded-md border border-status-error/30 bg-status-error/10 px-3 py-2.5 text-sm text-status-error">
+          <div className="rounded border border-accent-line bg-accent-muted px-3 py-2.5 font-mono text-[12px] text-accent">
             {generalError}
           </div>
         )}
@@ -414,7 +414,7 @@ export function LoginForm() {
         <button
           type="button"
           onClick={() => { setStep('classic'); setGeneralError('') }}
-          className="text-sm text-text-tertiary hover:text-text-secondary transition-colors"
+          className="font-mono text-[11px] uppercase tracking-[0.1em] text-text-secondary hover:text-text-primary transition-colors"
         >
           Sign in with password instead
         </button>

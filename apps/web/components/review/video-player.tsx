@@ -410,7 +410,7 @@ export function VideoPlayer({
             onClick={() => setTimeFormatOpen((p) => !p)}
             className="flex items-center gap-1.5 rounded-md bg-bg-tertiary px-2 sm:px-3 py-1 hover:bg-bg-hover transition-colors"
           >
-            <span className="font-mono text-xs sm:text-sm text-text-primary tabular-nums tracking-wide">
+            <span className="font-dot text-xs sm:text-[15px] font-bold text-text-primary tracking-[0.02em]">
               {timeFormat === "timecode" ? (
                 displayTime(currentTime)
               ) : (
@@ -429,8 +429,8 @@ export function VideoPlayer({
             />
           </button>
           {timeFormatOpen && (
-            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 w-48 rounded-xl border border-white/10 bg-[#2a2a30] shadow-2xl py-1.5 animate-in fade-in zoom-in-95 duration-100">
-              <div className="px-3 py-2 text-[11px] text-text-tertiary uppercase tracking-wider font-medium">
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 w-48 rounded border border-border bg-bg-elevated py-1.5 animate-in fade-in zoom-in-95 duration-100">
+              <div className="px-3 py-2 text-[11px] text-text-tertiary uppercase font-mono tracking-[0.16em]">
                 Time Format
               </div>
               {(
@@ -446,7 +446,7 @@ export function VideoPlayer({
                     "flex w-full items-center justify-between px-3 py-2 text-[13px] transition-colors",
                     timeFormat === item.id
                       ? "text-text-primary"
-                      : "text-text-secondary hover:bg-white/5",
+                      : "text-text-secondary hover:bg-bg-hover",
                   )}
                   onClick={() => {
                     setTimeFormat(item.id);

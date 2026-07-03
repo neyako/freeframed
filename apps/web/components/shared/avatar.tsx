@@ -10,13 +10,14 @@ interface AvatarProps {
   src?: string | null
   name?: string | null
   size?: AvatarSize
+  accent?: boolean
   className?: string
 }
 
 const sizeClasses: Record<AvatarSize, string> = {
-  sm: 'h-6 w-6 text-2xs',
-  md: 'h-8 w-8 text-xs',
-  lg: 'h-10 w-10 text-sm',
+  sm: 'h-[26px] w-[26px] text-[9px]',
+  md: 'h-[34px] w-[34px] text-[11px]',
+  lg: 'h-11 w-11 text-[13px]',
 }
 
 function getInitials(name?: string | null): string {
@@ -26,11 +27,12 @@ function getInitials(name?: string | null): string {
   return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase()
 }
 
-export function Avatar({ src, name, size = 'md', className }: AvatarProps) {
+export function Avatar({ src, name, size = 'md', accent = false, className }: AvatarProps) {
   return (
     <RadixAvatar.Root
       className={cn(
-        'relative inline-flex items-center justify-center rounded-full overflow-hidden bg-accent-muted shrink-0',
+        'relative inline-flex items-center justify-center rounded-full overflow-hidden bg-bg-tertiary border border-border-strong shrink-0',
+        accent && 'bg-accent border-accent',
         sizeClasses[size],
         className,
       )}
@@ -43,7 +45,10 @@ export function Avatar({ src, name, size = 'md', className }: AvatarProps) {
         />
       )}
       <RadixAvatar.Fallback
-        className="flex h-full w-full items-center justify-center font-medium text-accent"
+        className={cn(
+          'flex h-full w-full items-center justify-center font-mono font-normal tracking-[0.04em] text-text-primary',
+          accent && 'text-white',
+        )}
         delayMs={0}
       >
         {getInitials(name)}

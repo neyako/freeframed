@@ -122,7 +122,7 @@ export function KeyboardShortcuts({
         <Dialog.Content
           className={cn(
             'fixed left-1/2 top-1/2 z-50 w-full max-w-2xl -translate-x-1/2 -translate-y-1/2',
-            'rounded-2xl border border-border bg-bg-elevated shadow-2xl',
+            'rounded border border-border bg-bg-elevated',
             'data-[state=open]:animate-slide-down',
             'max-h-[80vh] flex flex-col',
           )}

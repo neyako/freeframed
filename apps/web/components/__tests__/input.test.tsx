@@ -22,7 +22,7 @@ describe('Input component', () => {
   it('applies error styling when error prop is present', () => {
     render(<Input error="Required" />)
     const input = screen.getByRole('textbox')
-    expect(input.className).toContain('border-status-error')
+    expect(input.className).toContain('border-accent')
   })
 
   it('handles onChange events', () => {

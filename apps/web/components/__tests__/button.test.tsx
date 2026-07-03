@@ -14,6 +14,12 @@ describe('Button component', () => {
     expect(button.className).toContain('bg-accent')
   })
 
+  it('solid variant has correct classes', () => {
+    render(<Button variant="solid">Solid</Button>)
+    const button = screen.getByRole('button')
+    expect(button.className).toContain('bg-text-primary')
+  })
+
   it('ghost variant has correct classes', () => {
     render(<Button variant="ghost">Ghost</Button>)
     const button = screen.getByRole('button')

@@ -54,7 +54,7 @@ function FolderThumbnails({ projectId, folderId, itemCount }: { projectId: strin
 
   if (thumbs.length === 0) {
     return (
-      <div className="aspect-[4/3] flex items-center justify-center bg-bg-tertiary rounded-t-lg">
+      <div className="ff-dotgrid aspect-[4/3] flex items-center justify-center bg-bg-tertiary rounded-t-lg">
         <Folder className="h-12 w-12 text-text-tertiary/50" />
       </div>
     )
@@ -155,7 +155,7 @@ export function FolderCard({
     <>
       <div
         className={cn(
-          'group relative rounded-lg border bg-bg-tertiary/50 cursor-pointer transition-all hover:border-border-focus hover:scale-[1.01]',
+          'group relative rounded-lg border bg-bg-secondary cursor-pointer transition-colors hover:border-border-strong',
           selected ? 'ring-2 ring-accent border-accent/50' : 'border-border',
           isDragOver && 'ring-2 ring-accent/50 bg-accent/5',
           menuOpen && 'z-[60]',
@@ -188,7 +188,7 @@ export function FolderCard({
               </button>
 
               {menuOpen && (
-                <div className="absolute right-0 top-full mt-1 z-50 w-40 rounded-lg border border-border bg-bg-elevated shadow-xl py-1">
+                <div className="absolute right-0 top-full mt-1 z-50 w-40 rounded border border-border bg-bg-elevated py-1">
                   <button
                     className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-text-secondary hover:bg-bg-hover"
                     onClick={(e) => {
@@ -210,7 +210,7 @@ export function FolderCard({
                     <Share2 className="h-3 w-3" /> Share
                   </button>
                   <button
-                    className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-red-400 hover:bg-red-500/10"
+                    className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-accent hover:bg-accent-muted"
                     onClick={(e) => {
                       e.stopPropagation()
                       setMenuOpen(false)
@@ -223,7 +223,7 @@ export function FolderCard({
               )}
             </div>
           </div>
-          <p className="text-xs text-text-tertiary mt-0.5">
+          <p className="font-mono text-[10px] text-text-tertiary mt-0.5">
             {folder.item_count} {folder.item_count === 1 ? 'Item' : 'Items'}
           </p>
         </div>

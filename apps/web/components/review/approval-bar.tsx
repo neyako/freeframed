@@ -28,12 +28,12 @@ const statusConfig: Record<
   approved: {
     icon: <CheckCircle2 className="h-4 w-4" />,
     label: 'Approved',
-    className: 'text-status-success',
+    className: 'text-text-primary',
   },
   rejected: {
     icon: <XCircle className="h-4 w-4" />,
     label: 'Rejected',
-    className: 'text-status-error',
+    className: 'text-accent',
   },
   pending: {
     icon: <Clock className="h-4 w-4" />,
@@ -73,13 +73,13 @@ function RejectNoteDialog({ onConfirm, onCancel }: RejectNoteProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-sm rounded-xl border border-border bg-bg-elevated p-5 shadow-xl animate-slide-up">
+      <div className="w-full max-w-sm rounded border border-border bg-bg-elevated p-5 animate-slide-up">
         <h3 className="text-sm font-semibold text-text-primary mb-1">Reject with note</h3>
         <p className="text-xs text-text-tertiary mb-3">
           Optionally add a note explaining why this version is being rejected.
         </p>
         <textarea
-          className="w-full resize-none rounded-md border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-border-focus min-h-[80px]"
+          className="w-full resize-none rounded-md border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-accent min-h-[80px]"
           placeholder="Optional rejection note…"
           value={note}
           onChange={(e) => setNote(e.target.value)}
@@ -204,17 +204,17 @@ export function ApprovalBar({ assetId, versionId, currentUserId, className }: Ap
             {/* Summary */}
             <div className="flex items-center gap-2 ml-2 shrink-0">
               {approvedCount > 0 && (
-                <span className="text-2xs text-status-success font-medium">
+                <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-text-secondary">
                   {approvedCount} approved
                 </span>
               )}
               {rejectedCount > 0 && (
-                <span className="text-2xs text-status-error font-medium">
+                <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-accent">
                   {rejectedCount} rejected
                 </span>
               )}
               {pendingCount > 0 && (
-                <span className="text-2xs text-text-tertiary">
+                <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-text-tertiary">
                   {pendingCount} pending
                 </span>
               )}
@@ -228,20 +228,20 @@ export function ApprovalBar({ assetId, versionId, currentUserId, className }: Ap
 
         {/* Error */}
         {actionError && (
-          <span className="text-xs text-status-error shrink-0">{actionError}</span>
+          <span className="text-xs text-accent shrink-0">{actionError}</span>
         )}
 
         {/* Action buttons */}
         {currentUserId && (
           <div className="flex items-center gap-2 shrink-0 ml-auto">
             {myApproval?.status === 'approved' && (
-              <span className="inline-flex items-center gap-1 text-xs text-status-success font-medium">
+              <span className="inline-flex items-center gap-1 text-xs text-text-primary font-medium">
                 <CheckCircle2 className="h-4 w-4" />
                 You approved
               </span>
             )}
             {myApproval?.status === 'rejected' && (
-              <span className="inline-flex items-center gap-1 text-xs text-status-error font-medium">
+              <span className="inline-flex items-center gap-1 text-xs text-accent font-medium">
                 <XCircle className="h-4 w-4" />
                 You rejected
               </span>
@@ -249,21 +249,20 @@ export function ApprovalBar({ assetId, versionId, currentUserId, className }: Ap
             {(!myApproval || myApproval.status === 'pending') && (
               <>
                 <Button
-                  variant="secondary"
+                  variant="ghost"
                   size="sm"
                   onClick={() => setShowRejectDialog(true)}
                   disabled={approving}
-                  className="text-status-error border-status-error/30 hover:border-status-error/60 hover:bg-status-error/10"
+                  className="text-accent hover:bg-accent-muted"
                 >
                   <XCircle className="h-4 w-4" />
                   Reject
                 </Button>
                 <Button
-                  variant="primary"
+                  variant="solid"
                   size="sm"
                   onClick={handleApprove}
                   loading={approving}
-                  className="bg-status-success hover:opacity-90"
                 >
                   <CheckCircle2 className="h-4 w-4" />
                   Approve

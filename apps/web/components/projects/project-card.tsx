@@ -3,12 +3,21 @@
 import * as React from 'react'
 import Link from 'next/link'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
-import { MoreHorizontal, ImagePlus, Settings, Trash2, Globe, Lock } from 'lucide-react'
+import { MoreHorizontal, Settings, Trash2, Globe } from 'lucide-react'
 import { cn, formatRelativeTime, formatBytes } from '@/lib/utils'
-import { getGradientForProject } from '@/lib/gradient-utils'
 import { api } from '@/lib/api'
 import { ProjectSettingsDialog } from './project-settings-dialog'
 import type { Project } from '@/types'
+
+function PosterFallback({ count, className }: { count: number; className?: string }) {
+  return (
+    <div className={cn('ff-dotgrid flex h-full w-full items-center justify-center bg-bg-tertiary', className)}>
+      <span className="font-dot text-[76px] font-black tracking-[0.04em] text-text-tertiary opacity-50">
+        {String(Math.min(count, 99)).padStart(2, '0')}
+      </span>
+    </div>
+  )
+}
 
 interface ProjectCardProps {
   project: Project
@@ -25,7 +34,6 @@ export function ProjectCard({
   className,
   onMutate,
 }: ProjectCardProps) {
-  const gradient = getGradientForProject(project.id)
   const assetCount = project.asset_count ?? 0
   const [settingsOpen, setSettingsOpen] = React.useState(false)
   const [deleting, setDeleting] = React.useState(false)
@@ -48,7 +56,7 @@ export function ProjectCard({
       <div className={cn('group relative', className)}>
         <Link
           href={`/projects/${project.id}`}
-          className="block rounded-xl overflow-hidden bg-bg-secondary border border-border hover:border-accent/40 transition-all duration-200 hover:shadow-lg hover:shadow-black/10"
+          className="block rounded-lg overflow-hidden bg-bg-secondary border border-border hover:border-border-strong transition-colors duration-200"
         >
           {/* Square poster area */}
           <div className="relative aspect-square w-full overflow-hidden">
@@ -60,21 +68,18 @@ export function ProjectCard({
                 className="h-full w-full object-cover"
               />
             ) : (
-              <div className={cn('h-full w-full bg-gradient-to-br', gradient)}>
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_40%,rgba(255,255,255,0.1),transparent_60%)]" />
-              </div>
+              <PosterFallback count={assetCount} />
             )}
 
-            {/* Bottom gradient overlay for text */}
-            <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/70 via-black/30 to-transparent" />
+            <div className="absolute inset-x-0 bottom-0 h-[84px] bg-gradient-to-t from-[var(--scrim)] to-transparent" />
 
             {/* Project name overlay */}
             <div className="absolute inset-x-0 bottom-0 p-3">
-              <p className="text-sm font-semibold text-white line-clamp-2 drop-shadow-sm">
+              <p className="text-[15px] font-semibold text-white line-clamp-2">
                 {project.name}
               </p>
               {project.description && (
-                <p className="text-[11px] text-white/70 line-clamp-1 mt-0.5">
+                <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-white/70 line-clamp-1 mt-0.5">
                   {project.description}
                 </p>
               )}
@@ -82,14 +87,15 @@ export function ProjectCard({
 
             {/* Public/role badges */}
             <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5">
+              {/* needs-review corner dot: blocked on a Project.needs_review field */}
               {project.is_public && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-black/30 backdrop-blur-sm px-2 py-0.5 text-[10px] font-medium text-white/90">
+                <span className="inline-flex items-center gap-1 rounded-none bg-black/55 backdrop-blur px-2 py-1 font-mono text-[9px] uppercase tracking-[0.1em] text-white/90">
                   <Globe className="h-2.5 w-2.5" />
                   Public
                 </span>
               )}
               {showRole && project.role && project.role !== 'owner' && (
-                <span className="inline-flex items-center rounded-full bg-black/30 backdrop-blur-sm px-2 py-0.5 text-[10px] font-medium text-white/90 capitalize">
+                <span className="inline-flex items-center rounded-none bg-black/55 backdrop-blur px-2 py-1 font-mono text-[9px] uppercase tracking-[0.1em] text-white/90">
                   {project.role}
                 </span>
               )}
@@ -98,7 +104,7 @@ export function ProjectCard({
 
           {/* Footer */}
           <div className="flex items-center justify-between px-3 py-2.5">
-            <span className="text-2xs text-text-tertiary">
+            <span className="font-mono text-[10px] tracking-[0.04em] text-text-tertiary">
               {assetCount > 0
                 ? `${assetCount} item${assetCount !== 1 ? 's' : ''} · ${formatBytes(project.storage_bytes ?? 0)}`
                 : `Updated ${formatRelativeTime(project.created_at)}`}
@@ -120,7 +126,7 @@ export function ProjectCard({
 
             <DropdownMenu.Portal>
               <DropdownMenu.Content
-                className="z-50 min-w-[180px] rounded-xl border border-border bg-bg-secondary p-1 shadow-xl"
+                className="z-50 min-w-[180px] rounded border border-border bg-bg-elevated p-1"
                 sideOffset={4}
                 align="end"
               >
@@ -139,7 +145,7 @@ export function ProjectCard({
                 <DropdownMenu.Separator className="my-1 h-px bg-border" />
 
                 <DropdownMenu.Item
-                  className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-status-error hover:bg-status-error/10 cursor-pointer outline-none transition-colors"
+                  className="flex items-center gap-2.5 rounded px-3 py-2 text-sm text-accent hover:bg-accent-muted cursor-pointer outline-none transition-colors"
                   onSelect={handleDelete}
                   disabled={deleting}
                 >

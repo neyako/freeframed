@@ -112,13 +112,13 @@ files (executors don't need design-project access).
 
 | Plan | Title | Bugs/Design | Priority | Effort | Depends on | Status |
 |------|-------|-------------|----------|--------|------------|--------|
-| 034 | Design tokens foundation — monochrome+red tokens, Space Grotesk/Mono/Doto fonts, squared radii, shadow kill | tokens.dc | P1 | M | — | TODO |
-| 035 | Primitive restyle — button (adds `solid`), input, badge, avatar, empty-state | button/input/badge/avatar/empty-state.dc | P1 | M | 034 | TODO |
-| 036 | New primitives — `ui/switch`, `ui/segmented`, `ui/progress` + migrate inline ancestors (appearance-popover, settings switches, uploads bar) | toggle/segmented/progress.dc | P2 | M | 034 | TODO |
-| 037 | Chrome — header wordmark + red dot, mono breadcrumbs, **theme toggle in header**, drawer/palette shells | chrome.dc | P2 | M | 034, 035 | TODO |
-| 038 | Browse surfaces — flat mono project posters (kills `gradient-utils`), dot-grid fallbacks, data-table asset list | card/table.dc | P2 | M–L | 034, 035 | TODO |
-| 039 | Review & share — Doto timecodes, red playhead (kills hardcoded indigo), mono approvals, guest-viewer token sweep | tokens/badge.dc | P2 | M | 034, 035 | TODO |
-| 040 | Auth screens — wordmark hero with red *d*, dot-grid field, Doto code inputs | index.dc | P3 | S–M | 034, 035 | TODO |
+| 034 | Design tokens foundation — monochrome+red tokens, Space Grotesk/Mono/Doto fonts, squared radii, shadow kill | tokens.dc | P1 | M | — | DONE ✓ verified 07-03 |
+| 035 | Primitive restyle — button (adds `solid`), input, badge, avatar, empty-state | button/input/badge/avatar/empty-state.dc | P1 | M | 034 | DONE ✓ verified 07-03 |
+| 036 | New primitives — `ui/switch`, `ui/segmented`, `ui/progress` + migrate inline ancestors (appearance-popover, settings switches, uploads bar) | toggle/segmented/progress.dc | P2 | M | 034 | DONE ✓ verified 07-03 |
+| 037 | Chrome — header wordmark + red dot, mono breadcrumbs, **theme toggle in header**, drawer/palette shells | chrome.dc | P2 | M | 034, 035 | DONE ✓ verified 07-03 |
+| 038 | Browse surfaces — flat mono project posters (kills `gradient-utils`), dot-grid fallbacks, data-table asset list | card/table.dc | P2 | M–L | 034, 035 | DONE ✓ verified 07-03 |
+| 039 | Review & share — Doto timecodes, red playhead (kills hardcoded indigo), mono approvals, guest-viewer token sweep | tokens/badge.dc | P2 | M | 034, 035 | DONE ✓ verified 07-03 |
+| 040 | Auth screens — wordmark hero with red *d*, dot-grid field, Doto code inputs | index.dc | P3 | S–M | 034, 035 | DONE ✓ verified 07-03 |
 
 ### Recommended execution order (round 3)
 
@@ -351,6 +351,56 @@ All plans FreeFrame `apps/web`, layout/behavior only, retheme-safe.
 | #8 timecode chip misaligned | **054** — chip `mt-[9px]`/`leading-none` vs textarea `py-2.5`/19.5px line box |
 | #9 uploads/notif full-height drawers | **055** — `h-[calc(100vh-2.75rem)]` drawers → anchored `max-h-[min(70dvh,560px)]` popovers |
 | #10 mobile comments toggle not ergonomic | **056** — "Show comments (N)" bar below player, top icon hidden below `md` |
+
+## Reconcile log — 2026-07-03 (run 3)
+
+Run against FreeFrame HEAD `27a37d3` (main) and projmgmt HEAD `1905a0b`. Since run 2 the maintainer
+committed the 054/055 batch (`9050c7d`) and merged 056 (`e53b62d`, README resolved to ours as
+recommended). The **entire round-3 retheme (034–040) has since been executed** and sits applied but
+**UNCOMMITTED** on main's working tree: 39 modified web files, `lib/gradient-utils.ts` deleted, plus
+untracked `app/fonts/` (doto-variable.woff2), `components/ui/{switch,segmented,progress}.tsx`, and
+6 new test files/dirs. This run verifies all seven retheme rows.
+
+- **034–040 — all DONE, verified (uncommitted).** Every plan's static done-criteria grep re-run this
+  session; all hold: **034** `5b8def`→0 / `D71921`→6 in `globals.css`, `Space_Grotesk` in
+  `app/layout.tsx` (2 matches = import+usage; the criterion said 1 but its intent — Grotesk in,
+  `DM_Sans`→0 — holds), `ff-dotgrid`, `borderRadius`+`boxShadow` overrides, `doto-variable.woff2`
+  present (untracked — see hygiene). **035** button shadows→0 + `solid`×2, badge `animate-blink`×1 +
+  status-colors→0, empty-state `ff-dotgrid`×1. **036** all three primitives exist; `react-switch`
+  confined to `ui/switch.tsx`; appearance-popover hex literals→0. **037** wordmark×1, `logo-icon`→0,
+  "Toggle color theme"×1, layout shadows→0 per file. **038** `gradient-utils` refs→0 + lib file
+  deleted, project-card `ff-dotgrid`/`font-dot`, `hover:border-accent`→0. **039** indigo→0 in
+  progress-bar, video-player `font-dot`, approval `status-success`→0 + `solid`×1, comment-input
+  `amber-`→0. **040** auth layout `ff-dotgrid`×1 / `logo-full`→0, login `font-dot`, `status-error`→0.
+- **Full gate (real, run this session):** `pnpm exec tsc --noEmit` → **0 errors** ("No errors found";
+  rtk wrapper exit-1 artifact); `pnpm test` → **164 passed (164)** across 26 files (was 141/20 —
+  +23 from the retheme's new primitive/theme-toggle/project-card/auth tests); `pnpm build` → exit 0.
+- **Prior-round must-survive anchors preserved through the retheme:** 054 `leading-[19.5px]`×1;
+  055 `max-h-[min(70dvh,560px)]`×1 each in uploads-panel/notification-drawer + `min-h-[260px]`×1;
+  056 "Show comments" bars + `hidden md:flex` gates in both files; 047 `fetchShareStreamInfo`×2 +
+  `poster`×3; 051 `pointer-coarse:opacity-100` across 9 files. **052 re-expressed, intent intact**:
+  039 changed the timecode to `font-dot text-xs sm:text-[15px]` (was `text-xs sm:text-sm`) — mobile
+  compression (`px-2 sm:px-4`, `gap-1 sm:gap-2`, `hidden sm:flex` loop) all survives.
+- **One out-of-scope hunk, accepted on merit:** `audio-player.tsx` (deferred from 039's scope) has a
+  1-line change — WaveSurfer's JS fallback hex `#5b8def`→`#D71921`. Mechanical token consistency
+  serving 034's intent; the deferred full conformance pass remains open.
+- **004 / 005 — TODO, re-confirmed: no drift.** projmgmt still at `1905a0b`, tree clean;
+  `src/lib/freeframe.ts` absent (004 unexecuted). Both executable; 004's end-to-end case still needs
+  a deployed, reachable FreeFrame (runtime precondition).
+- **Newly unblocked (no plan yet, on request):** `share-video-player.tsx` dead-code deletion (039 has
+  landed; file is 1.3K, referenced only by its own test, no CI tripwire); a `DESIGN.md` design
+  contract (053 was rejected as premature — the retheme it waited for is now live); the
+  audio-player/image-viewer conformance pass per 039's maintenance notes.
+- **Nothing newly rejected or blocked. No stale IN PROGRESS.** 053 stays REJECTED.
+
+**⚠ Tracking hygiene (maintainer action):** commit the round-3 batch. The untracked files
+(`app/fonts/`, `components/ui/switch|segmented|progress.tsx`, `components/auth/__tests__/`,
+`components/projects/__tests__/project-card.test.tsx`, the 4 new `components/__tests__/*.test.tsx`)
+need explicit `git add` — a plain `git commit -am` would ship a retheme that fails to build (missing
+fonts + primitives).
+
+**Executable right now:** projmgmt **004** and **005**. All FreeFrame plans (001–056) are DONE
+(round 3 pending commit).
 
 ## Reconcile log — 2026-07-03 (run 2)
 
