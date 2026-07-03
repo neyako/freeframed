@@ -115,7 +115,7 @@ export function NotificationDrawer({ open, onClose }: NotificationDrawerProps) {
       <div className="fixed inset-0 z-40" onClick={onClose} />
 
       {/* Drawer */}
-      <div className="fixed right-0 top-11 z-50 h-[calc(100vh-2.75rem)] w-[380px] max-w-[calc(100vw-1rem)] border-l border-border bg-bg-primary shadow-2xl flex flex-col animate-in slide-in-from-right-2 duration-150">
+      <div className="fixed right-2 top-12 z-50 w-[380px] max-w-[calc(100vw-1rem)] max-h-[min(70dvh,560px)] rounded-xl border border-border bg-bg-primary shadow-2xl flex flex-col overflow-hidden animate-in fade-in-0 zoom-in-95 slide-in-from-top-1 duration-150">
         {/* Header */}
         <div className="flex items-center justify-between px-4 h-12 border-b border-border shrink-0">
           <span className="text-sm font-semibold text-text-primary">Notifications</span>
@@ -178,7 +178,7 @@ export function NotificationDrawer({ open, onClose }: NotificationDrawerProps) {
               ))}
             </div>
           ) : filtered.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-center px-6">
+            <div className="flex flex-col items-center justify-center min-h-[260px] py-8 text-center px-6">
               <div className="h-14 w-14 rounded-full bg-bg-tertiary flex items-center justify-center mb-3">
                 <Bell className="h-7 w-7 text-text-tertiary" />
               </div>

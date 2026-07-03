@@ -406,7 +406,7 @@ export function CommentInput({
           <div className="flex items-start gap-0 rounded-lg border border-border bg-bg-tertiary focus-within:border-accent/50 focus-within:ring-1 focus-within:ring-accent/20">
             {/* Inline timecode badge — show when timecode attached (normal mode) or in drawing mode */}
             {hasTimecode && (timecodeAttached || isDrawingMode) && (
-              <span className="shrink-0 ml-2.5 mt-[9px] rounded bg-amber-500/20 px-1.5 py-0.5 font-mono text-[11px] text-amber-400 leading-none select-none">
+              <span className="shrink-0 ml-2.5 mt-2.5 rounded bg-amber-500/20 px-1.5 py-0 font-mono text-[11px] text-amber-400 leading-[19.5px] select-none">
                 {displayTime(playheadTime)}
               </span>
             )}
