@@ -28,6 +28,7 @@ import {
   Info,
   Loader2,
   Columns2,
+  MessageSquare,
   Upload,
 } from 'lucide-react'
 import Link from 'next/link'
@@ -402,7 +403,7 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
           <button
             onClick={() => setSidebarOpen((p) => !p)}
             className={cn(
-              'flex items-center justify-center h-8 w-8 rounded-md transition-colors',
+              'hidden md:flex items-center justify-center h-8 w-8 rounded-md transition-colors',
               sidebarOpen
                 ? 'bg-bg-hover text-text-primary'
                 : 'text-text-tertiary hover:text-text-primary hover:bg-bg-hover',
@@ -421,6 +422,16 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
           {/* Media viewer */}
           {renderMediaViewer()}
         </div>
+
+        {!sidebarOpen && (
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="md:hidden flex items-center justify-center gap-1.5 w-full py-2.5 text-xs font-medium text-text-secondary border-t border-border bg-bg-secondary shrink-0"
+          >
+            <MessageSquare className="h-4 w-4" />
+            Show comments{comments.length > 0 ? ` (${comments.length})` : ''}
+          </button>
+        )}
 
         {/* Right: comments sidebar */}
         {sidebarOpen && (
