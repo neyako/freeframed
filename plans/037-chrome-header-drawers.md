@@ -25,7 +25,7 @@
 > max-h-[min(70dvh,560px)] rounded-xl border border-border … shadow-2xl flex
 > flex-col overflow-hidden animate-in fade-in-0 zoom-in-95
 > slide-in-from-top-1 duration-150` (uploads keeps `bg-bg-secondary`,
-> notifications `bg-bg-primary`); the notification empty state is now
+> notifications `bg-bg-primary`); both files' empty states are now
 > `min-h-[260px] py-8` instead of `h-full`. NOT a STOP. Step 5 ("Drawer +
 > palette shells") applies its token treatment to these **popover** shells:
 > swap color/border/shadow tokens only, and **preserve the
