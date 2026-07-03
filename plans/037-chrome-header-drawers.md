@@ -17,6 +17,23 @@
 > `pointer-coarse:opacity-100` to the upload-row hover-reveal class in
 > `uploads-panel.tsx` (~line 149 — row actions, not the shell/header this
 > plan restyles). Structural only; NOT a STOP. Preserve that token.
+>
+> **Known, expected drift (reconciled 2026-07-03, run 2 — plan 055):** the
+> notifications and uploads shells are NO LONGER full-height drawers. Plan
+> 055 converted both outer containers to compact anchored popovers:
+> `fixed right-2 top-12 z-50 w-[380px] max-w-[calc(100vw-1rem)]
+> max-h-[min(70dvh,560px)] rounded-xl border border-border … shadow-2xl flex
+> flex-col overflow-hidden animate-in fade-in-0 zoom-in-95
+> slide-in-from-top-1 duration-150` (uploads keeps `bg-bg-secondary`,
+> notifications `bg-bg-primary`); the notification empty state is now
+> `min-h-[260px] py-8` instead of `h-full`. NOT a STOP. Step 5 ("Drawer +
+> palette shells") applies its token treatment to these **popover** shells:
+> swap color/border/shadow tokens only, and **preserve the
+> anchoring/size/overflow classes** (`right-2 top-12`, `max-w-*`,
+> `max-h-[min(70dvh,560px)]`, `overflow-hidden`, entry animation). The
+> `shadow-2xl` is still present for Step 5's shadow-removal grep to clear.
+> Radius: 034 remaps the scale globally — restyling `rounded-xl` → `rounded`
+> per the design is fine.
 
 ## Status
 
@@ -86,10 +103,12 @@ All excerpts at commit `39bdfc6`.
   and `setTheme(theme)` (applies to DOM + persists + saves to server). Resolve
   display state with the same trick the store uses: treat `system` as the
   `matchMedia('(prefers-color-scheme: dark)')` result.
-- `components/layout/notification-drawer.tsx` (7.4K) — right-side drawer under
-  the header (positioned by plan 027).
-- `components/layout/uploads-panel.tsx` (13.9K) — right-side drawer; header row
-  at line ~247 (`flex items-center justify-between px-4 h-12 border-b`).
+- `components/layout/notification-drawer.tsx` (7.4K) — compact anchored
+  popover under the header bell (drawer → popover by plan 055; see the
+  known-drift note above).
+- `components/layout/uploads-panel.tsx` (13.9K) — compact anchored popover
+  (plan 055); header row at ~line 247 (`flex items-center justify-between
+  px-4 h-12 border-b`) unchanged.
 - `components/layout/command-palette.tsx` (14.5K) — ⌘K dialog.
 - Test baseline: `pnpm test` → 136 passed (136) at `39bdfc6` (more after
   035/036 — record your starting number). No test asserts header classes.

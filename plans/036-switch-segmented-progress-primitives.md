@@ -18,6 +18,11 @@
 > `uploads-panel.tsx` (~line 149) and `project-settings-dialog.tsx` (~line
 > 107). Structural only; this plan's excerpts are unaffected — NOT a STOP.
 > Preserve the `pointer-coarse:opacity-100` token in any line you restyle.
+> Additionally (reconciled 2026-07-03, run 2): plan 055 converted the
+> `uploads-panel.tsx` outer shell (~line 244) from a full-height drawer to a
+> compact anchored popover (`max-h-[min(70dvh,560px)] rounded-xl
+> overflow-hidden`). Shell only — the upload-row progress internals this
+> plan migrates (~lines 114–120) are untouched. NOT a STOP.
 
 ## Status
 

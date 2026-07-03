@@ -27,6 +27,19 @@
 >   have shifted (~+45); re-locate by grep. The Step-5 grep sweep is
 >   unaffected. **Layout classes from 047–049 must survive your token
 >   sweep.** None of this is a STOP.
+> - `folder-share-viewer.tsx` + the editor asset page (reconciled
+>   2026-07-03, run 2 — plan 056, may land via branch
+>   `advisor/056-mobile-show-comments-bar`): top-bar panel toggles gated
+>   `hidden md:flex`; a mobile "Show comments (N)" bar (`md:hidden`,
+>   existing tokens only) added below the player in `ShareReviewInner`.
+>   Structural only; **the bar and the `hidden md:flex` gates must survive
+>   your token sweep.** NOT a STOP.
+> - `comment-input.tsx` (reconciled 2026-07-03, run 2 — plan 054): the
+>   timecode chip's alignment classes changed (`mt-[9px]` → `mt-2.5`,
+>   `py-0.5` → `py-0`, `leading-none` → `leading-[19.5px]`) to baseline-align
+>   the chip with the textarea's first line. The excerpt below is updated.
+>   Step 4 recolors this chip — **swap the color classes only and preserve
+>   `mt-2.5 px-1.5 py-0 leading-[19.5px]`**. NOT a STOP.
 
 ## Status
 
@@ -102,7 +115,9 @@ All excerpts at commit `39bdfc6`.
     `text-status-error` `text-2xs font-medium`.
   - RejectNoteDialog panel (line ~76): `rounded-xl ... shadow-xl`.
 - `apps/web/components/review/comment-input.tsx` (line ~409): timecode chip
-  `...amber-500/20 px-1.5 py-0.5 font-mono text-[11px] text-amber-400...`.
+  `shrink-0 ml-2.5 mt-2.5 rounded bg-amber-500/20 px-1.5 py-0 font-mono
+  text-[11px] text-amber-400 leading-[19.5px] select-none` (alignment
+  classes from plan 054 — preserve them; recolor only).
 - `apps/web/components/review/comment-panel.tsx`: timestamp (line ~485)
   `text-[11px] text-text-tertiary font-mono` (fine); clickable timecode
   (line ~502) `... font-mono text-accent hover:bg-accent/25` (fine after 034).
@@ -216,7 +231,8 @@ In `approval-bar.tsx`:
 - `comment-input.tsx` (line ~409): the amber timecode chip → `bg-accent-muted
   border border-accent-line text-accent font-mono text-[11px]` (red-tinted —
   the clickable timecode is the design's red-numeral motif; `accent-line`
-  token added in 034).
+  token added in 034). Color classes only — keep the plan-054 alignment
+  classes `mt-2.5 px-1.5 py-0 leading-[19.5px]` exactly as they are.
 - `comment-panel.tsx` (line ~502): already `text-accent`; add `font-dot` to
   the timecode text if the element renders only digits/colons, else leave
   `font-mono`.

@@ -322,9 +322,9 @@ All plans FreeFrame `apps/web`, layout/behavior only, retheme-safe.
 
 | Plan | Title | Item | Priority | Effort | Depends on | Status |
 |------|-------|------|----------|--------|------------|--------|
-| 054 | Align comment-input timecode chip with first text line | #8 | P2 | S | — | TODO |
-| 055 | Uploads & notifications become compact anchored popovers | #9 | P2 | S–M | — | TODO |
-| 056 | Mobile "Show comments" bar below player (editor + guest); hide top icon on mobile | #10 | P1 | S–M | — | TODO |
+| 054 | Align comment-input timecode chip with first text line | #8 | P2 | S | — | DONE ✓ verified 07-03 — chip line box matches textarea first line |
+| 055 | Uploads & notifications become compact anchored popovers | #9 | P2 | S–M | — | DONE ✓ verified 07-03 — compact desktop/mobile popovers |
+| 056 | Mobile "Show comments" bar below player (editor + guest); hide top icon on mobile | #10 | P1 | S–M | — | DONE ✓ verified 07-03 — on branch `advisor/056-mobile-show-comments-bar` (`1ff585b`), unmerged |
 
 ### Recommended execution order (round 6)
 
@@ -351,6 +351,60 @@ All plans FreeFrame `apps/web`, layout/behavior only, retheme-safe.
 | #8 timecode chip misaligned | **054** — chip `mt-[9px]`/`leading-none` vs textarea `py-2.5`/19.5px line box |
 | #9 uploads/notif full-height drawers | **055** — `h-[calc(100vh-2.75rem)]` drawers → anchored `max-h-[min(70dvh,560px)]` popovers |
 | #10 mobile comments toggle not ergonomic | **056** — "Show comments (N)" bar below player, top icon hidden below `md` |
+
+## Reconcile log — 2026-07-03 (run 2)
+
+Run against FreeFrame HEAD `48d6857` (main) and projmgmt HEAD `1905a0b`. Since the prior log, the
+round-5 batch landed in `b1b4458` and the round-6 plan docs in `48d6857`. Working tree is **dirty
+again**: the round-6 executor work for **054 + 055** (3 web files + this README's status rows) is
+applied but **UNCOMMITTED**.
+
+- **054 — DONE, verified (uncommitted).** `mt-[9px]` → 0 matches, `leading-[19.5px]` → 1 in
+  `comment-input.tsx`; scope clean (only the chip span). Visual baseline check was the executor's
+  (not re-run — static anchors + gate hold).
+- **055 — DONE, verified (uncommitted).** `h-[calc(100vh-2.75rem)]` → 0 across `components/layout/`;
+  `max-h-[min(70dvh,560px)]` ×1 in each of `uploads-panel.tsx` / `notification-drawer.tsx`;
+  empty-state `min-h-[260px]` ×1; plan-051's `pointer-coarse:opacity-100` survives in
+  `uploads-panel.tsx`. Live popover check was the executor's.
+- **Full gate (real, run this session):** `pnpm exec tsc --noEmit` → **0 errors** ("No errors found";
+  the rtk wrapper's exit 1 is the known wrapper artifact); `pnpm test` → **141 passed (141)** across
+  20 files (unchanged — 054/055 are class-string-only). `pnpm lint`/`pnpm build` not re-run (no
+  plugin/config changes this round).
+- **047–052 — re-confirmed on committed HEAD.** Round 5 now lives in `b1b4458`; spot anchors all
+  hold post-commit (`fetchShareStreamInfo` ×2, `poster` ×3, `pointer-coarse` plugin, transport-bar
+  `text-xs sm:text-sm`, share-dialog `sm:w-96`).
+- **056 — TODO, no drift, executable now (P1).** Its drift diff (`bf3d541..HEAD` + working tree) on
+  the editor asset page and `folder-share-viewer.tsx` is empty — 054/055 touched disjoint files.
+  Run it alone (nothing else may edit `folder-share-viewer.tsx` concurrently).
+- **Retheme drift processed (055's maintenance note honored).** **037** — known-drift note rewritten:
+  both shells are now anchored popovers; Step 5 restyles the popover shells, preserving anchoring/
+  `max-h`/`overflow-hidden` classes; current-state bullets updated. **039** — drift note + chip
+  excerpt + Step 4 updated: preserve 054's `mt-2.5 px-1.5 py-0 leading-[19.5px]`, recolor only.
+  **036** — note extended: 055's shell conversion doesn't touch the progress-row internals it
+  migrates. **034/035/038/040 — unaffected** (drift-check files untouched by 054/055). 034 remains
+  the next executable round-3 plan.
+- **004 / 005 — TODO, re-confirmed: no drift.** projmgmt still at `1905a0b`, tree clean →
+  zero drift by construction; `src/lib/freeframe.ts` still absent (004 unexecuted). Both executable;
+  004's end-to-end case still needs a deployed, reachable FreeFrame (runtime precondition).
+- **Nothing newly rejected or blocked. No stale IN PROGRESS.** 053 stays REJECTED.
+- **056 — DONE, verified on branch `advisor/056-mobile-show-comments-bar` (`1ff585b`, off `48d6857`),
+  UNMERGED** (verified later this same run, after the maintainer reported it executed). Diff reviewed
+  hunk-by-hunk against the plan: exact match — `MessageSquare` import added (editor page; guest file
+  already had it, ×5), both top-bar toggles gated `hidden md:flex`, both "Show comments (N)" bars
+  inserted between viewer column and `{sidebarOpen && …}` with the plan's exact class string. All 4
+  step grep anchors → expected counts on the branch blobs. Scope clean (2 in-scope files + README
+  row). `git merge-tree` vs main → **0 conflicts** on code. **Gate (tsc/test) and the 390px live
+  check are the executor's** — not re-run here (branch not checked out; main's tree is dirty with
+  054/055). Re-run the web gate after merge. Merge note: the branch's `plans/README.md` flips 056 to
+  DONE while marking 054/055 TODO (it branched before their rows updated) — resolve README to
+  **ours** (this file), which now carries all three DONE.
+
+**⚠ Tracking hygiene (maintainer action):** commit the 054/055 batch + this run's plan refreshes
+(036/037/039, README), then merge `advisor/056-mobile-show-comments-bar` (README → ours) and re-run
+`pnpm exec tsc --noEmit && pnpm test` in `apps/web/`.
+
+**Executable right now:** FreeFrame **034** (design tokens — unlocks 035–040; commit + merge the
+above first); projmgmt **004** and **005**.
 
 ## Reconcile log — 2026-07-03
 
