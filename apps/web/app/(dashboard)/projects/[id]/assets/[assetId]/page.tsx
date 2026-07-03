@@ -14,6 +14,7 @@ import { CommentInput } from '@/components/review/comment-input'
 // ApprovalBar removed for now
 import { VersionSwitcher } from '@/components/review/version-switcher'
 import { ShareDialog } from '@/components/review/share-dialog'
+import { Segmented } from '@/components/ui/segmented'
 import { useReviewStore } from '@/stores/review-store'
 import { useAuthStore } from '@/stores/auth-store'
 import { useComments } from '@/hooks/use-comments'
@@ -331,19 +332,18 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
 
   return (
     <div className="absolute inset-0 flex flex-col overflow-hidden">
-      {/* ─── Top bar (Frame.io style) ──────────────────────────────────── */}
-      <div className="flex items-center justify-between border-b border-border px-3 h-12 bg-bg-secondary shrink-0">
+      <div className="flex items-center justify-between border-b border-border px-3 sm:px-5 h-14 bg-bg-primary shrink-0">
         {/* Left: back + breadcrumb */}
         <div className="flex items-center gap-1 min-w-0 flex-1">
           <Link
             href={`/projects/${asset.project_id}`}
-            className="flex items-center justify-center h-7 w-7 rounded-md text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors shrink-0"
+            className="flex items-center justify-center h-8 w-8 rounded border border-transparent text-text-secondary hover:text-text-primary hover:border-border transition-colors shrink-0"
           >
             <ArrowLeft className="h-4 w-4" />
           </Link>
 
           {/* Asset name only */}
-          <span className="text-[13px] text-text-primary font-medium truncate">
+          <span className="text-sm font-semibold tracking-[-0.01em] text-text-primary truncate">
             {asset.name}
           </span>
         </div>
@@ -354,18 +354,18 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
             <button
               onClick={() => prevAsset && navigateAsset(prevAsset.id)}
               disabled={!prevAsset}
-              className="flex items-center justify-center h-7 w-7 rounded-md text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              className="flex items-center justify-center h-8 w-8 rounded border border-transparent text-text-secondary hover:text-text-primary hover:border-border transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
               title="Previous asset (←)"
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
-            <span className="hidden sm:inline text-xs text-text-secondary tabular-nums px-1">
+            <span className="hidden sm:inline font-dot text-xs text-text-secondary tabular-nums px-1">
               {currentIndex + 1} of {totalAssets}
             </span>
             <button
               onClick={() => nextAsset && navigateAsset(nextAsset.id)}
               disabled={!nextAsset}
-              className="flex items-center justify-center h-7 w-7 rounded-md text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              className="flex items-center justify-center h-8 w-8 rounded border border-transparent text-text-secondary hover:text-text-primary hover:border-border transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
               title="Next asset (→)"
             >
               <ChevronRight className="h-4 w-4" />
@@ -393,20 +393,20 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
           <VersionSwitcher versions={versions} />
           <button
             onClick={() => versionFileInputRef.current?.click()}
-            className="inline-flex items-center gap-1.5 rounded-md px-2.5 h-8 text-xs font-medium border border-border text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors"
+            className="inline-flex h-[34px] items-center gap-2 rounded border border-border-strong px-3.5 font-mono text-[11px] uppercase tracking-[0.08em] text-text-primary hover:border-text-primary hover:bg-bg-hover transition-colors"
             title="Upload new version"
           >
             <Upload className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">New Version</span>
+            <span className="hidden sm:inline">New version</span>
           </button>
           <ShareDialog assetId={asset.id} assetName={asset.name} projectId={projectId} asset={asset} />
           <button
             onClick={() => setSidebarOpen((p) => !p)}
             className={cn(
-              'hidden md:flex items-center justify-center h-8 w-8 rounded-md transition-colors',
+              'hidden md:flex items-center justify-center h-[34px] w-[34px] rounded border transition-colors',
               sidebarOpen
-                ? 'bg-bg-hover text-text-primary'
-                : 'text-text-tertiary hover:text-text-primary hover:bg-bg-hover',
+                ? 'border-border-strong text-text-primary'
+                : 'border-border text-text-secondary hover:text-text-primary hover:border-border-strong',
             )}
             title="Toggle sidebar"
           >
@@ -418,7 +418,7 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
       {/* ─── Main content: viewer + sidebar ────────────────────────────── */}
       <div className="flex flex-col md:flex-row flex-1 overflow-hidden min-h-0">
         {/* Left: viewer column */}
-        <div className="flex-1 flex flex-col bg-bg-primary overflow-hidden min-w-0">
+        <div className="ff-dotgrid flex-1 flex flex-col bg-bg-primary overflow-hidden min-w-0">
           {/* Media viewer */}
           {renderMediaViewer()}
         </div>
@@ -435,7 +435,7 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
 
         {/* Right: comments sidebar */}
         {sidebarOpen && (
-          <div className="w-full h-[55vh] md:h-auto md:w-[360px] flex flex-col border-t md:border-t-0 border-l-0 md:border-l border-border bg-bg-secondary shrink-0 animate-in slide-in-from-bottom-2 md:slide-in-from-right-2 duration-150">
+          <div className="w-full h-[55vh] md:h-auto md:w-[372px] flex flex-col border-t md:border-t-0 border-l-0 md:border-l border-border bg-bg-secondary shrink-0 animate-in slide-in-from-bottom-2 md:slide-in-from-right-2 duration-150">
             <button
               onClick={() => setSidebarOpen(false)}
               className="md:hidden flex items-center justify-center gap-1.5 w-full py-2 text-xs text-text-tertiary border-b border-border"
@@ -444,32 +444,16 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
               Hide comments
             </button>
 
-            {/* Tabs (Frame.io pill style) */}
-            <div className="px-4 pt-3 pb-2 shrink-0">
-              <div className="flex items-center bg-bg-tertiary rounded-lg p-0.5">
-                <button
-                  onClick={() => setActiveTab('comments')}
-                  className={cn(
-                    'flex-1 py-1.5 text-[13px] font-medium rounded-md transition-all',
-                    activeTab === 'comments'
-                      ? 'bg-bg-hover text-text-primary shadow-sm'
-                      : 'text-text-tertiary hover:text-text-secondary',
-                  )}
-                >
-                  Comments
-                </button>
-                <button
-                  onClick={() => setActiveTab('fields')}
-                  className={cn(
-                    'flex-1 py-1.5 text-[13px] font-medium rounded-md transition-all',
-                    activeTab === 'fields'
-                      ? 'bg-bg-hover text-text-primary shadow-sm'
-                      : 'text-text-tertiary hover:text-text-secondary',
-                  )}
-                >
-                  Fields
-                </button>
-              </div>
+            <div className="px-4 pt-3.5 pb-2.5 shrink-0">
+              <Segmented
+                stretch
+                options={[
+                  { value: 'comments', label: 'Comments' },
+                  { value: 'fields', label: 'Fields' },
+                ] as const}
+                value={activeTab}
+                onChange={setActiveTab}
+              />
             </div>
 
             {/* Content */}

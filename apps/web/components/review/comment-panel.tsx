@@ -874,14 +874,14 @@ export function CommentPanel({
   return (
     <div className={cn("flex flex-col flex-1 min-h-0", className)}>
       {/* ─── Toolbar ──────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between px-4 py-2.5 shrink-0">
+      <div className="flex items-center justify-between px-4 py-2.5 shrink-0 border-b border-border-secondary">
         {/* Visibility dropdown */}
         <div className="relative">
           <button
             className={cn(
-              "flex items-center gap-1.5 text-[13px] font-medium transition-colors rounded-md px-2 py-1",
+              "flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-[0.12em] transition-colors",
               visOpen
-                ? "bg-bg-tertiary text-text-primary"
+                ? "text-text-primary"
                 : "text-text-secondary hover:text-text-primary",
             )}
             onClick={() => {
@@ -891,7 +891,7 @@ export function CommentPanel({
             }}
           >
             {visLabel}
-            <ChevronDown className="h-3.5 w-3.5" />
+            <ChevronDown className="h-3 w-3" />
           </button>
           <Dropdown
             open={visOpen}
@@ -943,10 +943,10 @@ export function CommentPanel({
           <div className="relative">
             <button
               className={cn(
-                "h-7 w-7 flex items-center justify-center rounded-md transition-colors",
+                "h-[26px] w-[26px] flex items-center justify-center rounded-none transition-colors",
                 filterOpen || hasActiveFilters
-                  ? "text-accent bg-accent/10"
-                  : "text-text-tertiary hover:text-text-secondary hover:bg-bg-tertiary",
+                  ? "text-accent"
+                  : "text-text-tertiary hover:text-text-primary",
               )}
               title="Filter"
               onClick={() => {
@@ -1046,10 +1046,10 @@ export function CommentPanel({
           <div className="relative">
             <button
               className={cn(
-                "h-7 w-7 flex items-center justify-center rounded-md transition-colors",
+                "h-[26px] w-[26px] flex items-center justify-center rounded-none transition-colors",
                 sortOpen
-                  ? "text-accent bg-accent/10"
-                  : "text-text-tertiary hover:text-text-secondary hover:bg-bg-tertiary",
+                  ? "text-accent"
+                  : "text-text-tertiary hover:text-text-primary",
               )}
               title="Sort"
               onClick={() => {
@@ -1100,10 +1100,10 @@ export function CommentPanel({
           {/* Search */}
           <button
             className={cn(
-              "h-7 w-7 flex items-center justify-center rounded-md transition-colors",
+              "h-[26px] w-[26px] flex items-center justify-center rounded-none transition-colors",
               searchOpen
-                ? "text-accent bg-accent/10"
-                : "text-text-tertiary hover:text-text-secondary hover:bg-bg-tertiary",
+                ? "text-accent"
+                : "text-text-tertiary hover:text-text-primary",
             )}
             title="Search"
             onClick={() => {

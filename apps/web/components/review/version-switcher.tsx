@@ -51,10 +51,10 @@ export function VersionSwitcher({ versions, className }: VersionSwitcherProps) {
 
   return (
     <div className={cn('flex items-center gap-1.5', className)}>
-      <span className="text-xs text-text-tertiary shrink-0">Version:</span>
+      <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-text-tertiary shrink-0">Version:</span>
       <DropdownMenu.Root>
         <DropdownMenu.Trigger asChild>
-          <button className="inline-flex items-center gap-1 rounded-md px-2.5 py-1 bg-accent text-white text-xs font-medium hover:bg-accent/90 transition-colors outline-none">
+          <button className="inline-flex h-[26px] items-center gap-1 rounded-sm bg-accent px-2.5 font-mono text-[11px] tracking-[0.08em] text-white hover:bg-accent-hover transition-colors outline-none">
             v{currentVersion?.version_number ?? sorted[sorted.length - 1].version_number}
             {sorted.length > 1 && <ChevronDown className="h-3 w-3 opacity-70" />}
           </button>
@@ -64,7 +64,7 @@ export function VersionSwitcher({ versions, className }: VersionSwitcherProps) {
             <DropdownMenu.Content
               align="end"
               sideOffset={6}
-              className="z-[100] min-w-[160px] rounded-xl border border-border bg-bg-elevated shadow-2xl py-1.5 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
+              className="z-[100] min-w-[160px] rounded-lg border border-border bg-bg-elevated py-1.5 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
             >
               {sorted.map((version) => {
                 const isActive = currentVersion?.id === version.id

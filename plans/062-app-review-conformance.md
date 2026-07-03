@@ -21,6 +21,12 @@
 - **Depends on**: none hard; 059–061 recommended first for consistent review. Soft: 057/058 merged.
 - **Category**: design-conformance
 - **Planned at**: commit `f7fd883`, 2026-07-04
+- **Amended**: 2026-07-04 after a first execution hit the Step-4 STOP (dot-grid
+  bleeding through the transport bar). Root cause: `video-player.tsx:358` and
+  `audio-player.tsx:281` both use `bg-bg-secondary/80` — dead (opaque) before
+  plan 057's alpha tokens, genuinely translucent after. Step 4b now authorizes
+  the two one-token fixes; the corresponding STOP condition is retired. All
+  other steps from the first execution were verified and stand.
 
 ## Why this matters
 
@@ -170,10 +176,14 @@ Run all in `apps/web/`:
 - `apps/web/components/review/version-switcher.tsx`
 - `apps/web/components/review/comment-panel.tsx` (toolbar typography ONLY —
   lines ~874–990 region)
+- `apps/web/components/review/video-player.tsx` — **Step 4b's one-token edit
+  on line 358 ONLY**; everything else in the file stays untouched.
+- `apps/web/components/review/audio-player.tsx` — **Step 4b's one-token edit
+  on line 281 ONLY**.
 
 **Out of scope** (do NOT touch):
-- `video-player.tsx`, `audio-player.tsx`, `image-viewer.tsx` — 039 done;
-  deferred conformance pass is separate.
+- Everything else in `video-player.tsx` / `audio-player.tsx`, and all of
+  `image-viewer.tsx` — 039 done; deferred conformance pass is separate.
 - `comment-input.tsx` — 054's alignment anchors (`leading-[19.5px]`) live here.
 - `share-dialog.tsx` + all `share-*` files — plan 058.
 - `folder-share-viewer.tsx` (guest screen) — same spec applies but rounds 5/6
@@ -236,12 +246,30 @@ In `version-switcher.tsx`:
 
 Viewer column div (line 421): add the texture and stage padding:
 `className="ff-dotgrid flex-1 flex flex-col bg-bg-primary overflow-hidden min-w-0"`.
-Do NOT wrap or pad the players themselves — `ff-dotgrid` is background-only and
-the transport bar (inside `video-player.tsx`) sits on its own opaque surface.
-If the texture visibly bleeds through the video transport bar, STOP (that means
-the player's bar is transparent and fixing it is out of scope).
+Do NOT wrap or pad the players themselves — `ff-dotgrid` is background-only.
 
 **Verify**: `grep -c "ff-dotgrid" "app/(dashboard)/projects/[id]/assets/[assetId]/page.tsx"` → `1`
+
+### Step 4b: Opaque transport surfaces (amendment)
+
+The transport bars became translucent when plan 057's alpha tokens landed
+(`/80` was previously a dead modifier), so the Step-4 texture bleeds through.
+The design spec puts transport bars on an opaque surface with a top hairline.
+Two one-token edits — change `bg-bg-secondary/80` → `bg-bg-secondary`, nothing
+else on either line:
+
+`components/review/video-player.tsx:358` (current):
+```tsx
+<div className="flex items-center justify-between h-12 px-2 sm:px-4 bg-bg-secondary/80 border-t border-border shrink-0">
+```
+The `px-2 sm:px-4` (plan 052 mobile anchor) and every other class must stay
+byte-identical.
+
+`components/review/audio-player.tsx:281` (current): same class pattern
+(`... h-12 px-4 bg-bg-secondary/80 border-t border-border ...`) — same
+one-token change.
+
+**Verify**: `grep -rn "bg-bg-secondary/80" components/review/video-player.tsx components/review/audio-player.tsx` → 0 matches; `grep -c "px-2 sm:px-4" components/review/video-player.tsx` → unchanged from before your edit
 
 ### Step 5: Sidebar width + segmented tabs
 
@@ -308,6 +336,7 @@ Update class-string assertions only.
 - [ ] `pnpm exec tsc --noEmit` exits 0; `pnpm test` all pass; `pnpm build` exit 0
 - [ ] All four Step-7 anchor greps match
 - [ ] `grep -c "ff-dotgrid" "app/(dashboard)/projects/[id]/assets/[assetId]/page.tsx"` → `1`
+- [ ] `grep -rn "bg-bg-secondary/80" components/review/` → 0 matches (Step 4b)
 - [ ] `grep -rn "shadow-sm\|shadow-2xl" "app/(dashboard)/projects/[id]/assets/[assetId]/page.tsx" components/review/version-switcher.tsx` → 0 matches
 - [ ] No files outside the in-scope list modified (`git status`)
 - [ ] `plans/README.md` status row updated
@@ -319,7 +348,9 @@ Stop and report back (do not improvise) if:
 - Excerpts don't match the live code (drift).
 - Any Step-7 anchor grep fails after your edits — you clobbered a 029/056
   mobile anchor; revert that hunk and report.
-- The dot-grid texture bleeds through the video transport bar (Step 4).
+- The dot-grid texture still bleeds through a transport bar AFTER Step 4b's
+  two edits (means a third translucent surface exists — report it, don't hunt).
+- Step 4b requires touching anything beyond the two cited class strings.
 - A `comment-panel` test failure is behavioral (filter/visibility logic),
   not a class-string assertion.
 - `Segmented`'s generic typing fights `activeTab`'s `'comments' | 'fields'`

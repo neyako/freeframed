@@ -400,7 +400,7 @@ logic/data changes. Planned from branch `advisor/058-share-popup-redesign`
 | 059 | Global header conformance — 34px bordered controls, 0.18em breadcrumb, tertiary-bg search | app-chrome.dc | P2 | S–M | — (soft: 057/058 merged) | TODO |
 | 060 | Projects page — big title + Doto count, Segmented view toggle, mono sections, dashed tile, kills violet/fuchsia gradient + blue/amber pills | app-projects.dc | P2 | M | — (soft: 057) | TODO |
 | 061 | Library screen — 250px mono sidebar, accent-muted active folder, red storage track (amber dies), mono navigator, Segmented right-panel tabs, kills `#1a1a1f` popover | app-library.dc | P2 | M–L | 060 (soft, shared language) | TODO |
-| 062 | Review screen — hairline top bar + mono actions, red version chip, `ff-dotgrid` stage, 372px sidebar + Segmented tabs, mono comment toolbar | app-review.dc | P1 | M | — (soft: 059–061 first) | TODO |
+| 062 | Review screen — hairline top bar + mono actions, red version chip, `ff-dotgrid` stage, 372px sidebar + Segmented tabs, mono comment toolbar | app-review.dc | P1 | M | — (soft: 059–061 first) | TODO — unblocked 07-04: plan amended with Step 4b (one-token `bg-bg-secondary/80`→opaque in video-player:358 + audio-player:281; 057's alpha tokens made the formerly-dead `/80` real). Steps 1–3/5–6 applied+verified in working tree; re-dispatch to finish 4b + gate |
 
 ### Recommended execution order (round 8)
 
