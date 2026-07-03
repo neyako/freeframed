@@ -894,7 +894,7 @@ function ShareReviewInner({
               <Download className="h-3 w-3" /> Download
             </button>
           )}
-          <button onClick={() => setSidebarOpen(v => !v)} className="flex items-center justify-center h-8 w-8 rounded-md text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors">
+          <button onClick={() => setSidebarOpen(v => !v)} className="hidden md:flex items-center justify-center h-8 w-8 rounded-md text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors">
             {sidebarOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
           </button>
         </div>
@@ -940,6 +940,16 @@ function ShareReviewInner({
             </div>
           )}
         </div>
+
+        {!sidebarOpen && (
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="md:hidden flex items-center justify-center gap-1.5 w-full py-2.5 text-xs font-medium text-text-secondary border-t border-border bg-bg-secondary shrink-0"
+          >
+            <MessageSquare className="h-4 w-4" />
+            Show comments{comments.length > 0 ? ` (${comments.length})` : ''}
+          </button>
+        )}
 
         {/* Right sidebar — reuses project comment panel */}
         {sidebarOpen && (

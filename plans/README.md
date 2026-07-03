@@ -324,7 +324,7 @@ All plans FreeFrame `apps/web`, layout/behavior only, retheme-safe.
 |------|-------|------|----------|--------|------------|--------|
 | 054 | Align comment-input timecode chip with first text line | #8 | P2 | S | — | TODO |
 | 055 | Uploads & notifications become compact anchored popovers | #9 | P2 | S–M | — | TODO |
-| 056 | Mobile "Show comments" bar below player (editor + guest); hide top icon on mobile | #10 | P1 | S–M | — | TODO |
+| 056 | Mobile "Show comments" bar below player (editor + guest); hide top icon on mobile | #10 | P1 | S–M | — | DONE ✓ verified 07-03 |
 
 ### Recommended execution order (round 6)
 
