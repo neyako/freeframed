@@ -43,7 +43,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html
+      lang="en"
+      suppressHydrationWarning
+      className={`${spaceGrotesk.variable} ${spaceMono.variable} ${doto.variable}`}
+    >
       <head>
         {/* Inline script to apply theme BEFORE paint — prevents flash */}
         <script
@@ -52,9 +56,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body
-        className={`${spaceGrotesk.variable} ${spaceMono.variable} ${doto.variable} font-sans antialiased`}
-      >
+      <body className="font-sans antialiased">
         <ThemeInitializer />
         <ToastProvider>{children}</ToastProvider>
       </body>

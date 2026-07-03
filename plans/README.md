@@ -392,6 +392,13 @@ untracked `app/fonts/` (doto-variable.woff2), `components/ui/{switch,segmented,p
   contract (053 was rejected as premature — the retheme it waited for is now live); the
   audio-player/image-viewer conformance pass per 039's maintenance notes.
 - **Nothing newly rejected or blocked. No stale IN PROGRESS.** 053 stays REJECTED.
+- **Post-QA hotfix (same day, maintainer-requested):** manual QA showed Times/serif across the app.
+  Root cause: 034 put the next/font variable classes on `<body>` while `globals.css` composes
+  `--font-sans/--font-mono/--font-dot` at `:root` — custom-property substitution happens at the
+  declaring element (`<html>`), where the font vars didn't exist, so all three composite vars went
+  invalid → `font-family` fell to the browser default. jsdom tests can't catch this (no font
+  rendering). Fix: variable classes moved to `<html>` (`app/layout.tsx`). Verified live in Chrome
+  (computed font = Space Grotesk, `document.fonts.check` true) + gate green (tsc 0, 164/164).
 
 **⚠ Tracking hygiene (maintainer action):** commit the round-3 batch. The untracked files
 (`app/fonts/`, `components/ui/switch|segmented|progress.tsx`, `components/auth/__tests__/`,
