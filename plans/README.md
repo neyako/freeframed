@@ -352,6 +352,37 @@ All plans FreeFrame `apps/web`, layout/behavior only, retheme-safe.
 | #9 uploads/notif full-height drawers | **055** — `h-[calc(100vh-2.75rem)]` drawers → anchored `max-h-[min(70dvh,560px)]` popovers |
 | #10 mobile comments toggle not ergonomic | **056** — "Show comments (N)" bar below player, top icon hidden below `md` |
 
+## Round 7 — post-retheme QA: design drift (added 2026-07-03, planned at `955feed`)
+
+Two items from the maintainer's manual QA of the merged retheme, both traced
+to root causes this session. The design project gained/updated specs today
+(`share.dc.html` new, `index.dc.html`/`freeframe.css`/`chrome.dc.html`
+revised) — plans inline everything executors need.
+
+| Plan | Title | Finding | Priority | Effort | Depends on | Status |
+|------|-------|---------|----------|--------|------------|--------|
+| 057 | Alpha-capable color tokens — opacity modifiers compile, default ring red | ~100 dead `/NN` classes (Tailwind can't alpha a `var()` color); bare `ring-1` renders Tailwind default **blue** — the "blue-y" comment-input focus, CONFIRMED live | P1 | S–M | — | TODO |
+| 058 | Share popup rebuild to `ff-pop` spec — hairline rows, segmented Access, red only on Revoke | popup is "nine stacked boxes" vs the new share.dc.html spec | P1 | M | 057 (soft) | TODO |
+
+### Execution order (round 7)
+
+1. **057** — config-level root cause, zero call-site edits; also what makes
+   058's accent tints render honestly during its visual pass.
+2. **058** — after 057. Disjoint file sets, but don't run in parallel with
+   anything editing `components/review/share-*`.
+
+### Decisions & assumptions (redirect before execution if wrong)
+
+- **057 fixes the mechanism, not the call sites**: all ~100 authored `/NN`
+  tints light up as written. Any that read as noise post-fix are one-line
+  follow-ups, not part of the plan.
+- **058 hardcodes bilingual EN/VI labels** exactly per the design's
+  `ff-pop__label-en`/`-vi` pairs — the design pillar is "native Vietnamese
+  throughout". No i18n layer is introduced.
+- Design mock's Access options "View/Comment/Edit" map to the app's real
+  `view | comment | approve`.
+- The mock's head badge ("Live · v1") is skipped as decoration.
+
 ## Reconcile log — 2026-07-03 (run 3)
 
 Run against FreeFrame HEAD `27a37d3` (main) and projmgmt HEAD `1905a0b`. Since run 2 the maintainer
