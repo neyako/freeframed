@@ -361,8 +361,8 @@ revised) — plans inline everything executors need.
 
 | Plan | Title | Finding | Priority | Effort | Depends on | Status |
 |------|-------|---------|----------|--------|------------|--------|
-| 057 | Alpha-capable color tokens — opacity modifiers compile, default ring red | ~100 dead `/NN` classes (Tailwind can't alpha a `var()` color); bare `ring-1` renders Tailwind default **blue** — the "blue-y" comment-input focus, CONFIRMED live | P1 | S–M | — | TODO |
-| 058 | Share popup rebuild to `ff-pop` spec — hairline rows, segmented Access, red only on Revoke | popup is "nine stacked boxes" vs the new share.dc.html spec | P1 | M | 057 (soft) | TODO |
+| 057 | Alpha-capable color tokens — opacity modifiers compile, default ring red | ~100 dead `/NN` classes (Tailwind can't alpha a `var()` color); bare `ring-1` renders Tailwind default **blue** — the "blue-y" comment-input focus, CONFIRMED live | P1 | S–M | — | BLOCKED — broad CSS grep still matches pre-existing `bg-blue-500` utilities outside 057 scope |
+| 058 | Share popup rebuild to `ff-pop` spec — hairline rows, segmented Access, red only on Revoke | popup is "nine stacked boxes" vs the new share.dc.html spec | P1 | M | 057 (soft) | DONE ✓ verified 07-03 |
 
 ### Execution order (round 7)
 
@@ -382,6 +382,57 @@ revised) — plans inline everything executors need.
 - Design mock's Access options "View/Comment/Edit" map to the app's real
   `view | comment | approve`.
 - The mock's head badge ("Live · v1") is skipped as decoration.
+
+## Round 8 — screen-level design conformance (added 2026-07-04, planned at `f7fd883`)
+
+The design project gained **screen-level specs** on 2026-07-03:
+`app-chrome.dc.html`, `app-projects.dc.html`, `app-library.dc.html`,
+`app-review.dc.html` (+ `app-settings.dc.html`, not requested this round).
+Rounds 3/7 conformed tokens, primitives and the share popup; these four plans
+conform the actual screens. All specs are inlined in the plan files — executors
+don't need design-project access. All FreeFrame `apps/web`, presentation-only
+(class strings + swapping hand-rolled controls for existing primitives); zero
+logic/data changes. Planned from branch `advisor/058-share-popup-redesign`
+(HEAD `f7fd883`, tree carrying uncommitted 057/058 work).
+
+| Plan | Title | Spec | Priority | Effort | Depends on | Status |
+|------|-------|------|----------|--------|------------|--------|
+| 059 | Global header conformance — 34px bordered controls, 0.18em breadcrumb, tertiary-bg search | app-chrome.dc | P2 | S–M | — (soft: 057/058 merged) | TODO |
+| 060 | Projects page — big title + Doto count, Segmented view toggle, mono sections, dashed tile, kills violet/fuchsia gradient + blue/amber pills | app-projects.dc | P2 | M | — (soft: 057) | TODO |
+| 061 | Library screen — 250px mono sidebar, accent-muted active folder, red storage track (amber dies), mono navigator, Segmented right-panel tabs, kills `#1a1a1f` popover | app-library.dc | P2 | M–L | 060 (soft, shared language) | TODO |
+| 062 | Review screen — hairline top bar + mono actions, red version chip, `ff-dotgrid` stage, 372px sidebar + Segmented tabs, mono comment toolbar | app-review.dc | P1 | M | — (soft: 059–061 first) | TODO |
+
+### Recommended execution order (round 8)
+
+0. **Merge 057/058 first** (they sit uncommitted on `advisor/058-share-popup-redesign`;
+   round-8 executors dispatch from committed state).
+1. **062** (P1) — the core screen, highest user-facing impact.
+2. **059 → 060 → 061** — shell outward-in; 061 after 060 for the shared
+   mono-section language (no file overlap, order is soft).
+- Parallel-safe pairs: 059+060 (disjoint files). 061 and 062 both introduce
+  `Segmented`-tab patterns but touch different files — safe in parallel,
+  though whichever lands second should match the first's exact usage.
+
+### Dependency notes (round 8)
+
+- None of 059–062 touch `components/review/share-*` (058) or
+  `components/ui/*` / `components/projects/asset-grid.tsx` /
+  `asset-card.tsx` / `project-card.tsx` (035/036/038 settled).
+- 062 must preserve the 029/056 mobile anchors on the review page; its Step 7
+  audits them by grep.
+- All four stamp `f7fd883`; when the maintainer commits 057/058 first
+  (expected), the drift check will show `globals.css`/`tailwind.config.ts`/
+  share-* diffs — those are out-of-scope files for every round-8 plan and
+  not a STOP.
+
+### Deferred (round 8)
+
+- **`app-settings.dc.html`** — settings screen spec exists; not in the
+  maintainer's requested set. Plan on request.
+- **Guest share screen conformance** (`folder-share-viewer.tsx`) — same
+  app-review spec applies, but the file is dense with rounds-5/6 anchors;
+  needs its own plan with a fresh anchor inventory (see 062 maintenance notes).
+- **Dashboard home redesign** — no screen spec; 060 does token hygiene only.
 
 ## Reconcile log — 2026-07-03 (run 3)
 
