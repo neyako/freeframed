@@ -4,6 +4,53 @@ import { api } from '@/lib/api'
 import type { AssetResponse } from '@/types'
 
 const CHUNK_SIZE = 10 * 1024 * 1024 // 10 MB
+
+interface PutPartResult {
+  etag: string
+}
+
+/**
+ * PUT a single multipart chunk with byte-level progress.
+ * `onProgress` receives the fraction (0..1) of THIS part uploaded so far.
+ */
+function putPartWithProgress(
+  url: string,
+  chunk: Blob,
+  signal: AbortSignal,
+  onProgress: (fraction: number) => void,
+): Promise<PutPartResult> {
+  return new Promise<PutPartResult>((resolve, reject) => {
+    if (signal.aborted) {
+      reject(new DOMException('Upload cancelled', 'AbortError'))
+      return
+    }
+    const xhr = new XMLHttpRequest()
+    xhr.open('PUT', url)
+    const onAbort = () => xhr.abort()
+    signal.addEventListener('abort', onAbort, { once: true })
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress(e.loaded / e.total)
+    }
+    xhr.onload = () => {
+      signal.removeEventListener('abort', onAbort)
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve({ etag: xhr.getResponseHeader('ETag') ?? '' })
+      } else {
+        reject(new Error(`Part failed: ${xhr.status} ${xhr.statusText}`))
+      }
+    }
+    xhr.onerror = () => {
+      signal.removeEventListener('abort', onAbort)
+      reject(new Error('Part failed: network error'))
+    }
+    xhr.onabort = () => {
+      signal.removeEventListener('abort', onAbort)
+      reject(new DOMException('Upload cancelled', 'AbortError'))
+    }
+    xhr.send(chunk)
+  })
+}
+
 const HISTORY_PAGE_SIZE = 20
 
 export type UploadStatus = 'pending' | 'uploading' | 'processing' | 'complete' | 'failed' | 'cancelled'
@@ -197,20 +244,16 @@ const storeCreator: StateCreator<UploadStore, [['zustand/persist', unknown]]> = 
             part_number: partNumber,
           })
 
-          const putResponse = await fetch(presigned_url, {
-            method: 'PUT',
-            body: chunk,
-            signal: controller.signal,
-          })
-
-          if (!putResponse.ok) {
-            throw new Error(`Part ${partNumber} failed: ${putResponse.statusText}`)
-          }
-
-          const etag = putResponse.headers.get('ETag') ?? ''
+          const { etag } = await putPartWithProgress(
+            presigned_url,
+            chunk,
+            controller.signal,
+            (fraction) => {
+              const overall = ((partNumber - 1 + fraction) / totalChunks) * 95
+              updateFile(id, { progress: Math.round(overall) })
+            },
+          )
           parts.push({ PartNumber: partNumber, ETag: etag })
-
-          updateFile(id, { progress: Math.round((partNumber / totalChunks) * 95) })
         }
 
         await api.post('/upload/complete', {
@@ -302,10 +345,16 @@ const storeCreator: StateCreator<UploadStore, [['zustand/persist', unknown]]> = 
           const { presigned_url } = await api.post<{ presigned_url: string }>('/upload/presign-part', {
             s3_key, upload_id, part_number: partNumber,
           })
-          const putResponse = await fetch(presigned_url, { method: 'PUT', body: chunk, signal: controller.signal })
-          if (!putResponse.ok) throw new Error(`Part ${partNumber} failed: ${putResponse.statusText}`)
-          parts.push({ PartNumber: partNumber, ETag: putResponse.headers.get('ETag') ?? '' })
-          updateFile(id, { progress: Math.round((partNumber / totalChunks) * 95) })
+          const { etag } = await putPartWithProgress(
+            presigned_url,
+            chunk,
+            controller.signal,
+            (fraction) => {
+              const overall = ((partNumber - 1 + fraction) / totalChunks) * 95
+              updateFile(id, { progress: Math.round(overall) })
+            },
+          )
+          parts.push({ PartNumber: partNumber, ETag: etag })
         }
 
         await api.post('/upload/complete', { s3_key, upload_id, asset_id: assetId, version_id, parts })
