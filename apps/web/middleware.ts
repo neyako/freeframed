@@ -4,7 +4,12 @@ import type { NextRequest } from 'next/server'
 const PUBLIC_ROUTES = ['/login', '/setup']
 const PUBLIC_PREFIXES = ['/invite/', '/share/']
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+// Server-side (middleware) must reach the API with an ABSOLUTE url — a
+// relative NEXT_PUBLIC_API_URL like "/api" (all-in-one) has no origin here.
+const PUBLIC_API_URL = process.env.NEXT_PUBLIC_API_URL || ''
+const API_URL =
+  process.env.INTERNAL_API_URL ||
+  (PUBLIC_API_URL.startsWith('http') ? PUBLIC_API_URL : 'http://127.0.0.1:8000')
 
 function isPublicRoute(pathname: string): boolean {
   if (PUBLIC_ROUTES.includes(pathname)) return true
