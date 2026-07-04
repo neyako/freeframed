@@ -9,6 +9,7 @@ import pytest
 
 from packages.transcoder import hwaccel
 from packages.transcoder.base import TranscodeJob, TranscodeResult
+from packages.transcoder.ffmpeg_transcoder import _parse_progress_percent
 from packages.transcoder.hwaccel import (
     BACKENDS,
     build_hls_command,
@@ -166,8 +167,13 @@ class TestTaskSettingsWiring:
                 captured["hwaccel"] = hwaccel
                 captured["vaapi_device"] = vaapi_device
 
-            async def transcode(self, job: TranscodeJob) -> TranscodeResult:
+            async def transcode(
+                self,
+                job: TranscodeJob,
+                progress_callback=None,
+            ) -> TranscodeResult:
                 captured["job"] = job
+                captured["progress_callback"] = progress_callback
                 return TranscodeResult(
                     success=True,
                     hls_prefix="processed/asset-1/version-1",
@@ -209,6 +215,7 @@ class TestTaskSettingsWiring:
         assert captured["hwaccel"] == "vaapi"
         assert captured["vaapi_device"] == "/dev/dri/renderD129"
         assert captured["job"].input_s3_key == "raw/input.mp4"
+        assert callable(captured["progress_callback"])
         assert media_file.s3_key_processed == "processed/asset-1/version-1"
         assert media_file.s3_key_thumbnail == "processed/asset-1/version-1/thumbnail.jpg"
         assert db.flushed is True
@@ -297,3 +304,25 @@ class TestBuildHlsCommand:
         assert cmd[0] == "ffmpeg"
         assert cmd[-1].endswith("playlist.m3u8")
         assert cmd.count("a:0") == len(QUALITIES)
+
+
+class TestParseProgressPercent:
+    def test_out_time_us_computes_percent_of_duration(self) -> None:
+        assert _parse_progress_percent("out_time_us=5000000", 10) == 50.0
+
+    def test_out_time_ms_field_is_also_microseconds(self) -> None:
+        # ffmpeg's out_time_ms is, confusingly, also microseconds.
+        assert _parse_progress_percent("out_time_ms=5000000", 10) == 50.0
+
+    def test_malformed_line_returns_none(self) -> None:
+        assert _parse_progress_percent("not a progress line", 10) is None
+        assert _parse_progress_percent("out_time_us=not-a-number", 10) is None
+
+    def test_zero_duration_returns_none(self) -> None:
+        assert _parse_progress_percent("out_time_us=5000000", 0) is None
+
+    def test_percent_is_capped_at_99(self) -> None:
+        assert _parse_progress_percent("out_time_us=20000000", 10) == 99.0
+
+    def test_unrelated_progress_key_returns_none(self) -> None:
+        assert _parse_progress_percent("frame=120", 10) is None
