@@ -40,7 +40,6 @@ export function CopyButton({
 
 interface ControlRowProps {
   readonly label: string;
-  readonly labelVi?: string;
   readonly children: React.ReactNode;
   readonly group?: boolean;
   readonly footer?: React.ReactNode;
@@ -48,7 +47,6 @@ interface ControlRowProps {
 
 export function ControlRow({
   label,
-  labelVi,
   children,
   group = false,
   footer,
@@ -63,9 +61,6 @@ export function ControlRow({
       >
         <div className="min-w-0">
           <p className="text-sm font-medium text-text-primary">{label}</p>
-          {labelVi && (
-            <p className="mt-0.5 text-xs text-text-secondary">{labelVi}</p>
-          )}
         </div>
         <div className="shrink-0">{children}</div>
       </div>

@@ -38,7 +38,7 @@ export function SharePanel({
           >
             <span className="inline-flex items-center gap-2">
               <Users className="h-3.5 w-3.5" />
-              Invite people · Mời
+              Invite people
             </span>
             <ChevronDown
               className={cn(
@@ -127,7 +127,7 @@ export function ShareDialog({
         >
           <div className="flex items-center justify-between gap-3 border-b border-border bg-bg-tertiary px-5 py-3.5">
             <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-text-primary">
-              Share · Chia sẻ
+              Share
             </span>
           </div>
           <SharePanel

@@ -70,7 +70,7 @@ describe("ShareDialog", () => {
 
     await user.click(screen.getByRole("button", { name: /share/i }));
 
-    expect(screen.getByText("Share · Chia sẻ")).toBeInTheDocument();
+    expect(screen.getByText("Share", { selector: "span" })).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /new share link/i }),
     ).not.toBeInTheDocument();
@@ -83,7 +83,6 @@ describe("ShareDialog", () => {
     expect(screen.getByText("Passphrase")).toBeInTheDocument();
     expect(screen.getByText("Expiration")).toBeInTheDocument();
     expect(screen.getByText("Watermark")).toBeInTheDocument();
-    expect(screen.getByText("Quyền truy cập")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^revoke$/i })).toHaveClass(
       "border-accent-line",
     );
