@@ -78,6 +78,7 @@ ENV DATABASE_URL=postgresql://freeframe:freeframe@127.0.0.1:5432/freeframe \
     TRANSCODING_CONCURRENCY=2 \
     EMAIL_CONCURRENCY=2 \
     NEXT_PUBLIC_API_URL=/api \
+    INTERNAL_API_URL=http://127.0.0.1:8000 \
     PORT=3000 \
     HOSTNAME=0.0.0.0 \
     PYTHONPATH=/workspace
