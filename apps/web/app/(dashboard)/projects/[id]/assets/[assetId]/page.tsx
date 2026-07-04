@@ -14,7 +14,6 @@ import { CommentInput } from '@/components/review/comment-input'
 // ApprovalBar removed for now
 import { VersionSwitcher } from '@/components/review/version-switcher'
 import { ShareDialog } from '@/components/review/share-dialog'
-import { Segmented } from '@/components/ui/segmented'
 import { useReviewStore } from '@/stores/review-store'
 import { useAuthStore } from '@/stores/auth-store'
 import { useComments } from '@/hooks/use-comments'
@@ -56,7 +55,6 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
   const setLabel = useBreadcrumbStore((s) => s.setLabel)
   usePageTitle(asset?.name ?? null)
   const [annotationData, setAnnotationData] = useState<Record<string, unknown> | null>(null)
-  const [activeTab, setActiveTab] = useState<'comments' | 'fields'>('comments')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const deepLinkApplied = useRef(false)
   const autoOpenedRef = useRef(false)
@@ -151,7 +149,6 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
     if (!target) return
     deepLinkApplied.current = true
     setFocusedCommentId(commentId)
-    setActiveTab('comments')
     if ((target as any).timecode_start !== null && (target as any).timecode_start !== undefined) {
       seekTo((target as any).timecode_start, true)
     }
@@ -444,75 +441,26 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
               Hide comments
             </button>
 
-            <div className="px-4 pt-3.5 pb-2.5 shrink-0">
-              <Segmented
-                stretch
-                options={[
-                  { value: 'comments', label: 'Comments' },
-                  { value: 'fields', label: 'Fields' },
-                ] as const}
-                value={activeTab}
-                onChange={setActiveTab}
-              />
-            </div>
-
             {/* Content */}
             <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-              {activeTab === 'comments' ? (
-                <>
-                  <CommentPanel
-                    comments={comments as any}
-                    currentUserId={user?.id}
-                    onResolve={resolveComment}
-                    onDelete={deleteComment}
-                    onAddReaction={addReaction}
-                    onRemoveReaction={removeReaction}
-                    onReply={() => {}}
-                    onSubmitReply={handleSubmitReply}
-                  />
-                  {canComment && (
-                    <CommentInput
-                      assetId={asset.id}
-                      projectId={asset.project_id}
-                      assetType={asset.asset_type}
-                      onSubmit={handleSubmitComment}
-                      annotationData={annotationData}
-                    />
-                  )}
-                </>
-              ) : (
-                <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-text-tertiary">Name</span>
-                      <span className="text-xs text-text-primary font-medium truncate ml-4">{asset.name}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-text-tertiary">Type</span>
-                      <span className="text-xs text-text-primary capitalize">{asset.asset_type.replace('_', ' ')}</span>
-                    </div>
-                    {currentVersion && (
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-text-tertiary">Version</span>
-                        <span className="text-xs text-text-primary">v{currentVersion.version_number}</span>
-                      </div>
-                    )}
-                    {currentVersion && (
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-text-tertiary">Processing</span>
-                        <span className={cn(
-                          'text-xs capitalize',
-                          currentVersion.processing_status === 'ready' && 'text-status-success',
-                          currentVersion.processing_status === 'processing' && 'text-status-warning',
-                          currentVersion.processing_status === 'failed' && 'text-status-error',
-                          currentVersion.processing_status === 'uploading' && 'text-text-tertiary',
-                        )}>
-                          {currentVersion.processing_status}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
+              <CommentPanel
+                comments={comments as any}
+                currentUserId={user?.id}
+                onResolve={resolveComment}
+                onDelete={deleteComment}
+                onAddReaction={addReaction}
+                onRemoveReaction={removeReaction}
+                onReply={() => {}}
+                onSubmitReply={handleSubmitReply}
+              />
+              {canComment && (
+                <CommentInput
+                  assetId={asset.id}
+                  projectId={asset.project_id}
+                  assetType={asset.asset_type}
+                  onSubmit={handleSubmitComment}
+                  annotationData={annotationData}
+                />
               )}
             </div>
           </div>

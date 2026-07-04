@@ -109,7 +109,7 @@ export function LinkControls({
         <CopyButton text={url} disabled={saving} />
       </div>
 
-      <ControlRow label="Access" labelVi="Quyền truy cập" group>
+      <ControlRow label="Access" group>
         {permission ? (
           <Segmented
             options={SHARE_PERMISSION_OPTIONS}
@@ -127,7 +127,7 @@ export function LinkControls({
       </ControlRow>
 
       {showAdvancedControls && (
-        <ControlRow label="Visibility" labelVi="Ai có thể mở liên kết">
+        <ControlRow label="Visibility">
           <VisibilitySelect
             value={visibility}
             onChange={(nextVisibility) => onPatch({ visibility: nextVisibility })}
@@ -136,7 +136,7 @@ export function LinkControls({
         </ControlRow>
       )}
 
-      <ControlRow label="Allow download" labelVi="Cho phép tải xuống">
+      <ControlRow label="Allow download">
         <SwitchControl
           label="Allow download"
           checked={link.allow_download}
@@ -148,7 +148,6 @@ export function LinkControls({
       {showAdvancedControls && (
         <ControlRow
           label="Passphrase"
-          labelVi="Yêu cầu mật khẩu khi mở"
           footer={
             passphraseEnabled ? (
               <input
@@ -161,7 +160,7 @@ export function LinkControls({
                   if (event.key === "Enter") event.currentTarget.blur();
                 }}
                 disabled={saving}
-                placeholder="Nhập mật khẩu · passphrase"
+                placeholder="Passphrase"
                 className="h-[38px] w-full rounded border border-border-strong bg-bg-primary px-3 font-mono text-xs text-text-primary placeholder:text-text-tertiary focus:border-accent focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
               />
             ) : null
@@ -177,7 +176,7 @@ export function LinkControls({
       )}
 
       {showAdvancedControls && (
-        <ControlRow label="Watermark" labelVi="Đóng dấu bản xem">
+        <ControlRow label="Watermark">
           <SwitchControl
             label="Watermark"
             checked={Boolean(link.show_watermark)}
@@ -190,7 +189,7 @@ export function LinkControls({
       )}
 
       {showAdvancedControls && (
-        <ControlRow label="Expiration" labelVi="Ngày hết hạn" group>
+        <ControlRow label="Expiration" group>
           <input
             type="date"
             aria-label="Expiration date"
@@ -213,7 +212,7 @@ export function LinkControls({
           <div className="min-w-0">
             <p className="text-sm font-medium text-text-primary">Revoke link</p>
             <p className="mt-0.5 text-xs text-text-secondary">
-              Vô hiệu hóa liên kết ngay lập tức
+              Revoke this link immediately
             </p>
           </div>
           <button

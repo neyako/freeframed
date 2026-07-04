@@ -141,6 +141,8 @@ export function VideoPlayer({
   const { registerPauseHandler } = useReview();
   const [timeFormatOpen, setTimeFormatOpen] = useState(false);
   const timeFormatRef = useRef<HTMLDivElement>(null);
+  const [qualityOpen, setQualityOpen] = useState(false);
+  const qualityRef = useRef<HTMLDivElement>(null);
 
   // Close time format dropdown on outside click
   useEffect(() => {
@@ -155,6 +157,16 @@ export function VideoPlayer({
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, [timeFormatOpen]);
+
+  useEffect(() => {
+    if (!qualityOpen) return;
+    const handleClick = (e: MouseEvent) => {
+      if (qualityRef.current && !qualityRef.current.contains(e.target as Node))
+        setQualityOpen(false);
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [qualityOpen]);
 
   function displayTime(seconds: number): string {
     switch (timeFormat) {
@@ -360,7 +372,7 @@ export function VideoPlayer({
         <div className="flex items-center gap-1 sm:gap-2">
           <button
             onClick={togglePlay}
-            className="flex h-7 w-7 items-center justify-center rounded text-text-primary hover:bg-bg-hover transition-colors"
+            className="flex h-[34px] w-[34px] items-center justify-center rounded-md border border-border bg-bg-tertiary text-text-primary hover:border-border-strong transition-colors"
             aria-label={isPlaying ? "Pause" : "Play"}
           >
             {isPlaying ? (
@@ -373,10 +385,10 @@ export function VideoPlayer({
           <button
             onClick={() => setLoop((p) => !p)}
             className={cn(
-              "hidden sm:flex h-7 w-7 items-center justify-center rounded transition-colors",
+              "flex h-7 w-7 items-center justify-center rounded transition-colors",
               loop
-                ? "text-accent bg-accent/10"
-                : "text-text-tertiary hover:text-text-secondary hover:bg-bg-hover",
+                ? "text-accent"
+                : "text-text-tertiary hover:text-text-primary",
             )}
             aria-label="Loop"
           >
@@ -385,7 +397,7 @@ export function VideoPlayer({
 
           <button
             onClick={handleSpeedCycle}
-            className="flex h-7 items-center justify-center rounded px-1.5 text-xs font-medium text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors tabular-nums"
+            className="font-mono text-xs text-text-secondary hover:text-text-primary"
             aria-label="Playback speed"
           >
             {playbackRate}x
@@ -393,7 +405,7 @@ export function VideoPlayer({
 
           <button
             onClick={toggleMute}
-            className="flex h-7 w-7 items-center justify-center rounded text-text-tertiary hover:text-text-secondary hover:bg-bg-hover transition-colors"
+            className="flex h-7 w-7 items-center justify-center rounded text-text-tertiary hover:text-text-primary transition-colors"
             aria-label={isMuted ? "Unmute" : "Mute"}
           >
             {isMuted || volume === 0 ? (
@@ -408,7 +420,7 @@ export function VideoPlayer({
         <div className="relative" ref={timeFormatRef}>
           <button
             onClick={() => setTimeFormatOpen((p) => !p)}
-            className="flex items-center gap-1.5 rounded-md bg-bg-tertiary px-2 sm:px-3 py-1 hover:bg-bg-hover transition-colors"
+            className="flex items-center gap-1.5 rounded-md border border-border bg-bg-tertiary px-3.5 py-1 hover:border-border-strong transition-colors"
           >
             <span className="font-dot text-xs sm:text-[15px] font-bold text-text-primary tracking-[0.02em]">
               {timeFormat === "timecode" ? (
@@ -467,31 +479,71 @@ export function VideoPlayer({
         <div className="flex items-center gap-1 sm:gap-2">
           {/* Quality selector */}
           {qualityLevels.length > 0 && (
-            <select
-              value={currentQuality}
-              onChange={(e) => setQuality(parseInt(e.target.value, 10))}
-              className="bg-transparent text-text-secondary text-xs border border-border rounded px-1.5 py-1 cursor-pointer shrink-0 hover:text-text-primary transition-colors"
-              aria-label="Quality"
-            >
-              <option value={-1} className="bg-bg-secondary">
-                Auto
-              </option>
-              {qualityLevels.map((level) => (
-                <option
-                  key={level.index}
-                  value={level.index}
-                  className="bg-bg-secondary"
-                >
-                  {level.label}
-                </option>
-              ))}
-            </select>
+            <div className="relative shrink-0" ref={qualityRef}>
+              <button
+                onClick={() => setQualityOpen((p) => !p)}
+                className="flex items-center gap-1 rounded border border-border px-2 py-1 font-mono text-[11px] uppercase tracking-[0.08em] text-text-secondary hover:border-border-strong hover:text-text-primary transition-colors"
+                aria-label="Quality"
+              >
+                {currentQuality === -1
+                  ? "Auto"
+                  : (qualityLevels.find((l) => l.index === currentQuality)
+                      ?.label ?? "Auto")}
+                <ChevronUp
+                  className={cn(
+                    "h-3 w-3 text-text-tertiary transition-transform",
+                    qualityOpen && "rotate-180",
+                  )}
+                />
+              </button>
+              {qualityOpen && (
+                <div className="absolute bottom-full right-0 mb-2 z-50 w-36 rounded border border-border bg-bg-elevated py-1.5 animate-in fade-in zoom-in-95 duration-100">
+                  <button
+                    className={cn(
+                      "flex w-full items-center justify-between px-3 py-2 text-[13px] transition-colors",
+                      currentQuality === -1
+                        ? "text-text-primary"
+                        : "text-text-secondary hover:bg-bg-hover",
+                    )}
+                    onClick={() => {
+                      setQuality(-1);
+                      setQualityOpen(false);
+                    }}
+                  >
+                    Auto{" "}
+                    {currentQuality === -1 && (
+                      <Check className="h-4 w-4 text-accent" />
+                    )}
+                  </button>
+                  {qualityLevels.map((level) => (
+                    <button
+                      key={level.index}
+                      className={cn(
+                        "flex w-full items-center justify-between px-3 py-2 text-[13px] transition-colors",
+                        currentQuality === level.index
+                          ? "text-text-primary"
+                          : "text-text-secondary hover:bg-bg-hover",
+                      )}
+                      onClick={() => {
+                        setQuality(level.index);
+                        setQualityOpen(false);
+                      }}
+                    >
+                      {level.label}{" "}
+                      {currentQuality === level.index && (
+                        <Check className="h-4 w-4 text-accent" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
 
           {/* Fullscreen */}
           <button
             onClick={handleFullscreen}
-            className="flex h-7 w-7 items-center justify-center rounded text-text-tertiary hover:text-text-primary hover:bg-bg-hover transition-colors"
+            className="flex h-7 w-7 items-center justify-center rounded text-text-tertiary hover:text-text-primary transition-colors"
             aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
           >
             {isFullscreen ? (
