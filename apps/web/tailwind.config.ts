@@ -85,6 +85,7 @@ const config: Config = {
         'shimmer': 'shimmer 2s linear infinite',
         'pulse-soft': 'pulse-soft 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
         'blink': 'blink 1.4s steps(1) infinite',
+        'indeterminate-slide': 'indeterminate-slide 1.3s ease-in-out infinite',
       },
       keyframes: {
         'fade-in': {
@@ -121,6 +122,10 @@ const config: Config = {
         },
         blink: {
           '50%': { opacity: '0.25' },
+        },
+        'indeterminate-slide': {
+          '0%': { transform: 'translateX(-120%)' },
+          '100%': { transform: 'translateX(360%)' },
         },
       },
       transitionTimingFunction: {

@@ -13,6 +13,8 @@ interface ProgressTrackProps {
   readonly value: number
   readonly accent?: boolean
   readonly className?: string
+  /** amber fill — for the processing/transcode phase, matching the Processing badge */
+  readonly warning?: boolean
   /** Animate a fixed-width segment instead of tracking `value` — for phases
    * with no real percent yet (e.g. transcode processing before progress is
    * reported), so the bar reads as "working" rather than stuck at 0. */
@@ -80,6 +82,7 @@ export function SegmentedProgress({
 export function ProgressTrack({
   value,
   accent = false,
+  warning = false,
   className,
   indeterminate = false,
 }: ProgressTrackProps) {
@@ -90,7 +93,8 @@ export function ProgressTrack({
         className={cn(
           'h-full bg-text-primary',
           accent && 'bg-accent',
-          indeterminate && 'w-2/5 animate-pulse',
+          warning && 'bg-amber-500',
+          indeterminate && 'w-2/5 animate-indeterminate-slide',
         )}
         style={indeterminate ? undefined : { width: `${clamped}%` }}
       />

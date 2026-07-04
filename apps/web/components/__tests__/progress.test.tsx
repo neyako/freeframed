@@ -24,11 +24,20 @@ describe('Progress components', () => {
 
   it('animates a fixed-width segment instead of tracking value when indeterminate', () => {
     const { container } = render(<ProgressTrack value={0} indeterminate />)
-    const fill = container.querySelector('.animate-pulse')
+    const fill = container.querySelector('.animate-indeterminate-slide')
     if (!(fill instanceof HTMLElement)) {
       throw new Error('Indeterminate fill not found')
     }
     expect(fill.style.width).toBe('')
     expect(fill.className).toContain('w-2/5')
+  })
+
+  it('uses amber fill for warning (processing phase)', () => {
+    const { container } = render(<ProgressTrack value={30} warning />)
+    const fill = container.querySelector('.bg-amber-500')
+    if (!(fill instanceof HTMLElement)) {
+      throw new Error('Warning fill not found')
+    }
+    expect(fill).toHaveStyle({ width: '30%' })
   })
 })
