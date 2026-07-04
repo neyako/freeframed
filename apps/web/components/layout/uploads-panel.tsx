@@ -112,7 +112,12 @@ function UploadItem({ upload }: { upload: UploadFile }) {
 
         {/* Progress bar */}
         {showProgress && (
-          <ProgressTrack value={progressValue} accent className="mt-2" />
+          <ProgressTrack
+            value={progressValue}
+            accent
+            className="mt-2"
+            indeterminate={upload.status === 'processing' && upload.processingProgress === 0}
+          />
         )}
 
         {/* Detail line */}

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { api, ApiError } from '@/lib/api'
+import { setTokens } from '@/lib/auth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 
@@ -77,14 +78,18 @@ export function SetupWizard() {
     setLoading(true)
     setErrors({})
     try {
-      await api.post('/setup/create-superadmin', {
-        email: form.email,
-        name: form.name,
-        password: form.password,
-      })
+      const res = await api.post<{ access_token: string; refresh_token: string }>(
+        '/setup/create-superadmin',
+        {
+          email: form.email,
+          name: form.name,
+          password: form.password,
+        }
+      )
+      setTokens(res.access_token, res.refresh_token)
       setSuccess(true)
       setTimeout(() => {
-        router.push('/login')
+        router.replace('/projects')
       }, 1800)
     } catch (err) {
       if (err instanceof ApiError) {
@@ -106,7 +111,7 @@ export function SetupWizard() {
           </svg>
         </div>
         <h2 className="text-lg font-medium tracking-[-0.02em] text-text-primary mb-1">Admin account created</h2>
-        <p className="text-sm text-text-secondary">Redirecting you to login…</p>
+        <p className="text-sm text-text-secondary">Redirecting you to your projects…</p>
       </div>
     )
   }

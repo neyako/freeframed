@@ -30,9 +30,7 @@ export async function middleware(request: NextRequest) {
   const setupDone = request.cookies.get('ff_setup_done')?.value
   if (!setupDone) {
     try {
-      const res = await fetch(`${API_URL}/setup/status`, {
-        next: { revalidate: 60 }, // Cache for 60 seconds
-      })
+      const res = await fetch(`${API_URL}/setup/status`, { cache: 'no-store' })
       if (res.ok) {
         const data = await res.json()
         if (data.needs_setup) {

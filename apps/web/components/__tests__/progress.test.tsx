@@ -21,4 +21,14 @@ describe('Progress components', () => {
     }
     expect(fill).toHaveStyle({ width: '42%' })
   })
+
+  it('animates a fixed-width segment instead of tracking value when indeterminate', () => {
+    const { container } = render(<ProgressTrack value={0} indeterminate />)
+    const fill = container.querySelector('.animate-pulse')
+    if (!(fill instanceof HTMLElement)) {
+      throw new Error('Indeterminate fill not found')
+    }
+    expect(fill.style.width).toBe('')
+    expect(fill.className).toContain('w-2/5')
+  })
 })
