@@ -88,8 +88,8 @@ export function AppearancePopover() {
   return (
     <Popover.Root>
       <Popover.Trigger asChild>
-        <button className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-sm text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors">
-          <SlidersHorizontal className="h-4 w-4" />
+        <button className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.14em] text-text-secondary hover:text-text-primary transition-colors">
+          <SlidersHorizontal className="h-3.5 w-3.5" />
           Appearance
         </button>
       </Popover.Trigger>

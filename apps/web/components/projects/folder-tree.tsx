@@ -98,11 +98,11 @@ function FolderNode({
     <div>
       <div
         className={cn(
-          'group flex items-center gap-1 px-2 py-1 rounded-md text-[13px] cursor-pointer transition-colors',
+          'group flex items-center gap-1 px-2 py-1 rounded font-mono text-xs tracking-[0.04em] cursor-pointer transition-colors',
           isActive
-            ? 'bg-accent/10 text-accent font-medium'
+            ? 'bg-accent-muted text-accent'
             : 'text-text-secondary hover:text-text-primary hover:bg-bg-hover',
-          isDragOver && 'ring-2 ring-accent/50 bg-accent/5',
+          isDragOver && 'ring-1 ring-accent bg-accent-muted',
         )}
         style={{ paddingLeft: `${8 + depth * 16}px` }}
         onClick={handleClick}
@@ -243,11 +243,11 @@ export function FolderTree({
       {/* Project root */}
       <div
         className={cn(
-          'flex items-center gap-2 px-2 py-1.5 rounded-md text-[13px] cursor-pointer transition-colors',
+          'flex items-center gap-2 px-2 py-1.5 rounded font-mono text-xs tracking-[0.04em] cursor-pointer transition-colors',
           currentFolderId === null && !showTrash
-            ? 'bg-accent/10 text-accent font-medium'
+            ? 'bg-accent-muted text-accent'
             : 'text-text-secondary hover:text-text-primary hover:bg-bg-hover',
-          isDragOverRoot && 'ring-2 ring-accent/50 bg-accent/5',
+          isDragOverRoot && 'ring-1 ring-accent bg-accent-muted',
         )}
         onClick={() => onSelectFolder(null)}
         onDragOver={(e) => {
@@ -286,9 +286,9 @@ export function FolderTree({
       {/* Recently Deleted */}
       <div
         className={cn(
-          'flex items-center gap-2 px-2 py-1 rounded-md text-[13px] cursor-pointer transition-colors mt-2',
+          'flex items-center gap-2 px-2 py-1 rounded font-mono text-xs tracking-[0.04em] cursor-pointer transition-colors mt-2',
           showTrash
-            ? 'bg-accent/10 text-accent font-medium'
+            ? 'bg-accent-muted text-accent'
             : 'text-text-tertiary hover:text-text-secondary hover:bg-bg-hover',
         )}
         onClick={onShowTrash}
