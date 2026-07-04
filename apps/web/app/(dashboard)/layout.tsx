@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useAuthStore } from "@/stores/auth-store";
 import { useUploadStore } from "@/stores/upload-store";
 import { Header } from "@/components/layout/header";
+import { MobileNav } from "@/components/layout/mobile-nav";
 import { CommandPalette } from "@/components/layout/command-palette";
 import { UploadsPanel } from "@/components/layout/uploads-panel";
 import { UploadSSEBridge } from "@/components/layout/upload-sse-bridge";
@@ -45,6 +46,7 @@ export default function DashboardLayout({
         {!isAssetViewer && <Header onSearchOpen={() => setCommandOpen(true)} />}
 
         <div className="relative flex-1 overflow-y-auto">{children}</div>
+        {!isAssetViewer && <MobileNav onSearchOpen={() => setCommandOpen(true)} />}
       </main>
 
       <UploadsPanel />
