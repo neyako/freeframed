@@ -15,7 +15,6 @@ class TokenResponse(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
-    needs_password: bool = False  # True if user needs to set password
 
 class RefreshRequest(BaseModel):
     refresh_token: str
@@ -37,21 +36,6 @@ class InviteRequest(BaseModel):
     email: EmailStr
     name: str
 
-# Magic code flow
-class SendMagicCodeRequest(BaseModel):
-    email: EmailStr
-
-class SendMagicCodeResponse(BaseModel):
-    message: str
-    email: str
-
-class VerifyMagicCodeRequest(BaseModel):
-    email: EmailStr
-    code: str
-
-class SetPasswordRequest(BaseModel):
-    password: str
-
 # Invite flow
 class AcceptInviteRequest(BaseModel):
     token: str
@@ -71,4 +55,3 @@ class UpdateUserRoleRequest(BaseModel):
 
 class DeactivateUserRequest(BaseModel):
     user_id: uuid.UUID
-

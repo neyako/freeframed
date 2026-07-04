@@ -7,8 +7,6 @@ from ..database import get_db
 from ..schemas.auth import (
     RegisterRequest, LoginRequest, TokenResponse,
     RefreshRequest, UserResponse, InviteRequest,
-    SendMagicCodeRequest, SendMagicCodeResponse,
-    VerifyMagicCodeRequest, SetPasswordRequest,
     AcceptInviteRequest, InviteInfoResponse,
 )
 from ..services.auth_service import (
@@ -16,116 +14,16 @@ from ..services.auth_service import (
     create_access_token, create_refresh_token, decode_token,
     get_user_by_email, get_user_by_id,
 )
-from ..services.redis_service import (
-    generate_magic_code, store_magic_code, verify_magic_code as redis_verify_magic_code,
-    MAGIC_CODE_EXPIRY_SECONDS,
-)
-from ..tasks.email_tasks import send_magic_code_email, send_invite_email
-from ..tasks.celery_app import send_task_safe
+from ..tasks.email_tasks import send_invite_email
 from ..models.user import User, UserStatus
 from ..middleware.auth import get_current_user
-from ..middleware.rate_limit import rate_limit
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-
-MAGIC_CODE_EXPIRY_MINUTES = MAGIC_CODE_EXPIRY_SECONDS // 60
 
 
 def _generate_invite_token() -> str:
     """Generate a secure invite token."""
     return secrets.token_urlsafe(48)
-
-
-@router.post("/send-magic-code", response_model=SendMagicCodeResponse, dependencies=[Depends(rate_limit("send_magic_code", 5, 600))])
-def send_magic_code(body: SendMagicCodeRequest, db: Session = Depends(get_db)):
-    """
-    Send magic code to email.
-    - If user exists: send code for login
-    - If user doesn't exist: create pending user and send code
-    """
-    user = get_user_by_email(db, body.email)
-    
-    if not user:
-        # Check if this is the first user (becomes super admin)
-        user_count = db.query(User).filter(User.deleted_at.is_(None)).count()
-        is_first_user = user_count == 0
-        
-        # Create new user in pending_verification status
-        user = User(
-            email=body.email,
-            name=body.email.split("@")[0],  # Temporary name from email
-            status=UserStatus.pending_verification,
-            email_verified=False,
-            is_superadmin=is_first_user,  # First user becomes super admin
-        )
-        db.add(user)
-        db.commit()
-    
-    # Generate and store magic code in Redis
-    code = generate_magic_code()
-    store_magic_code(body.email, code)
-
-    # Queue email via Celery (async)
-    try:
-        send_task_safe(send_magic_code_email, body.email, code, MAGIC_CODE_EXPIRY_MINUTES)
-    except Exception:
-        pass  # Email delivery is best-effort; code is already in Redis
-    
-    return SendMagicCodeResponse(
-        message="Magic code sent to your email",
-        email=body.email,
-    )
-
-
-@router.post("/verify-magic-code", response_model=TokenResponse, dependencies=[Depends(rate_limit("verify_magic_code", 10, 600))])
-def verify_magic_code(body: VerifyMagicCodeRequest, db: Session = Depends(get_db)):
-    """
-    Verify magic code and return tokens.
-    Returns needs_password=True if user hasn't set a password yet.
-    """
-    user = get_user_by_email(db, body.email)
-    
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    if user.status == UserStatus.deactivated:
-        raise HTTPException(status_code=401, detail="Account deactivated")
-    
-    # Verify magic code from Redis
-    success, error = redis_verify_magic_code(body.email, body.code)
-    if not success:
-        raise HTTPException(status_code=401, detail=error)
-    
-    # Mark email as verified
-    user.email_verified = True
-    
-    # If user was pending verification, activate them
-    if user.status == UserStatus.pending_verification:
-        user.status = UserStatus.active
-    
-    db.commit()
-    
-    # Check if user needs to set password
-    needs_password = user.password_hash is None
-    
-    return TokenResponse(
-        access_token=create_access_token(str(user.id)),
-        refresh_token=create_refresh_token(str(user.id)),
-        needs_password=needs_password,
-    )
-
-
-@router.post("/set-password", response_model=UserResponse)
-def set_password(
-    body: SetPasswordRequest,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Set password for authenticated user (after magic code verification)."""
-    current_user.password_hash = hash_password(body.password)
-    db.commit()
-    db.refresh(current_user)
-    return current_user
 
 
 @router.get("/invite/{token}", response_model=InviteInfoResponse)
@@ -179,7 +77,6 @@ def accept_invite(body: AcceptInviteRequest, db: Session = Depends(get_db)):
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 def register(body: RegisterRequest, db: Session = Depends(get_db)):
-    """Register with email + password (legacy, prefer magic code flow)."""
     if get_user_by_email(db, body.email):
         raise HTTPException(status_code=400, detail="Email already registered")
     user = User(
@@ -187,7 +84,7 @@ def register(body: RegisterRequest, db: Session = Depends(get_db)):
         name=body.name,
         password_hash=hash_password(body.password),
         status=UserStatus.active,
-        email_verified=False,  # Not verified until magic code
+        email_verified=False,
     )
     db.add(user)
     db.commit()
