@@ -101,7 +101,7 @@ export function Header({ onSearchOpen }: HeaderProps) {
 
   return (
     <>
-      <header className="sticky top-0 z-20 flex h-11 items-center justify-between border-b border-border bg-bg-primary/90 backdrop-blur-sm px-4">
+      <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-border bg-bg-primary/90 backdrop-blur-sm px-4 sm:px-6">
         {/* Left: logo + breadcrumbs */}
         <div className="flex items-center gap-3 min-w-0">
           <Link href="/projects" className="flex items-center gap-2 shrink-0" onClick={() => setNotifOpen(false)}>
@@ -122,7 +122,7 @@ export function Header({ onSearchOpen }: HeaderProps) {
             )}
           </Link>
 
-          <nav className="flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-[0.12em] min-w-0">
+          <nav className="flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-[0.18em] min-w-0">
             {breadcrumbs.map((crumb, index) => {
               const isLast = index === breadcrumbs.length - 1
               return (
@@ -132,7 +132,7 @@ export function Header({ onSearchOpen }: HeaderProps) {
                   )}
                   {isLast ? (
                     <span className="inline-flex items-center gap-1.5 text-text-primary min-w-0">
-                      <span className="h-[5px] w-[5px] rounded-full bg-accent shrink-0" aria-hidden />
+                      <span className="h-1.5 w-1.5 rounded-full bg-accent shrink-0" aria-hidden />
                       <span className="truncate max-w-[180px]">{crumb.label}</span>
                     </span>
                   ) : crumb.href ? (
@@ -157,10 +157,10 @@ export function Header({ onSearchOpen }: HeaderProps) {
           <button
             onClick={() => setNotifOpen((v) => !v)}
             className={cn(
-              'relative flex h-7 w-7 items-center justify-center rounded-md transition-colors',
+              'relative flex h-[34px] w-[34px] items-center justify-center rounded border transition-colors',
               notifOpen
-                ? 'bg-bg-hover text-text-primary'
-                : 'text-text-tertiary hover:bg-bg-hover hover:text-text-primary',
+                ? 'border-border text-text-primary'
+                : 'border-transparent text-text-secondary hover:border-border hover:text-text-primary',
             )}
             title="Notifications"
           >
@@ -176,10 +176,10 @@ export function Header({ onSearchOpen }: HeaderProps) {
           <button
             onClick={() => { setNotifOpen(false); togglePanel() }}
             className={cn(
-              'relative flex h-7 w-7 items-center justify-center rounded-md transition-colors',
+              'relative flex h-[34px] w-[34px] items-center justify-center rounded border transition-colors',
               panelOpen
-                ? 'bg-bg-hover text-text-primary'
-                : 'text-text-tertiary hover:bg-bg-hover hover:text-text-primary',
+                ? 'border-border text-text-primary'
+                : 'border-transparent text-text-secondary hover:border-border hover:text-text-primary',
             )}
             title="Uploads"
           >
@@ -194,13 +194,11 @@ export function Header({ onSearchOpen }: HeaderProps) {
           {/* Search trigger */}
           <button
             onClick={onSearchOpen}
-            className="flex items-center gap-1.5 rounded border border-border bg-bg-secondary/60 px-2.5 py-1 font-mono text-[11px] uppercase tracking-[0.12em] text-text-tertiary hover:border-border-strong hover:text-text-primary transition-colors"
+            className="flex h-[34px] items-center gap-2 rounded border border-border bg-bg-tertiary px-3 font-mono text-[11px] uppercase tracking-[0.14em] text-text-tertiary hover:border-border-strong hover:text-text-secondary transition-colors"
           >
             <Search className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Search</span>
-            <kbd className="hidden sm:inline-flex items-center gap-0.5 rounded border border-border bg-bg-tertiary/50 px-1 py-0.5 font-mono text-[10px] text-text-tertiary">
-              <span>⌘</span>K
-            </kbd>
+            <kbd className="hidden sm:inline-flex items-center rounded-[2px] border border-border-strong bg-transparent px-[5px] py-px font-mono text-[10px] tracking-[0.06em] text-text-tertiary">⌘K</kbd>
           </button>
 
           <button
