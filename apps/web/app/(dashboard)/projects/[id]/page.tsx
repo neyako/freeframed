@@ -24,6 +24,7 @@ import { api } from "@/lib/api";
 import { findVersionCandidate } from "@/lib/version-match";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Segmented } from "@/components/ui/segmented";
 import { Avatar } from "@/components/shared/avatar";
 import { AssetGrid } from "@/components/projects/asset-grid";
 import { CommentPanel } from "@/components/review/comment-panel";
@@ -371,17 +372,17 @@ export default function ProjectDetailPage() {
         </div>
       )}
       {leftPanelOpen && (
-      <div className="hidden lg:flex w-72 flex-col border-r border-border bg-bg-secondary shrink-0">
+      <div className="hidden lg:flex w-[250px] flex-col border-r border-border bg-bg-secondary shrink-0">
         {/* Assets section */}
         <div className="p-3 space-y-0.5">
           <div className="flex items-center justify-between px-2 mb-1">
-            <span className="text-2xs font-semibold text-text-tertiary uppercase tracking-wider">
+            <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-text-tertiary">
               Assets
             </span>
             <div className="flex items-center gap-1">
             {canCreateFolder && (
               <button
-                className="text-text-tertiary hover:text-text-primary transition-colors"
+                className="flex h-6 w-6 items-center justify-center rounded-sm text-text-tertiary hover:text-text-primary transition-colors"
                 onClick={() => {
                   setFolderDialogParentId(currentFolderId);
                   setFolderDialogOpen(true);
@@ -393,7 +394,7 @@ export default function ProjectDetailPage() {
             )}
             <button
               onClick={toggleLeftPanel}
-              className="text-text-tertiary hover:text-text-primary transition-colors"
+              className="flex h-6 w-6 items-center justify-center rounded-sm text-text-tertiary hover:text-text-primary transition-colors"
               title="Collapse panel"
             >
               <PanelLeftClose className="h-3.5 w-3.5" />
@@ -442,31 +443,25 @@ export default function ProjectDetailPage() {
           const used = project?.storage_bytes ?? 0;
           const limit = 10 * 1024 * 1024 * 1024; // 10 GB default limit
           const pct = limit > 0 ? Math.min((used / limit) * 100, 100) : 0;
-          const isCritical = pct >= 90;
-          const isWarning = pct >= 80;
           return (
-            <div className="border-t border-border shrink-0 p-2 space-y-1">
-              <div className="flex flex-col gap-1 px-2.5 py-1.5">
+            <div className="border-t border-border shrink-0 px-4 pb-5 pt-4 space-y-2">
+              <div className="flex flex-col gap-1">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-medium text-text-secondary">Storage</span>
+                  <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-text-tertiary">Storage</span>
                   <span className={cn(
-                    "text-[10px] tabular-nums",
-                    isCritical ? "text-status-error font-medium" : isWarning ? "text-amber-400 font-medium" : "text-text-tertiary",
+                    "font-mono text-[10px] tracking-[0.02em] tabular-nums",
+                    pct >= 90 ? "text-accent" : "text-text-secondary",
                   )}>
                     {formatBytes(used)} / {formatBytes(limit)}
                   </span>
                 </div>
                 <div className="h-1 w-full rounded-full bg-bg-hover overflow-hidden">
                   <div
-                    className={cn(
-                      "h-full rounded-full transition-all duration-300",
-                      isCritical ? "bg-status-error" : isWarning ? "bg-amber-400" : "bg-accent",
-                    )}
+                    className="h-full rounded-full bg-accent transition-all duration-300"
                     style={{ width: `${Math.max(pct, 1)}%` }}
                   />
                 </div>
               </div>
-              <div className="h-5" />
             </div>
           );
         })()}
@@ -516,7 +511,7 @@ export default function ProjectDetailPage() {
         <div className="px-5 pt-3 pb-6 space-y-3">
           {showTrash ? (
             <div className="flex-1 overflow-y-auto">
-              <h2 className="text-sm font-medium text-text-primary mb-3">
+              <h2 className="font-mono text-[11px] uppercase tracking-[0.16em] text-text-secondary mb-3">
                 Recently Deleted
               </h2>
               {trash.folders.length === 0 && trash.assets.length === 0 ? (
@@ -526,19 +521,19 @@ export default function ProjectDetailPage() {
                   {trash.folders.map((item) => (
                     <div
                       key={item.id}
-                      className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-white/5"
+                      className="flex items-center justify-between px-3 py-2 rounded hover:bg-bg-hover"
                     >
                       <div className="flex items-center gap-2 min-w-0">
                         <FolderIcon className="h-4 w-4 text-text-tertiary shrink-0" />
                         <span className="text-sm text-text-primary truncate">
                           {item.name}
                         </span>
-                        <span className="text-xs text-text-tertiary">
+                        <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-text-tertiary">
                           Folder
                         </span>
                       </div>
                       <button
-                        className="text-xs text-accent hover:underline shrink-0"
+                        className="font-mono text-[10px] uppercase tracking-[0.14em] text-accent hover:text-accent-hover shrink-0"
                         onClick={async () => {
                           await restoreFolder(item.id);
                           mutateTrash();
@@ -553,18 +548,18 @@ export default function ProjectDetailPage() {
                   {trash.assets.map((item) => (
                     <div
                       key={item.id}
-                      className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-white/5"
+                      className="flex items-center justify-between px-3 py-2 rounded hover:bg-bg-hover"
                     >
                       <div className="flex items-center gap-2 min-w-0">
                         <span className="text-sm text-text-primary truncate">
                           {item.name}
                         </span>
-                        <span className="text-xs text-text-tertiary capitalize">
+                        <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-text-tertiary capitalize">
                           {item.type}
                         </span>
                       </div>
                       <button
-                        className="text-xs text-accent hover:underline shrink-0"
+                        className="font-mono text-[10px] uppercase tracking-[0.14em] text-accent hover:text-accent-hover shrink-0"
                         onClick={async () => {
                           await restoreAsset(item.id);
                           mutateTrash();
@@ -719,16 +714,17 @@ export default function ProjectDetailPage() {
                     </Button>
                   )}
                   {canCreateFolder && (
-                    <button
-                      className="flex items-center gap-1.5 h-8 px-3 rounded-lg border border-border text-text-secondary hover:text-text-primary hover:bg-bg-hover text-[13px] transition-colors"
+                    <Button
+                      variant="secondary"
+                      size="sm"
                       onClick={() => {
                         setFolderDialogParentId(currentFolderId);
                         setFolderDialogOpen(true);
                       }}
                     >
                       <FolderPlus className="h-4 w-4" />
-                      <span className="hidden sm:inline">New Folder</span>
-                    </button>
+                      <span className="hidden sm:inline">New folder</span>
+                    </Button>
                   )}
                   {canUpload && (
                     <Button size="sm" onClick={() => uploadInputRef.current?.click()}>
@@ -822,34 +818,21 @@ export default function ProjectDetailPage() {
         <div className="hidden xl:flex w-[360px] flex-col border-l border-border bg-bg-secondary shrink-0">
           <>
               {/* Tabs */}
-              <div className="flex items-center border-b border-border">
-                <button
-                  onClick={() => setRightTab("comments")}
-                  className={cn(
-                    "flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-colors border-b-2",
-                    rightTab === "comments"
-                      ? "border-accent text-text-primary"
-                      : "border-transparent text-text-tertiary hover:text-text-secondary",
-                  )}
-                >
-                  <MessageSquare className="h-4 w-4" />
-                  Comments
-                </button>
-                <button
-                  onClick={() => setRightTab("fields")}
-                  className={cn(
-                    "flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-colors border-b-2",
-                    rightTab === "fields"
-                      ? "border-accent text-text-primary"
-                      : "border-transparent text-text-tertiary hover:text-text-secondary",
-                  )}
-                >
-                  Fields
-                </button>
+              <div className="flex items-center gap-1 border-b border-border px-3 py-2.5">
+                <Segmented
+                  stretch
+                  className="flex-1"
+                  options={[
+                    { value: "comments", label: "Comments" },
+                    { value: "fields", label: "Fields" },
+                  ] as const}
+                  value={rightTab}
+                  onChange={setRightTab}
+                />
                 {selectedAsset && (
                   <button
                     onClick={() => setSelectedAsset(null)}
-                    className="px-3 text-text-tertiary hover:text-text-primary transition-colors"
+                    className="px-2 text-text-tertiary hover:text-text-primary transition-colors"
                   >
                     <X className="h-4 w-4" />
                   </button>
