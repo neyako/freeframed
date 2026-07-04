@@ -355,7 +355,7 @@ export function VideoPlayer({
       </div>
 
       {/* Bottom transport bar (matches audio player style) */}
-      <div className="flex items-center justify-between h-12 px-2 sm:px-4 bg-bg-secondary/80 border-t border-border shrink-0">
+      <div className="flex items-center justify-between h-12 px-2 sm:px-4 bg-bg-secondary border-t border-border shrink-0">
         {/* Left: Play, Loop, Speed, Volume */}
         <div className="flex items-center gap-1 sm:gap-2">
           <button
