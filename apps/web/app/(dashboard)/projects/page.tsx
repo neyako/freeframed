@@ -14,10 +14,11 @@ import {
   Share2,
   Globe,
 } from "lucide-react";
-import { cn, formatBytes } from "@/lib/utils";
+import { formatBytes } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Segmented } from "@/components/ui/segmented";
 import { ProjectCard } from "@/components/projects/project-card";
 import { EmptyState } from "@/components/shared/empty-state";
 import { useAuthStore } from "@/stores/auth-store";
@@ -55,14 +56,14 @@ function ProjectListRow({
       href={`/projects/${project.id}`}
       className="flex items-center gap-4 px-4 py-3 hover:bg-bg-hover transition-colors border-b border-border last:border-b-0"
     >
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-violet-600 to-fuchsia-500">
-        <FolderOpen className="h-4 w-4 text-white" />
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded border border-border bg-bg-tertiary">
+        <FolderOpen className="h-4 w-4 text-text-tertiary" />
       </div>
       <div className="flex-1 min-w-0">
         <span className="text-sm font-medium text-text-primary truncate block">
           {project.name}
         </span>
-        <span className="text-2xs text-text-tertiary">
+        <span className="font-mono text-[10px] tracking-[0.04em] text-text-tertiary">
           {(project.asset_count ?? 0) > 0
             ? `${project.asset_count} item${(project.asset_count ?? 0) !== 1 ? "s" : ""} · ${formatBytes(project.storage_bytes ?? 0)}`
             : "No assets yet"}
@@ -80,18 +81,7 @@ function ProjectListRow({
         })}
       </span>
       {showRole && (
-        <span
-          className={cn(
-            "hidden sm:inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium w-fit",
-            project.role === "owner"
-              ? "bg-accent/10 text-accent"
-              : project.role === "editor"
-                ? "bg-blue-500/10 text-blue-400"
-                : project.role === "reviewer"
-                  ? "bg-amber-500/10 text-amber-400"
-                  : "bg-bg-tertiary text-text-tertiary",
-          )}
-        >
+        <span className="hidden sm:inline-flex items-center rounded-[2px] border border-border-strong px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.14em] text-text-secondary">
           {roleName}
         </span>
       )}
@@ -130,8 +120,10 @@ function ProjectSection({
     <div className="space-y-4">
       <div className="flex items-center gap-2">
         {icon}
-        <h2 className="text-sm font-medium text-text-secondary">{title}</h2>
-        <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-bg-tertiary px-1.5 text-[10px] font-medium text-text-tertiary">
+        <h2 className="font-mono text-[11px] uppercase tracking-[0.16em] text-text-secondary">
+          {title}
+        </h2>
+        <span className="rounded-[2px] border border-border px-[7px] py-0.5 font-dot text-xs font-bold text-text-tertiary">
           {projects.length}
         </span>
       </div>
@@ -139,22 +131,22 @@ function ProjectSection({
       {projects.length === 0 && showNewButton ? (
         <button
           onClick={onNewProject}
-          className="group flex w-full items-center gap-4 rounded-xl border-2 border-dashed border-border bg-bg-secondary/30 px-5 py-8 hover:border-accent/40 hover:bg-bg-secondary/60 transition-all duration-200"
+          className="flex w-full items-center gap-4 rounded-lg border border-dashed border-border-strong bg-transparent px-5 py-8 text-text-tertiary transition-colors hover:border-text-secondary hover:text-text-secondary"
         >
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-bg-tertiary text-text-tertiary group-hover:bg-accent group-hover:text-white transition-colors">
-            <Plus className="h-5 w-5" />
-          </div>
+          <span className="flex h-11 w-11 items-center justify-center rounded border border-border-strong bg-bg-secondary">
+            <Plus className="h-[18px] w-[18px]" />
+          </span>
           <div className="text-left">
             <p className="text-sm font-medium text-text-primary">
               Create your first project
             </p>
-            <p className="text-xs text-text-tertiary mt-0.5">
+            <p className="mt-0.5 font-mono text-[11px] uppercase tracking-[0.14em] text-text-tertiary">
               Organize and review your media assets
             </p>
           </div>
         </button>
       ) : viewMode === "grid" ? (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3.5">
           {projects.map((project) => (
             <ProjectCard
               key={project.id}
@@ -167,19 +159,19 @@ function ProjectSection({
           {showNewButton && onNewProject && (
             <button
               onClick={onNewProject}
-              className="group flex flex-col items-center justify-center gap-2.5 rounded-xl border-2 border-dashed border-border bg-bg-secondary/30 aspect-square hover:border-accent/40 hover:bg-bg-secondary/60 transition-all duration-200"
+              className="flex min-h-[280px] flex-col items-center justify-center gap-3.5 rounded-lg border border-dashed border-border-strong text-text-tertiary transition-colors hover:border-text-secondary hover:text-text-secondary"
             >
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-bg-tertiary text-text-tertiary group-hover:bg-accent group-hover:text-white transition-colors">
-                <Plus className="h-5 w-5" />
-              </div>
-              <span className="text-sm text-text-secondary group-hover:text-text-primary transition-colors">
-                New Project
+              <span className="flex h-11 w-11 items-center justify-center rounded border border-border-strong bg-bg-secondary">
+                <Plus className="h-[18px] w-[18px]" />
+              </span>
+              <span className="font-mono text-[11px] uppercase tracking-[0.16em]">
+                New project
               </span>
             </button>
           )}
         </div>
       ) : (
-        <div className="rounded-xl border border-border overflow-hidden bg-bg-secondary">
+        <div className="rounded-lg border border-border overflow-hidden bg-bg-secondary">
           {projects.map((project) => (
             <ProjectListRow
               key={project.id}
@@ -192,7 +184,7 @@ function ProjectSection({
               onClick={onNewProject}
               className="flex items-center gap-3 px-4 py-3 w-full hover:bg-bg-hover transition-colors text-left border-t border-border"
             >
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border-2 border-dashed border-border text-text-tertiary">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded border border-dashed border-border-strong text-text-tertiary">
                 <Plus className="h-3.5 w-3.5" />
               </div>
               <span className="text-sm text-text-secondary">New Project</span>
@@ -276,45 +268,40 @@ export default function ProjectsPage() {
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="mx-auto w-full max-w-[1360px] px-4 sm:px-8 lg:px-10 pt-6 sm:pt-10 pb-24 space-y-9">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-end justify-between gap-5">
         <div>
-          <h1 className="text-lg font-semibold text-text-primary">Projects</h1>
+          <h1 className="font-sans text-[clamp(26px,4vw,36px)] font-medium tracking-[-0.02em] leading-none text-text-primary">
+            Projects
+          </h1>
           {projects && projects.length > 0 && (
-            <p className="mt-0.5 text-sm text-text-tertiary">
-              {projects.length} project{projects.length !== 1 ? "s" : ""}
+            <p className="mt-1.5 font-mono text-[11px] uppercase tracking-[0.14em] text-text-tertiary">
+              <span className="font-dot text-[13px] font-bold text-text-secondary">
+                {projects.length}
+              </span>{" "}
+              project{projects.length !== 1 ? "s" : ""}
             </p>
           )}
         </div>
 
         <div className="flex items-center gap-2">
-          <div className="flex items-center rounded-lg border border-border overflow-hidden">
-            <button
-              onClick={() => setViewMode("grid")}
-              className={cn(
-                "p-1.5 transition-colors",
-                viewMode === "grid"
-                  ? "bg-accent-muted text-accent"
-                  : "text-text-tertiary hover:bg-bg-hover hover:text-text-secondary",
-              )}
-              title="Grid view"
-            >
-              <LayoutGrid className="h-4 w-4" />
-            </button>
-            <button
-              onClick={() => setViewMode("list")}
-              className={cn(
-                "p-1.5 transition-colors",
-                viewMode === "list"
-                  ? "bg-accent-muted text-accent"
-                  : "text-text-tertiary hover:bg-bg-hover hover:text-text-secondary",
-              )}
-              title="List view"
-            >
-              <List className="h-4 w-4" />
-            </button>
-          </div>
+          <Segmented
+            options={[
+              {
+                value: "grid",
+                label: "Grid view",
+                icon: <LayoutGrid className="h-[13px] w-[13px]" />,
+              },
+              {
+                value: "list",
+                label: "List view",
+                icon: <List className="h-[13px] w-[13px]" />,
+              },
+            ] as const}
+            value={viewMode}
+            onChange={setViewMode}
+          />
 
           <Dialog.Root
             open={dialogOpen}
@@ -326,7 +313,7 @@ export default function ProjectsPage() {
             <Dialog.Trigger asChild>
               <Button size="sm">
                 <Plus className="h-4 w-4" />
-                New Project
+                New project
               </Button>
             </Dialog.Trigger>
 
@@ -393,11 +380,11 @@ export default function ProjectsPage() {
 
       {/* Content */}
       {isLoading ? (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3.5">
           {Array.from({ length: 5 }).map((_, i) => (
             <div
               key={i}
-              className="flex flex-col rounded-xl overflow-hidden border border-border"
+              className="flex flex-col rounded-lg overflow-hidden border border-border"
             >
               <div className="aspect-square animate-pulse bg-bg-tertiary" />
               <div className="px-3 py-2.5">

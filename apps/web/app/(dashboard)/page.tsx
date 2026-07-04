@@ -25,7 +25,7 @@ function AssetCard({ asset }: AssetCardProps) {
   return (
     <Link
       href={`/assets/${asset.id}`}
-      className="group flex flex-col gap-2 rounded-lg border border-border bg-bg-secondary p-3 hover:border-border-focus hover:bg-bg-tertiary transition-colors"
+      className="flex flex-col gap-2 rounded-lg border border-border bg-bg-secondary p-3 hover:border-border-strong transition-colors"
     >
       {/* Thumbnail placeholder */}
       <div className="aspect-video w-full rounded-md bg-bg-tertiary overflow-hidden flex items-center justify-center text-text-tertiary">
@@ -34,7 +34,7 @@ function AssetCard({ asset }: AssetCardProps) {
 
       <div className="flex flex-col gap-1">
         <div className="flex items-start justify-between gap-2">
-          <p className="text-sm font-medium text-text-primary line-clamp-1 group-hover:text-accent transition-colors">
+          <p className="text-sm font-medium text-text-primary line-clamp-1">
             {asset.name}
           </p>
         </div>
@@ -42,7 +42,7 @@ function AssetCard({ asset }: AssetCardProps) {
           {formatRelativeTime(asset.updated_at)}
         </p>
         {asset.due_date && (
-          <p className="text-xs text-status-warning">
+          <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-text-secondary">
             Due {new Date(asset.due_date).toLocaleDateString()}
           </p>
         )}
@@ -72,9 +72,13 @@ function Section({
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-2">
         <Icon className="h-4 w-4 text-text-secondary" />
-        <h2 className="text-sm font-semibold text-text-primary">{title}</h2>
+        <h2 className="font-mono text-[11px] uppercase tracking-[0.16em] text-text-secondary">
+          {title}
+        </h2>
         {assets && assets.length > 0 && (
-          <span className="text-xs text-text-tertiary">({assets.length})</span>
+          <span className="font-dot text-xs font-bold text-text-tertiary">
+            {assets.length}
+          </span>
         )}
       </div>
 
