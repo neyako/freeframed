@@ -39,5 +39,8 @@ describe('Progress components', () => {
       throw new Error('Warning fill not found')
     }
     expect(fill).toHaveStyle({ width: '30%' })
+    // exactly one bg-* fill class — no cascade ambiguity with accent/text-primary
+    expect(fill.className).not.toContain('bg-accent')
+    expect(fill.className).not.toContain('bg-text-primary')
   })
 })

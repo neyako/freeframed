@@ -87,15 +87,11 @@ export function ProgressTrack({
   indeterminate = false,
 }: ProgressTrackProps) {
   const clamped = clampProgress(value)
+  const fillColor = warning ? 'bg-amber-500' : accent ? 'bg-accent' : 'bg-text-primary'
   return (
     <div className={cn('h-1.5 w-full rounded-full bg-bg-hover overflow-hidden', className)}>
       <div
-        className={cn(
-          'h-full bg-text-primary',
-          accent && 'bg-accent',
-          warning && 'bg-amber-500',
-          indeterminate && 'w-2/5 animate-indeterminate-slide',
-        )}
+        className={cn('h-full', fillColor, indeterminate && 'w-2/5 animate-indeterminate-slide')}
         style={indeterminate ? undefined : { width: `${clamped}%` }}
       />
     </div>
