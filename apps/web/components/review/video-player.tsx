@@ -310,7 +310,11 @@ export function VideoPlayer({
     (e: React.PointerEvent<HTMLDivElement>) => {
       if (isDrawingMode) return;
       // Keep receiving pointerup even if the pointer leaves the element
-      e.currentTarget.setPointerCapture(e.pointerId);
+      try {
+        e.currentTarget.setPointerCapture(e.pointerId);
+      } catch {
+        /* unsupported pointer capture — hold still works via pointerup on element */
+      }
       holdTimerRef.current = setTimeout(() => {
         holdPrevRateRef.current = playbackRate;
         holdActiveRef.current = true;
@@ -363,11 +367,10 @@ export function VideoPlayer({
     >
       {/* Video area — fills available space, object-contain preserves aspect ratio with letterbox */}
       <div
-        className="flex-1 relative min-h-0 bg-black overflow-hidden cursor-pointer select-none"
+        className="flex-1 relative min-h-0 bg-black overflow-hidden cursor-pointer select-none touch-none"
         onClick={handleContainerClick}
         onPointerDown={startHold}
         onPointerUp={endHold}
-        onPointerLeave={endHold}
         onPointerCancel={endHold}
         onContextMenu={(e) => {
           e.preventDefault();
@@ -433,7 +436,7 @@ export function VideoPlayer({
         <div className="flex items-center gap-1 sm:gap-2 justify-self-start">
           <button
             onClick={() => seek(currentTime - 5)}
-            className="sm:hidden flex h-7 w-7 items-center justify-center rounded text-text-tertiary hover:text-text-primary transition-colors"
+            className="md:hidden flex h-7 w-7 items-center justify-center rounded text-text-tertiary hover:text-text-primary transition-colors"
             aria-label="Back 5 seconds"
           >
             <RotateCcw className="h-4 w-4" />
@@ -453,7 +456,7 @@ export function VideoPlayer({
 
           <button
             onClick={() => seek(currentTime + 5)}
-            className="sm:hidden flex h-7 w-7 items-center justify-center rounded text-text-tertiary hover:text-text-primary transition-colors"
+            className="md:hidden flex h-7 w-7 items-center justify-center rounded text-text-tertiary hover:text-text-primary transition-colors"
             aria-label="Forward 5 seconds"
           >
             <RotateCw className="h-4 w-4" />
@@ -462,7 +465,7 @@ export function VideoPlayer({
           <button
             onClick={() => setLoop((p) => !p)}
             className={cn(
-              "hidden sm:flex h-7 w-7 items-center justify-center rounded transition-colors",
+              "hidden md:flex h-7 w-7 items-center justify-center rounded transition-colors",
               loop
                 ? "text-accent"
                 : "text-text-tertiary hover:text-text-primary",
@@ -474,7 +477,7 @@ export function VideoPlayer({
 
           <button
             onClick={handleSpeedCycle}
-            className="hidden sm:block font-mono text-xs text-text-secondary hover:text-text-primary"
+            className="hidden md:block font-mono text-xs text-text-secondary hover:text-text-primary"
             aria-label="Playback speed"
           >
             {playbackRate}x
@@ -482,7 +485,7 @@ export function VideoPlayer({
 
           <button
             onClick={toggleMute}
-            className="hidden sm:flex h-7 w-7 items-center justify-center rounded text-text-tertiary hover:text-text-primary transition-colors"
+            className="hidden md:flex h-7 w-7 items-center justify-center rounded text-text-tertiary hover:text-text-primary transition-colors"
             aria-label={isMuted ? "Unmute" : "Mute"}
           >
             {isMuted || volume === 0 ? (
