@@ -342,6 +342,20 @@ export function VideoPlayer({
     if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
   }, []);
 
+  // While holding, hls.js recovery or the browser can reset the native rate — pin it back
+  useEffect(() => {
+    if (!isHoldingFast) return;
+    const video = videoRef.current;
+    if (!video) return;
+    const enforce = () => {
+      if (holdActiveRef.current && video.playbackRate !== 2) {
+        video.playbackRate = 2;
+      }
+    };
+    video.addEventListener("ratechange", enforce);
+    return () => video.removeEventListener("ratechange", enforce);
+  }, [isHoldingFast, videoRef]);
+
   const handleFullscreen = useCallback(() => {
     if (containerRef.current) {
       toggleFullscreen(containerRef.current);
@@ -372,10 +386,7 @@ export function VideoPlayer({
         onPointerDown={startHold}
         onPointerUp={endHold}
         onPointerCancel={endHold}
-        onContextMenu={(e) => {
-          e.preventDefault();
-          endHold();
-        }}
+        onContextMenu={(e) => e.preventDefault()}
       >
         <video
           ref={videoRef}
