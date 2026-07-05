@@ -397,10 +397,10 @@ logic/data changes. Planned from branch `advisor/058-share-popup-redesign`
 
 | Plan | Title | Spec | Priority | Effort | Depends on | Status |
 |------|-------|------|----------|--------|------------|--------|
-| 059 | Global header conformance — 34px bordered controls, 0.18em breadcrumb, tertiary-bg search | app-chrome.dc | P2 | S–M | — (soft: 057/058 merged) | TODO |
-| 060 | Projects page — big title + Doto count, Segmented view toggle, mono sections, dashed tile, kills violet/fuchsia gradient + blue/amber pills | app-projects.dc | P2 | M | — (soft: 057) | TODO |
-| 061 | Library screen — 250px mono sidebar, accent-muted active folder, red storage track (amber dies), mono navigator, Segmented right-panel tabs, kills `#1a1a1f` popover | app-library.dc | P2 | M–L | 060 (soft, shared language) | TODO |
-| 062 | Review screen — hairline top bar + mono actions, red version chip, `ff-dotgrid` stage, 372px sidebar + Segmented tabs, mono comment toolbar | app-review.dc | P1 | M | — (soft: 059–061 first) | TODO — unblocked 07-04: plan amended with Step 4b (one-token `bg-bg-secondary/80`→opaque in video-player:358 + audio-player:281; 057's alpha tokens made the formerly-dead `/80` real). Steps 1–3/5–6 applied+verified in working tree; re-dispatch to finish 4b + gate |
+| 059 | Global header conformance — 34px bordered controls, 0.18em breadcrumb, tertiary-bg search | app-chrome.dc | P2 | S–M | — (soft: 057/058 merged) | DONE ✓ verified 07-04 — reviewed+committed at `f518f6c` on worktree branch `worktree-agent-a38981cb70576289e` (Codex executor, 1 revision: kbd chip kept `hidden sm:inline-flex`); gate green in worktree (tsc 0, 166/166, build 0), single-file diff `header.tsx` 11+/13−. Merge worktree branch → main |
+| 060 | Projects page — big title + Doto count, Segmented view toggle, mono sections, dashed tile, kills violet/fuchsia gradient + blue/amber pills | app-projects.dc | P2 | M | — (soft: 057) | DONE ✓ verified 07-04 — Codex executor, all steps applied+reviewed on worktree branch `worktree-agent-ab192ea347ddcaf60`; gate green in worktree (tsc 0, 166/166, build 0, all done-criteria greps pass), 2-file diff 62+/71−. committed at `5a5fede` on worktree branch `worktree-agent-ab192ea347ddcaf60`. Merge worktree branch → main |
+| 061 | Library screen — 250px mono sidebar, accent-muted active folder, red storage track (amber dies), mono navigator, Segmented right-panel tabs, kills `#1a1a1f` popover | app-library.dc | P2 | M–L | 060 (soft, shared language) | DONE ✓ verified 07-04 — Codex executor (2 chunks: steps 1–4, then 5–7 to stay under the 10-min wall), reviewed+committed at `657a2b1` on worktree branch `worktree-agent-af01de05b80bb8f2e`; gate green in worktree (tsc 0, 166/166, build 0), all done-criteria greps pass, 4-file diff 51+/68−. Merge worktree branch → main |
+| 062 | Review screen — hairline top bar + mono actions, red version chip, `ff-dotgrid` stage, 372px sidebar + Segmented tabs, mono comment toolbar | app-review.dc | P1 | M | — (soft: 059–061 first) | DONE ✓ verified 07-04 — steps 1–6 at `1d1ffeb` (branch `advisor/062-app-review-conformance`); step 4b reviewed+committed at `4914d97` on worktree branch `worktree-agent-ac453f56067b1ce97`, gate green in worktree (tsc 0, 166/166, build 0, anchors ×1). Merge worktree branch → advisor branch → main |
 
 ### Recommended execution order (round 8)
 
@@ -433,6 +433,92 @@ logic/data changes. Planned from branch `advisor/058-share-popup-redesign`
   app-review spec applies, but the file is dense with rounds-5/6 anchors;
   needs its own plan with a fresh anchor inventory (see 062 maintenance notes).
 - **Dashboard home redesign** — no screen spec; 060 does token hygiene only.
+
+## Round 9 — quirk fixes + mobile redesign (added 2026-07-04, planned at `a7d1e10`)
+
+From a maintainer bug/quirk report on the round-8 all-in-one preview, plus a
+request to implement the mobile design (`app-mobile.dc.html`, 4 screens sharing a
+bottom tab nav). All specs inlined in the plan files. Decisions taken from the
+maintainer: **Fields tab → removed** (Comments full height); **magic-link auth →
+fully removed** (web + API), email+password only.
+
+**Not planned — resolved / non-issues (vetted):**
+- *Guest HLS `networkError`* — same root cause as the upload failure (HLS `.ts`
+  segments presigned to `S3_PUBLIC_ENDPOINT`, default `localhost:9000`, which was
+  the dead dev-stack MinIO pre-fix). Fixed by pointing the preview at the real
+  :9000. Latent config footgun for *remote* self-hosters (README already
+  documents setting `S3_PUBLIC_ENDPOINT`); no code plan unless it reproduces.
+- *Mixed Vietnamese/English* outside the share components — the rest is
+  user-uploaded content (asset titles, burned-in subtitles), not UI. See 067.
+
+| Plan | Title | Quirk | Priority | Effort | Depends on | Status |
+|------|-------|-------|----------|--------|------------|--------|
+| 063 | First-deploy `/setup` redirect — middleware server-side absolute API URL + all-in-one `INTERNAL_API_URL` | #5 | P1 | S–M | — | DONE ✓ 07-04 — Codex, reviewed+committed `d0f13cb` on `worktree-agent-a8bb876b22fbe1ae5`; gate green (tsc 0, 166/166, build 0), 2-file diff. Merge → main |
+| 064 | Real byte-level upload progress (XHR + `upload.onprogress`, both loops) | #8 | P2 | M | — | DONE ✓ 07-04 — Codex, reviewed+committed `440d06b` on `worktree-agent-a47b0289901d611db`; gate green (tsc 0, 169/169, build 0), helper + both loops + test. Merge → main |
+| 065 | Review player conformance — spec transport bar, custom quality dropdown, drop Fields tab | #1,#3,#4 | P2 | M | soft: 062 | DONE ✓ 07-05 — Codex (redispatched, content-based preflight), reviewed+committed `0f9bd20` on `worktree-agent-af3dcc08dc9c88fe1`; gate green (tsc 0, 166/166, build 0), 2-file diff. Minor: loop btn lost `hidden sm:` (shows on mobile; 071 redoes mobile transport). Merge → main |
+| 066 | Remove magic-link auth — email+password only (web + API + schemas + services) | #6 | P2 | M | — | DONE ✓ 07-05 — Codex (2 chunks + Step-7 resume after a 10-min timeout; stale job-lock cleared), reviewed+committed `f332794` on `worktree-agent-a5024c3a645b94d6c`; gate green (py_compile 0, tsc 0, 166/166, build 0), 8-file diff 93+/563−. Verified no dangling `rate_limit`/`send_task_safe`; login/register/refresh/invite intact; test asserts real `/auth/login` flow. Merge → main |
+| 067 | English-only share UI — strip bilingual Vietnamese strings | #7 | P3 | S | soft: 058 | DONE ✓ 07-04 — Codex, reviewed+committed `ba84d31` on `worktree-agent-a89dda74d17461f79`; gate green (tsc 0, 166/166, build 0), 4-file diff, no Vietnamese left. Merge → main |
+| 068 | Mobile shell foundation — bottom tab nav + responsive dashboard shell | mobile | P2 | M | soft: 059 | DONE ✓ 07-05 — Codex, reviewed+committed `46ea93a` on `worktree-agent-aa9ae40122ded9cbd`; gate green (tsc 0, 168/168, build 0). NEW `mobile-nav.tsx` + layout mount + test. Header de-dup step DROPPED (would collide with 059); defer to mobile-screen plans. Merge → main |
+| 069 | Mobile Projects screen — full-width New-project action + 2-col grid | mobile | P2 | S–M | 060 + 068 merged | TODO (written 07-05; content-based drift check, runs post-merge) |
+| 070 | Mobile Library screen — mobile folder-access strip + single-col assets (desktop folder tree is `hidden lg:flex`, so mobile has no folder access) | mobile | P2 | M–L | 061 + 068 merged | TODO (written 07-05; runs post-merge) |
+| 071 | Mobile Review screen | mobile | — | — | — | COVERED — already conformant via plan 056 (collapsible "Show comments (N)" `md:hidden` toggle + full-width `h-[55vh]` bottom-sheet panel) and plan 065 (transport bar). No separate plan; ±5s skip buttons from the spec are a feature-add, deferred. |
+| 072 | Mobile Settings screen — horizontal section chips (`lg:hidden`), sidebar `hidden lg:block` | mobile | P2 | S | soft: 068 | TODO (written 07-05; independent of round-8 merge — settings untouched by round 8) |
+
+### Follow-up fixes (round 9, post-preview re-test)
+
+Maintainer re-tested the merged preview and hit two bugs; fixed directly (sonnet,
+not the plan lane, at maintainer's request) — commit `21e58f8` on branch
+`fix/round9-followups` (off `preview/round9-view`; cherry-pick onto main after
+merging 063–068):
+- **Setup ↔ login loop** — middleware cached `/setup/status` 60s → stale
+  `needs_setup:true` after account creation. Fixed: `cache: 'no-store'`. Also the
+  setup wizard discarded the tokens `create-superadmin` returns and bounced to
+  `/login`; now `setTokens()` + `/projects` (auto-login).
+- **Progress bar jumps 0→100** — 064 fixed the *upload* phase; the *transcode*
+  phase emitted no percent, so the processing bar sat at 0. Fixed in two commits:
+  `21e58f8` added an indeterminate animated bar (fallback), then `c66dd74`
+  (`feat(transcode): emit transcode_progress events`) wired **real** granular
+  progress — `ffmpeg_transcoder.py` streams ffmpeg `-progress`, computes percent
+  vs. probed duration (preserving `check=True` failure semantics + a stderr-drain
+  thread to avoid pipe deadlock), and `transcode_tasks.py` publishes
+  `transcode_progress` to the existing SSE channel (web was already wired). Verified
+  in-image: real percentages climbed 6→26→46→66→85→99. The indeterminate bar
+  remains for the split second before the first event.
+- **Processing bar color/animation** (`2d24492` + `69f3653`) — the processing bar
+  was red while the Processing badge/label are amber; now amber during transcode
+  (red stays for upload), via a `warning` variant. The indeterminate fallback
+  changed from a static `w-2/5 animate-pulse` (looked stuck at 40%) to a sliding
+  `animate-indeterminate-slide` keyframe. `69f3653` makes the fill a single
+  mutually-exclusive class (`warning?amber:accent?red:text-primary`) so the color
+  is deterministic, not cascade-dependent.
+
+Follow-up branch `fix/round9-followups` stack (cherry-pick onto main after
+063–068): `21e58f8` → `c66dd74` → `2d24492` → `69f3653`.
+- Known pre-existing (not fixed): middleware's `if (!setupDone)` block returns
+  early before the auth-token check, so a client's *first* cookieless request to a
+  protected route gets 200 instead of a `/login` redirect (every later request
+  redirects correctly). Not a data leak — client API calls still need real tokens.
+
+### Recommended execution order (round 9)
+
+1. **063** (P1 bug) and **064** (P2 bug) — independent, parallel-safe (disjoint files).
+2. **066** (magic links) and **067** (English) — independent cleanups, parallel-safe.
+3. **065** (review player) — after 062 is merged (shares the review page).
+4. **068** (mobile shell) — foundation; must land before 069–072.
+5. **069–072** (per-screen mobile) — written after 068's shell is settled (they
+   reuse its `MobileNav` + responsive conventions); order among them is free,
+   though 071 also depends on 065's player changes.
+
+### Notes (round 9)
+
+- All six written plans stamp `a7d1e10`. `video-player.tsx`, `upload-store.ts`,
+  `middleware.ts`, `login-form.tsx`, and `share-*` are NOT touched by the round-8
+  branches (059–062), so 063/064/066/067 execute cleanly from current HEAD; 065
+  and 068 note the soft 062/059 dependencies in their drift checks.
+- 069–072 are deliberately deferred until 068 lands — the per-screen mobile
+  adaptations depend on the shared bottom-nav + shell primitives 068 creates;
+  writing them first would risk rework. The 4-screen spec (`app-mobile.dc.html`)
+  is captured in the design project and summarized in 068's "Why this matters".
 
 ## Reconcile log — 2026-07-03 (run 3)
 
