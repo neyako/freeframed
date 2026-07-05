@@ -31,9 +31,32 @@ export default function SettingsLayout({
   const { user, isSuperAdmin } = useAuthStore()
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-full flex-col lg:flex-row">
+      <nav className="lg:hidden flex gap-2 overflow-x-auto border-b border-border px-4 py-3 [scrollbar-width:none]">
+        {settingsNavItems.map((item) => {
+          if (item.adminOnly && !isSuperAdmin) return null
+
+          const isActive = pathname === item.href || pathname?.startsWith(item.href + '/')
+
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn(
+                'shrink-0 inline-flex items-center rounded-md px-3 py-2 font-mono text-[11px] tracking-[0.05em] transition-colors',
+                isActive
+                  ? 'text-text-primary bg-bg-hover border border-border'
+                  : 'text-text-tertiary border border-transparent hover:text-text-secondary',
+              )}
+            >
+              {item.label}
+            </Link>
+          )
+        })}
+      </nav>
+
       {/* Settings Sidebar */}
-      <aside className="w-56 border-r border-border bg-bg-secondary shrink-0">
+      <aside className="hidden lg:block w-56 border-r border-border bg-bg-secondary shrink-0">
         <div className="p-4 border-b border-border">
           <h2 className="text-sm font-semibold text-text-primary">Settings</h2>
           <p className="text-xs text-text-tertiary mt-0.5">

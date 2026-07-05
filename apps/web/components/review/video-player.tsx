@@ -11,6 +11,8 @@ import {
   ChevronUp,
   Check,
   Repeat,
+  RotateCcw,
+  RotateCw,
 } from "lucide-react";
 import { cn, formatTime, formatTimecode, formatFrames } from "@/lib/utils";
 import { api } from "@/lib/api";
@@ -330,6 +332,7 @@ export function VideoPlayer({
           poster={poster ?? undefined}
           playsInline
           preload="metadata"
+          loop={loop}
         />
 
         {/* Loading spinner */}
@@ -371,6 +374,14 @@ export function VideoPlayer({
         {/* Left: Play, Loop, Speed, Volume */}
         <div className="flex items-center gap-1 sm:gap-2">
           <button
+            onClick={() => seek(currentTime - 5)}
+            className="sm:hidden flex h-7 w-7 items-center justify-center rounded text-text-tertiary hover:text-text-primary transition-colors"
+            aria-label="Back 5 seconds"
+          >
+            <RotateCcw className="h-4 w-4" />
+          </button>
+
+          <button
             onClick={togglePlay}
             className="flex h-[34px] w-[34px] items-center justify-center rounded-md border border-border bg-bg-tertiary text-text-primary hover:border-border-strong transition-colors"
             aria-label={isPlaying ? "Pause" : "Play"}
@@ -383,9 +394,17 @@ export function VideoPlayer({
           </button>
 
           <button
+            onClick={() => seek(currentTime + 5)}
+            className="sm:hidden flex h-7 w-7 items-center justify-center rounded text-text-tertiary hover:text-text-primary transition-colors"
+            aria-label="Forward 5 seconds"
+          >
+            <RotateCw className="h-4 w-4" />
+          </button>
+
+          <button
             onClick={() => setLoop((p) => !p)}
             className={cn(
-              "flex h-7 w-7 items-center justify-center rounded transition-colors",
+              "hidden sm:flex h-7 w-7 items-center justify-center rounded transition-colors",
               loop
                 ? "text-accent"
                 : "text-text-tertiary hover:text-text-primary",
