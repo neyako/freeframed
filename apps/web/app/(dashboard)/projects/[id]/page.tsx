@@ -508,6 +508,48 @@ export default function ProjectDetailPage() {
             </div>
           </div>
         )}
+        {/* Mobile folder strip — desktop uses the sidebar */}
+        <div className="lg:hidden flex gap-2 overflow-x-auto px-4 py-3 border-b border-border [scrollbar-width:none]">
+          <button
+            type="button"
+            onClick={() => handleSelectFolder(null)}
+            className={cn(
+              'shrink-0 inline-flex items-center gap-2 rounded-md px-3 py-2 font-mono text-[11px] tracking-[0.04em] transition-colors',
+              currentFolderId === null && !showTrash
+                ? 'text-accent bg-accent-muted border border-accent-line'
+                : 'text-text-tertiary border border-transparent hover:text-text-secondary',
+            )}
+          >
+            {project?.name ?? 'Project'}
+          </button>
+          {(tree ?? []).map((node) => (
+            <button
+              key={node.id}
+              type="button"
+              onClick={() => handleSelectFolder(node.id)}
+              className={cn(
+                'shrink-0 inline-flex items-center gap-2 rounded-md px-3 py-2 font-mono text-[11px] tracking-[0.04em] transition-colors',
+                currentFolderId === node.id
+                  ? 'text-accent bg-accent-muted border border-accent-line'
+                  : 'text-text-tertiary border border-transparent hover:text-text-secondary',
+              )}
+            >
+              {node.name}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => { setShowTrash(true); setCurrentFolderId(null); }}
+            className={cn(
+              'shrink-0 inline-flex items-center gap-2 rounded-md px-3 py-2 font-mono text-[11px] tracking-[0.04em] transition-colors',
+              showTrash
+                ? 'text-accent bg-accent-muted border border-accent-line'
+                : 'text-text-tertiary border border-transparent hover:text-text-secondary',
+            )}
+          >
+            Deleted
+          </button>
+        </div>
         <div className="px-5 pt-3 pb-6 space-y-3">
           {showTrash ? (
             <div className="flex-1 overflow-y-auto">
