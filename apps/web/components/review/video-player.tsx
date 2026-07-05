@@ -370,9 +370,9 @@ export function VideoPlayer({
       </div>
 
       {/* Bottom transport bar (matches audio player style) */}
-      <div className="flex items-center justify-between h-12 px-2 sm:px-4 bg-bg-secondary border-t border-border shrink-0">
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center h-12 px-2 sm:px-4 bg-bg-secondary border-t border-border shrink-0">
         {/* Left: Play, Loop, Speed, Volume */}
-        <div className="flex items-center gap-1 sm:gap-2">
+        <div className="flex items-center gap-1 sm:gap-2 justify-self-start">
           <button
             onClick={() => seek(currentTime - 5)}
             className="sm:hidden flex h-7 w-7 items-center justify-center rounded text-text-tertiary hover:text-text-primary transition-colors"
@@ -436,7 +436,7 @@ export function VideoPlayer({
         </div>
 
         {/* Center: Timecode display with format picker */}
-        <div className="relative" ref={timeFormatRef}>
+        <div className="relative justify-self-center" ref={timeFormatRef}>
           <button
             onClick={() => setTimeFormatOpen((p) => !p)}
             className="flex items-center gap-1.5 rounded-md border border-border bg-bg-tertiary px-3.5 py-1 hover:border-border-strong transition-colors"
@@ -495,7 +495,7 @@ export function VideoPlayer({
         </div>
 
         {/* Right: Quality, Fullscreen */}
-        <div className="flex items-center gap-1 sm:gap-2">
+        <div className="flex items-center gap-1 sm:gap-2 justify-self-end">
           {/* Quality selector */}
           {qualityLevels.length > 0 && (
             <div className="relative shrink-0" ref={qualityRef}>

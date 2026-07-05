@@ -390,13 +390,15 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
           <VersionSwitcher versions={versions} />
           <button
             onClick={() => versionFileInputRef.current?.click()}
-            className="inline-flex h-[34px] items-center gap-2 rounded border border-border-strong px-3.5 font-mono text-[11px] uppercase tracking-[0.08em] text-text-primary hover:border-text-primary hover:bg-bg-hover transition-colors"
+            className="hidden md:inline-flex h-[34px] items-center gap-2 rounded border border-border-strong px-3.5 font-mono text-[11px] uppercase tracking-[0.08em] text-text-primary hover:border-text-primary hover:bg-bg-hover transition-colors"
             title="Upload new version"
           >
             <Upload className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">New version</span>
           </button>
-          <ShareDialog assetId={asset.id} assetName={asset.name} projectId={projectId} asset={asset} />
+          <div className="hidden md:block">
+            <ShareDialog assetId={asset.id} assetName={asset.name} projectId={projectId} asset={asset} />
+          </div>
           <button
             onClick={() => setSidebarOpen((p) => !p)}
             className={cn(
@@ -432,10 +434,18 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
 
         {/* Right: comments sidebar */}
         {sidebarOpen && (
-          <div className="w-full h-[55vh] md:h-auto md:w-[372px] flex flex-col border-t md:border-t-0 border-l-0 md:border-l border-border bg-bg-secondary shrink-0 animate-in slide-in-from-bottom-2 md:slide-in-from-right-2 duration-150">
+          <div
+            className={cn(
+              'w-full flex flex-col border-t md:border-t-0 border-l-0 md:border-l border-border bg-bg-secondary shrink-0 animate-in slide-in-from-bottom-2 md:slide-in-from-right-2 duration-150 md:h-auto md:w-[372px]',
+              isDrawingMode ? 'h-auto' : 'h-[55vh]',
+            )}
+          >
             <button
               onClick={() => setSidebarOpen(false)}
-              className="md:hidden flex items-center justify-center gap-1.5 w-full py-2 text-xs text-text-tertiary border-b border-border"
+              className={cn(
+                'md:hidden flex items-center justify-center gap-1.5 w-full py-2 text-xs text-text-tertiary border-b border-border',
+                isDrawingMode && 'hidden',
+              )}
             >
               <ChevronDown className="h-4 w-4" />
               Hide comments
@@ -443,16 +453,18 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
 
             {/* Content */}
             <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-              <CommentPanel
-                comments={comments as any}
-                currentUserId={user?.id}
-                onResolve={resolveComment}
-                onDelete={deleteComment}
-                onAddReaction={addReaction}
-                onRemoveReaction={removeReaction}
-                onReply={() => {}}
-                onSubmitReply={handleSubmitReply}
-              />
+              <div className={cn('flex-1 flex flex-col min-h-0 overflow-hidden', isDrawingMode && 'hidden md:flex')}>
+                <CommentPanel
+                  comments={comments as any}
+                  currentUserId={user?.id}
+                  onResolve={resolveComment}
+                  onDelete={deleteComment}
+                  onAddReaction={addReaction}
+                  onRemoveReaction={removeReaction}
+                  onReply={() => {}}
+                  onSubmitReply={handleSubmitReply}
+                />
+              </div>
               {canComment && (
                 <CommentInput
                   assetId={asset.id}
