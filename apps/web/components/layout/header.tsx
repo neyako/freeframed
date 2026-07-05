@@ -181,7 +181,7 @@ export function Header({ onSearchOpen }: HeaderProps) {
           <button
             onClick={() => { setNotifOpen(false); togglePanel() }}
             className={cn(
-              'relative flex h-[34px] w-[34px] items-center justify-center rounded border transition-colors',
+              'relative hidden lg:flex h-[34px] w-[34px] items-center justify-center rounded border transition-colors',
               panelOpen
                 ? 'border-border text-text-primary'
                 : 'border-transparent text-text-secondary hover:border-border hover:text-text-primary',
@@ -199,7 +199,7 @@ export function Header({ onSearchOpen }: HeaderProps) {
           {/* Search trigger */}
           <button
             onClick={onSearchOpen}
-            className="flex h-[34px] items-center gap-2 rounded border border-border bg-bg-tertiary px-3 font-mono text-[11px] uppercase tracking-[0.14em] text-text-tertiary hover:border-border-strong hover:text-text-secondary transition-colors"
+            className="hidden lg:flex h-[34px] items-center gap-2 rounded border border-border bg-bg-tertiary px-3 font-mono text-[11px] uppercase tracking-[0.14em] text-text-tertiary hover:border-border-strong hover:text-text-secondary transition-colors"
           >
             <Search className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Search</span>
@@ -210,7 +210,7 @@ export function Header({ onSearchOpen }: HeaderProps) {
             type="button"
             aria-label="Toggle color theme"
             onClick={() => setTheme(isLight ? 'dark' : 'light')}
-            className="flex h-[34px] items-center gap-2 rounded border border-border bg-bg-tertiary px-2 sm:px-3 font-mono text-[11px] uppercase tracking-[0.12em] text-text-secondary hover:border-border-strong hover:text-text-primary transition-colors"
+            className="hidden lg:flex h-[34px] items-center gap-2 rounded border border-border bg-bg-tertiary px-2 sm:px-3 font-mono text-[11px] uppercase tracking-[0.12em] text-text-secondary hover:border-border-strong hover:text-text-primary transition-colors"
           >
             <span className="relative h-3.5 w-[26px] rounded-full border border-border-strong bg-bg-primary" aria-hidden>
               <span

@@ -270,7 +270,7 @@ export default function ProjectsPage() {
   return (
     <div className="mx-auto w-full max-w-[1360px] px-4 sm:px-8 lg:px-10 pt-6 sm:pt-10 pb-24 space-y-9">
       {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="font-sans text-[clamp(26px,4vw,36px)] font-medium tracking-[-0.02em] leading-none text-text-primary">
             Projects
@@ -285,7 +285,7 @@ export default function ProjectsPage() {
           )}
         </div>
 
-        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+        <div className="flex items-center gap-2">
           <Segmented
             options={[
               {
@@ -311,7 +311,7 @@ export default function ProjectsPage() {
             }}
           >
             <Dialog.Trigger asChild>
-              <Button size="sm" className="w-full sm:w-auto">
+              <Button size="sm" className="hidden sm:inline-flex">
                 <Plus className="h-4 w-4" />
                 New project
               </Button>
@@ -377,6 +377,12 @@ export default function ProjectsPage() {
           </Dialog.Root>
         </div>
       </div>
+
+      {/* Mobile primary action — spec 1a full-width New project */}
+      <Button size="sm" className="w-full sm:hidden" onClick={() => setDialogOpen(true)}>
+        <Plus className="h-4 w-4" />
+        New project
+      </Button>
 
       {/* Content */}
       {isLoading ? (
