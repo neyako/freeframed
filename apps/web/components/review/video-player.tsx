@@ -290,10 +290,45 @@ export function VideoPlayer({
   }, [togglePlay, seek, currentTime, isDrawingMode]);
 
   const handleContainerClick = useCallback(() => {
+    if (holdSuppressClickRef.current) {
+      holdSuppressClickRef.current = false;
+      return;
+    }
     if (!isDrawingMode) {
       togglePlay();
     }
   }, [togglePlay, isDrawingMode]);
+
+  // Hold-to-fast: press-and-hold the video area plays at 2x (TikTok/YouTube style)
+  const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const holdPrevRateRef = useRef(1);
+  const holdSuppressClickRef = useRef(false);
+  const [isHoldingFast, setIsHoldingFast] = useState(false);
+
+  const startHold = useCallback(() => {
+    if (isDrawingMode) return;
+    holdTimerRef.current = setTimeout(() => {
+      holdPrevRateRef.current = playbackRate;
+      setPlaybackRate(2);
+      setIsHoldingFast(true);
+      holdSuppressClickRef.current = true;
+    }, 500);
+  }, [isDrawingMode, playbackRate, setPlaybackRate]);
+
+  const endHold = useCallback(() => {
+    if (holdTimerRef.current) {
+      clearTimeout(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+    if (isHoldingFast) {
+      setPlaybackRate(holdPrevRateRef.current);
+      setIsHoldingFast(false);
+    }
+  }, [isHoldingFast, setPlaybackRate]);
+
+  useEffect(() => () => {
+    if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
+  }, []);
 
   const handleFullscreen = useCallback(() => {
     if (containerRef.current) {
@@ -320,8 +355,12 @@ export function VideoPlayer({
     >
       {/* Video area — fills available space, object-contain preserves aspect ratio with letterbox */}
       <div
-        className="flex-1 relative min-h-0 bg-black overflow-hidden cursor-pointer"
+        className="flex-1 relative min-h-0 bg-black overflow-hidden cursor-pointer select-none"
         onClick={handleContainerClick}
+        onPointerDown={startHold}
+        onPointerUp={endHold}
+        onPointerLeave={endHold}
+        onPointerCancel={endHold}
       >
         <video
           ref={videoRef}
@@ -339,6 +378,13 @@ export function VideoPlayer({
         {isLoading && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div className="w-10 h-10 border-4 border-white/20 border-t-white rounded-full animate-spin" />
+          </div>
+        )}
+
+        {/* Hold-to-fast indicator */}
+        {isHoldingFast && (
+          <div className="pointer-events-none absolute top-3 left-1/2 -translate-x-1/2 z-10 rounded bg-black/70 px-2.5 py-1 font-mono text-xs text-white">
+            2x ››
           </div>
         )}
 
@@ -416,7 +462,7 @@ export function VideoPlayer({
 
           <button
             onClick={handleSpeedCycle}
-            className="font-mono text-xs text-text-secondary hover:text-text-primary"
+            className="hidden sm:block font-mono text-xs text-text-secondary hover:text-text-primary"
             aria-label="Playback speed"
           >
             {playbackRate}x
@@ -424,7 +470,7 @@ export function VideoPlayer({
 
           <button
             onClick={toggleMute}
-            className="flex h-7 w-7 items-center justify-center rounded text-text-tertiary hover:text-text-primary transition-colors"
+            className="hidden sm:flex h-7 w-7 items-center justify-center rounded text-text-tertiary hover:text-text-primary transition-colors"
             aria-label={isMuted ? "Unmute" : "Mute"}
           >
             {isMuted || volume === 0 ? (
