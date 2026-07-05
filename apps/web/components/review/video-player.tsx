@@ -302,29 +302,37 @@ export function VideoPlayer({
   // Hold-to-fast: press-and-hold the video area plays at 2x (TikTok/YouTube style)
   const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const holdPrevRateRef = useRef(1);
+  const holdActiveRef = useRef(false);
   const holdSuppressClickRef = useRef(false);
   const [isHoldingFast, setIsHoldingFast] = useState(false);
 
-  const startHold = useCallback(() => {
-    if (isDrawingMode) return;
-    holdTimerRef.current = setTimeout(() => {
-      holdPrevRateRef.current = playbackRate;
-      setPlaybackRate(2);
-      setIsHoldingFast(true);
-      holdSuppressClickRef.current = true;
-    }, 500);
-  }, [isDrawingMode, playbackRate, setPlaybackRate]);
+  const startHold = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (isDrawingMode) return;
+      // Keep receiving pointerup even if the pointer leaves the element
+      e.currentTarget.setPointerCapture(e.pointerId);
+      holdTimerRef.current = setTimeout(() => {
+        holdPrevRateRef.current = playbackRate;
+        holdActiveRef.current = true;
+        setPlaybackRate(2);
+        setIsHoldingFast(true);
+        holdSuppressClickRef.current = true;
+      }, 500);
+    },
+    [isDrawingMode, playbackRate, setPlaybackRate],
+  );
 
   const endHold = useCallback(() => {
     if (holdTimerRef.current) {
       clearTimeout(holdTimerRef.current);
       holdTimerRef.current = null;
     }
-    if (isHoldingFast) {
+    if (holdActiveRef.current) {
+      holdActiveRef.current = false;
       setPlaybackRate(holdPrevRateRef.current);
       setIsHoldingFast(false);
     }
-  }, [isHoldingFast, setPlaybackRate]);
+  }, [setPlaybackRate]);
 
   useEffect(() => () => {
     if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
@@ -361,6 +369,10 @@ export function VideoPlayer({
         onPointerUp={endHold}
         onPointerLeave={endHold}
         onPointerCancel={endHold}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          endHold();
+        }}
       >
         <video
           ref={videoRef}
