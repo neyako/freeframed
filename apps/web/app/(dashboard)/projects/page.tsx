@@ -146,7 +146,7 @@ function ProjectSection({
           </div>
         </button>
       ) : viewMode === "grid" ? (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3.5">
+        <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-[repeat(auto-fill,minmax(240px,1fr))]">
           {projects.map((project) => (
             <ProjectCard
               key={project.id}
@@ -270,7 +270,7 @@ export default function ProjectsPage() {
   return (
     <div className="mx-auto w-full max-w-[1360px] px-4 sm:px-8 lg:px-10 pt-6 sm:pt-10 pb-24 space-y-9">
       {/* Header */}
-      <div className="flex flex-wrap items-end justify-between gap-5">
+      <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
         <div>
           <h1 className="font-sans text-[clamp(26px,4vw,36px)] font-medium tracking-[-0.02em] leading-none text-text-primary">
             Projects
@@ -285,7 +285,7 @@ export default function ProjectsPage() {
           )}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
           <Segmented
             options={[
               {
@@ -311,7 +311,7 @@ export default function ProjectsPage() {
             }}
           >
             <Dialog.Trigger asChild>
-              <Button size="sm">
+              <Button size="sm" className="w-full sm:w-auto">
                 <Plus className="h-4 w-4" />
                 New project
               </Button>
@@ -380,7 +380,7 @@ export default function ProjectsPage() {
 
       {/* Content */}
       {isLoading ? (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3.5">
+        <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-[repeat(auto-fill,minmax(240px,1fr))]">
           {Array.from({ length: 5 }).map((_, i) => (
             <div
               key={i}
