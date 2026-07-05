@@ -18,6 +18,8 @@ import {
   Users,
   PanelLeftClose,
   PanelLeftOpen,
+  ArrowLeft,
+  Trash2,
 } from "lucide-react";
 import { cn, formatRelativeTime, formatBytes } from "@/lib/utils";
 import { api } from "@/lib/api";
@@ -508,6 +510,43 @@ export default function ProjectDetailPage() {
             </div>
           </div>
         )}
+        {/* Mobile app bar — global header is hidden on this route at <lg (spec 1b) */}
+        <div className="lg:hidden flex items-center gap-3 px-4 pt-4 pb-3 border-b border-border">
+          <button
+            type="button"
+            aria-label="Back"
+            onClick={() => router.push('/projects')}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-text-secondary hover:text-text-primary transition-colors"
+          >
+            <ArrowLeft className="h-[17px] w-[17px]" />
+          </button>
+          <div className="flex min-w-0 flex-1 flex-col gap-px">
+            <span className="font-mono text-[9px] uppercase tracking-[0.18em] text-text-tertiary">Project</span>
+            <span className="truncate text-[15px] font-semibold tracking-[-0.01em] text-text-primary">
+              {project?.name ?? 'Project'}
+            </span>
+          </div>
+          {canManageMembers && (
+            <button
+              type="button"
+              aria-label="Members"
+              onClick={() => setMembersDialogOpen(true)}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border text-text-secondary hover:text-text-primary transition-colors"
+            >
+              <Users className="h-[15px] w-[15px]" />
+            </button>
+          )}
+          {canShare && (
+            <button
+              type="button"
+              aria-label="Share"
+              onClick={() => setActiveShare({ kind: "project" })}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border text-text-secondary hover:text-text-primary transition-colors"
+            >
+              <Share2 className="h-[15px] w-[15px]" />
+            </button>
+          )}
+        </div>
         {/* Mobile folder strip — desktop uses the sidebar */}
         <div className="lg:hidden flex gap-2 overflow-x-auto px-4 py-3 border-b border-border [scrollbar-width:none]">
           <button
@@ -520,6 +559,7 @@ export default function ProjectDetailPage() {
                 : 'text-text-tertiary border border-transparent hover:text-text-secondary',
             )}
           >
+            <FolderIcon className="h-[13px] w-[13px]" />
             {project?.name ?? 'Project'}
           </button>
           {(tree ?? []).map((node) => (
@@ -534,6 +574,7 @@ export default function ProjectDetailPage() {
                   : 'text-text-tertiary border border-transparent hover:text-text-secondary',
               )}
             >
+              <FolderIcon className="h-[13px] w-[13px]" />
               {node.name}
             </button>
           ))}
@@ -547,6 +588,7 @@ export default function ProjectDetailPage() {
                 : 'text-text-tertiary border border-transparent hover:text-text-secondary',
             )}
           >
+            <Trash2 className="h-[13px] w-[13px]" />
             Deleted
           </button>
         </div>
@@ -740,6 +782,7 @@ export default function ProjectDetailPage() {
                     <Button
                       variant="secondary"
                       size="sm"
+                      className="hidden lg:inline-flex"
                       onClick={() => setMembersDialogOpen(true)}
                     >
                       <Users className="h-4 w-4" />
@@ -749,6 +792,7 @@ export default function ProjectDetailPage() {
                     <Button
                       variant="secondary"
                       size="sm"
+                      className="hidden lg:inline-flex"
                       onClick={() => setActiveShare({ kind: "project" })}
                     >
                       <Share2 className="h-4 w-4" />
@@ -759,6 +803,7 @@ export default function ProjectDetailPage() {
                     <Button
                       variant="secondary"
                       size="sm"
+                      className="hidden lg:inline-flex"
                       onClick={() => {
                         setFolderDialogParentId(currentFolderId);
                         setFolderDialogOpen(true);

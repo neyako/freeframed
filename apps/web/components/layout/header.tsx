@@ -61,6 +61,8 @@ function buildBreadcrumbs(pathname: string, dynamicLabels: Record<string, string
 
 export function Header({ onSearchOpen }: HeaderProps) {
   const pathname = usePathname()
+  // Library page renders its own contextual app bar on mobile (spec 1b)
+  const isProjectLibrary = /^\/projects\/[^/]+$/.test(pathname ?? '')
   const { labels, extraCrumbs } = useBreadcrumbStore()
   const { user, logout } = useAuthStore()
   const { files: uploadFiles, togglePanel, panelOpen } = useUploadStore()
@@ -101,7 +103,10 @@ export function Header({ onSearchOpen }: HeaderProps) {
 
   return (
     <>
-      <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-border bg-bg-primary/90 backdrop-blur-sm px-4 sm:px-6">
+      <header className={cn(
+        'sticky top-0 z-20 h-14 items-center justify-between border-b border-border bg-bg-primary/90 backdrop-blur-sm px-4 sm:px-6',
+        isProjectLibrary ? 'hidden lg:flex' : 'flex',
+      )}>
         {/* Left: logo + breadcrumbs */}
         <div className="flex items-center gap-3 min-w-0">
           <Link href="/projects" className="flex items-center gap-2 shrink-0" onClick={() => setNotifOpen(false)}>
