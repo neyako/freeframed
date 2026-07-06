@@ -1,0 +1,40 @@
+# ============================================================
+# FreeFrame — All-in-one (single container, homelab-friendly)
+# ============================================================
+# Everything (web, API, workers, Postgres, Redis, MinIO) runs in
+# one container. All state lives in a bind mount you choose.
+#
+#   docker compose -f docker-compose.aio.yml up -d --build
+#
+# Then open http://<host>:8080 and create the first admin with
+# the SETUP_TOKEN from <data dir>/secrets.env.
+#
+# Reverse proxy is optional. To use one (nginx, Nginx Proxy
+# Manager, Caddy, ...), forward it to this port with websocket
+# support and set FRONTEND_URL/CORS_ORIGINS to your public
+# origin. See deploy/allinone/README.md for examples.
+# ============================================================
+
+services:
+  freeframe:
+    build:
+      context: .
+      dockerfile: Dockerfile.allinone
+    image: freeframe:allinone
+    ports:
+      - "8080:80"
+    volumes:
+      - ./data:/data          # bind mount — change to e.g. /srv/freeframe:/data
+    environment:
+      # Set to the origin users type into their browser
+      FRONTEND_URL: http://localhost:8080
+      CORS_ORIGINS: http://localhost:8080
+      TRANSCODE_HWACCEL: auto
+      # API_WORKERS: 4
+      # TRANSCODING_CONCURRENCY: 2
+    # Intel/AMD GPU transcoding: uncomment
+    # devices:
+    #   - /dev/dri:/dev/dri
+    # NVIDIA: install nvidia-container-toolkit and uncomment
+    # gpus: all
+    restart: unless-stopped

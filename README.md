@@ -50,14 +50,28 @@ Open [http://localhost:3000](http://localhost:3000) to access FreeFrame. The fir
 
 ## Production Deployment
 
+**All-in-one (recommended for homelabs)** — one container with everything bundled,
+all state in a bind-mounted host directory:
+
 ```bash
-cp .env.example .env.prod
+docker compose -f docker-compose.aio.yml up -d --build
+# open http://<host>:8080 — first-admin token is in ./data/secrets.env
+```
+
+**Multi-container** — separate Postgres/Redis/API/worker services for bigger installs:
+
+```bash
+cp .env.prod.example .env.prod
 # Edit .env.prod — set your credentials, S3, email config
-# For SSL: also set DOMAIN and ACME_EMAIL (Traefik auto-provisions Let's Encrypt certs)
 docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
 ```
 
-For the full guide including **SSL setup**, **bring-your-own infrastructure** (external database, Redis, S3, SMTP), scaling, and troubleshooting, see:
+Both serve plain HTTP on port 8080. TLS is bring-your-own: front it with whatever
+reverse proxy you already run (nginx, Nginx Proxy Manager, Caddy, ...) or use it
+as-is on a trusted LAN. See [deploy/allinone/README.md](deploy/allinone/README.md)
+for proxy examples.
+
+For the full guide including **bring-your-own infrastructure** (external database, Redis, S3, SMTP), scaling, and troubleshooting, see:
 
 **[Production Deployment Guide](docs/deployment.md)**
 
@@ -65,8 +79,8 @@ For the full guide including **SSL setup**, **bring-your-own infrastructure** (e
 
 ```
                     ┌──────────────┐
-                    │   Traefik    │
-                    │   :80/:443   │
+                    │    nginx     │
+                    │    :8080     │
                     └──────┬───────┘
                            │
                ┌───────────┴───────────┐
@@ -101,7 +115,7 @@ For the full guide including **SSL setup**, **bring-your-own infrastructure** (e
 | Queue        | Celery + Redis                                    |
 | Transcoding  | FFmpeg (multi-bitrate HLS)                        |
 | Storage      | Any S3-compatible (AWS, R2, B2, MinIO)           |
-| Proxy        | Traefik (auto SSL via Let's Encrypt)              |
+| Proxy        | nginx router; bring your own TLS proxy (optional) |
 | Auth         | JWT + magic code email login                      |
 
 ## Documentation

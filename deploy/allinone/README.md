@@ -16,23 +16,70 @@ with `--build-arg ALLINONE_PLATFORM=linux/arm64`, but hardware encoder availabil
 
 ## Run
 
-CPU-only:
+All state lives under `/data` — mount a host directory there (bind mount), so your
+data sits in a normal folder you can back up, snapshot, or move. Compose users can
+run `docker compose -f docker-compose.aio.yml up -d --build` from the repo root;
+with plain `docker run`:
 
 ```bash
-docker run -d --name freeframe -p 80:80 -v ff_data:/data freeframe:allinone
+docker run -d --name freeframe -p 8080:80 -v /srv/freeframe:/data freeframe:allinone
 ```
 
 NVIDIA GPU hosts can add `--gpus all` when the NVIDIA Container Toolkit is installed:
 
 ```bash
-docker run -d --name freeframe --gpus all -p 80:80 -v ff_data:/data freeframe:allinone
+docker run -d --name freeframe --gpus all -p 8080:80 -v /srv/freeframe:/data freeframe:allinone
 ```
 
 Intel or AMD GPU hosts can pass the DRM device:
 
 ```bash
-docker run -d --name freeframe --device /dev/dri:/dev/dri -p 80:80 -v ff_data:/data freeframe:allinone
+docker run -d --name freeframe --device /dev/dri:/dev/dri -p 8080:80 -v /srv/freeframe:/data freeframe:allinone
 ```
+
+## Reverse proxy (optional)
+
+The container serves everything on one plain-HTTP port; no proxy is required on a
+trusted LAN. To put it behind your own proxy, forward to that port with websocket
+support and unlimited body size, and set `FRONTEND_URL` and `CORS_ORIGINS` to the
+public origin.
+
+Nginx Proxy Manager: add a Proxy Host → forward to `<host>:8080`, enable
+"Websockets Support", and set client_max_body_size 0 under Advanced → Custom
+Nginx Configuration.
+
+nginx:
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name review.example.com;
+    client_max_body_size 0;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_buffering off;
+        proxy_read_timeout 3600s;
+    }
+}
+```
+
+Caddy:
+
+```
+review.example.com {
+    reverse_proxy 127.0.0.1:8080
+}
+```
+
+Then run the container with `-e FRONTEND_URL=https://review.example.com
+-e CORS_ORIGINS=https://review.example.com`.
 
 ## Environment
 
@@ -54,7 +101,7 @@ Example:
 ```bash
 docker run -d --name freeframe \
   -p 80:80 \
-  -v ff_data:/data \
+  -v /srv/freeframe:/data \
   -e JWT_SECRET='replace-with-a-long-random-secret' \
   -e FRONTEND_URL='https://photos.example.com' \
   -e TRANSCODE_HWACCEL=auto \
@@ -93,15 +140,15 @@ docker run -d --name freeframe \
   -e S3_PUBLIC_ENDPOINT='https://s3.example.com' \
   -e S3_ACCESS_KEY='replace-with-a-random-access-key' \
   -e S3_SECRET_KEY='replace-with-a-long-random-secret' \
-  -v ff_data:/data \
+  -v /srv/freeframe:/data \
   freeframe:allinone
 ```
 
 ## Data And Backups
 
-All persistent state lives under the `/data` volume, including Postgres data, MinIO objects, Redis
-AOF data, and the generated secret file. Back up the volume before upgrades and on a regular
-schedule. Because the database is bundled into the application container, this image is intended for
+All persistent state lives under `/data`, including Postgres data, MinIO objects, Redis
+AOF data, and the generated secret file. With a bind mount this is just a host directory —
+back it up before upgrades and on a regular schedule. Because the database is bundled into the application container, this image is intended for
 one machine and is not a horizontal-scaling topology.
 
 ## Encoder Verification

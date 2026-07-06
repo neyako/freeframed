@@ -2,6 +2,12 @@
 
 This guide covers deploying FreeFrame to a production server using Docker Compose.
 
+> **Homelab / single box?** Use the all-in-one image instead — one container with
+> everything bundled and all state in a single bind-mounted directory. See
+> [`deploy/allinone/README.md`](../deploy/allinone/README.md) and
+> [`docker-compose.aio.yml`](../docker-compose.aio.yml). The rest of this guide
+> covers the multi-container stack.
+
 ---
 
 ## Hardware Requirements
@@ -73,7 +79,7 @@ git clone https://github.com/Techiebutler/freeframe.git
 cd freeframe
 
 # 2. Create your production environment file
-cp .env.example .env.prod
+cp .env.prod.example .env.prod
 
 # 3. Edit .env.prod with your actual credentials
 #    At minimum: change passwords, configure S3, email, and JWT_SECRET
@@ -86,52 +92,31 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
 docker compose --env-file .env.prod -f docker-compose.prod.yml ps
 ```
 
-FreeFrame is now running on **port 80**. The first user to sign up becomes the super admin via the setup wizard.
+FreeFrame is now running on **port 8080** (change with `HTTP_PORT` in `.env.prod`). Create the first admin via the setup wizard using your `SETUP_TOKEN`.
+
+All persistent state (Postgres, Redis) lives in bind mounts under `DATA_DIR` (default `./data`) — plain host directories you can back up or move.
 
 ---
 
 ## SSL / TLS Setup
 
-FreeFrame uses **Traefik** as its reverse proxy, which can automatically provision and renew **Let's Encrypt** SSL certificates with zero manual setup.
+The stack serves plain HTTP and does not bundle a TLS proxy — you bring your own. Any reverse proxy works: **nginx**, **Nginx Proxy Manager**, **Caddy**, **Cloudflare Tunnel**, an existing ingress, or none at all on a trusted LAN.
 
-### Enabling SSL
+> **Important:** with `APP_ENV=production`, auth cookies are `Secure`-only — logins require HTTPS at your proxy. For HTTP-only LAN use, set `LOCAL_MODE=true` in `.env.prod`.
 
-Set these two variables in your `.env.prod`:
+### Behind your own reverse proxy
 
-```
-DOMAIN=your-domain.com
-ACME_EMAIL=admin@your-domain.com
-FRONTEND_URL=https://your-domain.com
-```
+1. Point your proxy at FreeFrame's `HTTP_PORT` (default 8080)
+2. Enable websocket support and forward `X-Forwarded-For` / `X-Forwarded-Proto`
+3. Allow large request bodies (`client_max_body_size 0;` in nginx / NPM Advanced config)
+4. Set `FRONTEND_URL` and `CORS_ORIGINS` in `.env.prod` to your `https://` origin
+5. For **Cloudflare**: set SSL mode to "Full"
 
-Then start (or restart) the services:
-
-```bash
-docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
-```
-
-That's it. Traefik will:
-- Automatically obtain SSL certificates from Let's Encrypt
-- Serve your site over HTTPS on port 443
-- Auto-renew certificates before they expire
-
-> **Requirements:** Your domain's DNS A record must point to your server, and ports 80 + 443 must be open. Traefik needs port 80 for the ACME HTTP challenge even when serving HTTPS.
+Example nginx server block and a Caddy one-liner are in [`deploy/allinone/README.md`](../deploy/allinone/README.md#reverse-proxy-optional) — same pattern, just target port 8080 of this stack.
 
 ### Without SSL (HTTP only)
 
-If you don't set `DOMAIN` and `ACME_EMAIL`, FreeFrame runs on **HTTP port 80** only. This is fine for:
-- Local testing of the production build
-- Running behind an external reverse proxy that handles SSL
-
-### Behind an External Reverse Proxy (Cloudflare, Caddy, etc.)
-
-If FreeFrame sits behind another proxy that already handles SSL:
-
-1. Don't set `DOMAIN` / `ACME_EMAIL` — let Traefik run in HTTP mode
-2. Point your external proxy to FreeFrame's port 80
-3. Ensure the proxy forwards these headers: `X-Real-IP`, `X-Forwarded-For`, `X-Forwarded-Proto`
-4. For **Cloudflare**: set SSL mode to "Full"
-5. Set `FRONTEND_URL` in `.env.prod` to your `https://` URL
+Fine for local testing or a trusted LAN. Set `LOCAL_MODE=true` so logins work over plain HTTP, and leave `FRONTEND_URL`/`CORS_ORIGINS` at your `http://host:8080` origin.
 
 ---
 
@@ -143,7 +128,7 @@ FreeFrame's Docker Compose includes PostgreSQL and Redis by default, but you can
 
 Works with: **AWS RDS, Google Cloud SQL, Supabase, Neon, DigitalOcean Managed DB, or any PostgreSQL 15+ instance.**
 
-1. Remove the `postgres` service and `pgdata` volume from `docker-compose.prod.yml`
+1. Remove the `postgres` service from `docker-compose.prod.yml`
 2. Remove `postgres` from the `depends_on` of the `api` and `worker` services
 3. In `.env.prod`, set `DATABASE_URL` to your external database:
    ```
@@ -158,7 +143,7 @@ Works with: **AWS RDS, Google Cloud SQL, Supabase, Neon, DigitalOcean Managed DB
 
 Works with: **AWS ElastiCache, Upstash, Redis Cloud, DigitalOcean Managed Redis, or any Redis 7+ / Valkey instance.** Valkey is a drop-in Redis replacement and works out of the box.
 
-1. Remove the `redis` service and `redisdata` volume from `docker-compose.prod.yml`
+1. Remove the `redis` service from `docker-compose.prod.yml`
 2. Remove `redis` from the `depends_on` of the `api`, `worker`, `email_worker`, and `beat` services
 3. In `.env.prod`, set `REDIS_URL` to your external instance:
    ```
@@ -233,8 +218,10 @@ All environment variables are documented in [`.env.example`](../.env.example). K
 | `S3_ENDPOINT` | Custom S3 endpoint (non-AWS) | (empty = AWS) |
 | `JWT_SECRET` | Auth token signing key | (required, generate with `openssl rand -hex 64`) |
 | `FRONTEND_URL` | Your FreeFrame URL (with https://) | (required) |
-| `DOMAIN` | Your domain for auto SSL | (optional) |
-| `ACME_EMAIL` | Email for Let's Encrypt notifications | (optional) |
+| `CORS_ORIGINS` | Comma-separated allowed browser origins | `FRONTEND_URL` |
+| `HTTP_PORT` | Host port the stack's nginx router listens on | `8080` |
+| `DATA_DIR` | Host directory for Postgres/Redis bind mounts | `./data` |
+| `LOCAL_MODE` | Allow HTTP-only logins + local defaults | `false` |
 | `MAIL_PROVIDER` | `smtp` or `ses` | `smtp` |
 | `API_WORKERS` | Gunicorn worker processes | `4` |
 | `TRANSCODING_CONCURRENCY` | Parallel transcoding jobs | `2` |
@@ -347,7 +334,7 @@ Your media files are already in S3. For redundancy:
 | Database | PostgreSQL | **Critical** — all users, projects, comments, share links |
 | Media files | S3 bucket | **Important** — uploaded assets and transcoded files |
 | Environment config | `.env.prod` | **Important** — save a copy outside the server |
-| SSL certificates | `letsencrypt/` volume | Low — Traefik auto-renews them |
+| SSL certificates | your reverse proxy | Managed outside this stack |
 
 ---
 
@@ -380,7 +367,7 @@ Database migrations run automatically on API startup. Always check the [CHANGELO
 docker compose --env-file .env.prod -f docker-compose.prod.yml logs api
 docker compose --env-file .env.prod -f docker-compose.prod.yml logs worker
 docker compose --env-file .env.prod -f docker-compose.prod.yml logs web
-docker compose --env-file .env.prod -f docker-compose.prod.yml logs traefik
+docker compose --env-file .env.prod -f docker-compose.prod.yml logs proxy
 
 # Check all service statuses
 docker compose --env-file .env.prod -f docker-compose.prod.yml ps
@@ -396,13 +383,11 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm api sh -
 docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm api sh -c "cd /workspace/apps/api && alembic current"
 ```
 
-### SSL certificate not working
+### Login fails / session not persisting
 
-- Verify `DOMAIN` and `ACME_EMAIL` are set in `.env.prod`
-- Check that DNS A record points to your server: `dig your-domain.com`
-- Ensure ports 80 and 443 are open: `sudo ufw allow 80,443/tcp`
-- Check Traefik logs: `docker compose --env-file .env.prod -f docker-compose.prod.yml logs traefik`
-- Let's Encrypt has rate limits — if you hit them, wait an hour and retry
+- Behind HTTPS proxy: confirm the proxy forwards `X-Forwarded-Proto: https` and `FRONTEND_URL`/`CORS_ORIGINS` match the browser origin exactly
+- Plain HTTP (LAN): set `LOCAL_MODE=true` — production mode issues `Secure` cookies that browsers drop over HTTP
+- SSL certificates are handled by your own reverse proxy — check its logs/docs for ACME issues
 
 ### S3 connection issues
 
@@ -410,17 +395,17 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm api sh -
 - Ensure your bucket exists and has proper CORS configuration
 - For non-AWS providers, double-check the `S3_ENDPOINT` URL
 
-### Port 80/443 already in use
+### Port already in use
 
 ```bash
 # Find what's using the port
-sudo lsof -i :80
-# Stop that service or change the port mapping in docker-compose.prod.yml
+sudo lsof -i :8080
+# Stop that service or change HTTP_PORT in .env.prod
 ```
 
 ### Large file uploads failing
 
-Large media files are uploaded directly to S3 via presigned URLs (bypassing Traefik), so proxy limits don't apply to file data. If uploads still fail:
+Large media files are uploaded directly to S3 via presigned URLs (bypassing the stack's proxy), so its limits don't apply to file data — but your own reverse proxy must allow large bodies (`client_max_body_size 0;`). If uploads still fail:
 - Check that your S3 bucket doesn't have a size limit
 - Verify your server has enough `/tmp` space for transcoding
 - Check worker logs for processing errors
