@@ -4,7 +4,11 @@
 # Everything (web, API, workers, Postgres, Redis, MinIO) runs in
 # one container. All state lives in a bind mount you choose.
 #
-#   docker compose -f docker-compose.aio.yml up -d --build
+#   docker compose -f docker-compose.aio.yml up -d
+#
+# Uses the prebuilt image from GHCR (built by CI on every push to
+# main). To build from source instead, uncomment the build block
+# and run with --build.
 #
 # Then open http://<host>:8080 and create the first admin with
 # the SETUP_TOKEN from <data dir>/secrets.env.
@@ -17,10 +21,11 @@
 
 services:
   freeframe:
-    build:
-      context: .
-      dockerfile: Dockerfile.allinone
-    image: freeframe:allinone
+    image: ghcr.io/neyako/freeframe:edge
+    # Build from source instead:
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile.allinone
     ports:
       - "8080:80"
     volumes:

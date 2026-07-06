@@ -4,7 +4,16 @@ This image is the single-box deployment path for FreeFrame: web, API, workers, P
 MinIO, nginx, and supervisor run in one container. Use the multi-container deployment when you need
 horizontal scaling or independently managed stateful services.
 
-## Build
+## Get the image
+
+Prebuilt (recommended — built by GitHub Actions on every push to main):
+
+```bash
+docker pull ghcr.io/neyako/freeframe:edge     # latest main
+docker pull ghcr.io/neyako/freeframe:latest   # latest tagged release
+```
+
+Or build from source:
 
 ```bash
 docker build -f Dockerfile.allinone -t freeframe:allinone .
@@ -18,23 +27,23 @@ with `--build-arg ALLINONE_PLATFORM=linux/arm64`, but hardware encoder availabil
 
 All state lives under `/data` — mount a host directory there (bind mount), so your
 data sits in a normal folder you can back up, snapshot, or move. Compose users can
-run `docker compose -f docker-compose.aio.yml up -d --build` from the repo root;
+run `docker compose -f docker-compose.aio.yml up -d` from the repo root;
 with plain `docker run`:
 
 ```bash
-docker run -d --name freeframe -p 8080:80 -v /srv/freeframe:/data freeframe:allinone
+docker run -d --name freeframe -p 8080:80 -v /srv/freeframe:/data ghcr.io/neyako/freeframe:edge
 ```
 
 NVIDIA GPU hosts can add `--gpus all` when the NVIDIA Container Toolkit is installed:
 
 ```bash
-docker run -d --name freeframe --gpus all -p 8080:80 -v /srv/freeframe:/data freeframe:allinone
+docker run -d --name freeframe --gpus all -p 8080:80 -v /srv/freeframe:/data ghcr.io/neyako/freeframe:edge
 ```
 
 Intel or AMD GPU hosts can pass the DRM device:
 
 ```bash
-docker run -d --name freeframe --device /dev/dri:/dev/dri -p 8080:80 -v /srv/freeframe:/data freeframe:allinone
+docker run -d --name freeframe --device /dev/dri:/dev/dri -p 8080:80 -v /srv/freeframe:/data ghcr.io/neyako/freeframe:edge
 ```
 
 ## Reverse proxy (optional)
@@ -107,7 +116,7 @@ docker run -d --name freeframe \
   -e TRANSCODE_HWACCEL=auto \
   -e API_WORKERS=4 \
   -e TRANSCODING_CONCURRENCY=2 \
-  freeframe:allinone
+  ghcr.io/neyako/freeframe:edge
 ```
 
 ## Uploads & Object Storage
@@ -141,7 +150,7 @@ docker run -d --name freeframe \
   -e S3_ACCESS_KEY='replace-with-a-random-access-key' \
   -e S3_SECRET_KEY='replace-with-a-long-random-secret' \
   -v /srv/freeframe:/data \
-  freeframe:allinone
+  ghcr.io/neyako/freeframe:edge
 ```
 
 ## Data And Backups

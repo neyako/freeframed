@@ -51,11 +51,14 @@ Open [http://localhost:3000](http://localhost:3000) to access FreeFrame. The fir
 ## Production Deployment
 
 **All-in-one (recommended for homelabs)** — one container with everything bundled,
-all state in a bind-mounted host directory:
+all state in a bind-mounted host directory. Prebuilt images are published to GHCR
+on every push to main (`:edge`) and on version tags (`:latest`, `:x.y.z`):
 
 ```bash
-docker compose -f docker-compose.aio.yml up -d --build
-# open http://<host>:8080 — first-admin token is in ./data/secrets.env
+docker run -d --name freeframe -p 8080:80 -v /srv/freeframe:/data ghcr.io/neyako/freeframe:edge
+# or, from a repo checkout:
+docker compose -f docker-compose.aio.yml up -d
+# open http://<host>:8080 — first-admin token is in <data dir>/secrets.env
 ```
 
 **Multi-container** — separate Postgres/Redis/API/worker services for bigger installs:
