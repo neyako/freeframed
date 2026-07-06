@@ -47,5 +47,9 @@ export async function fetchShareStreamInfo(
 }
 
 export function resolveStreamUrl(url: string): string {
-  return url.startsWith('/') ? `${API_URL}${url}` : url
+  if (!url.startsWith('/')) return url
+  // Idempotent: with a path-relative API_URL (e.g. "/api"), a second resolve
+  // would otherwise produce "/api/api/..."
+  if (url.startsWith(`${API_URL}/`)) return url
+  return `${API_URL}${url}`
 }

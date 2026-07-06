@@ -3,16 +3,13 @@
 import { Loader2, Video } from 'lucide-react'
 import { useVideoPlayer } from '@/hooks/use-video-player'
 import { cn } from '@/lib/utils'
+import { resolveStreamUrl } from './share-stream'
+
+export { resolveStreamUrl }
 
 interface ShareVideoPlayerProps {
   src: string
   className?: string
-}
-
-export function resolveStreamUrl(url: string): string {
-  return url.startsWith('/')
-    ? `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}${url}`
-    : url
 }
 
 export function ShareVideoPlayer({ src, className }: ShareVideoPlayerProps) {

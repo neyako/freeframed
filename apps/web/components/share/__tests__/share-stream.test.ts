@@ -60,4 +60,9 @@ describe('resolveStreamUrl', () => {
       'https://cdn.example.test/x.mp4',
     )
   })
+
+  it('is idempotent — resolving twice must not double the prefix', () => {
+    const once = resolveStreamUrl('/stream/hls/master.m3u8?token=x')
+    expect(resolveStreamUrl(once)).toBe(once)
+  })
 })

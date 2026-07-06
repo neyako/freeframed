@@ -18,6 +18,7 @@ import { cn, formatTime, formatTimecode, formatFrames } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { useReviewStore, type TimeFormat } from "@/stores/review-store";
 import { useVideoPlayer } from "@/hooks/use-video-player";
+import { resolveStreamUrl } from "@/components/share/share-stream";
 import { useReview } from "./review-provider";
 import { ProgressBar } from "./progress-bar";
 import type { Comment } from "@/types";
@@ -188,20 +189,14 @@ export function VideoPlayer({
   useEffect(() => {
     setStreamUrl(null);
     if (initialStreamUrl) {
-      const resolved = initialStreamUrl.startsWith("/")
-        ? `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}${initialStreamUrl}`
-        : initialStreamUrl;
-      setStreamUrl(resolved);
+      setStreamUrl(resolveStreamUrl(initialStreamUrl));
       return;
     }
     api
       .get<StreamUrlResponse>(`/assets/${assetId}/stream`)
       .then((data) => {
         // HLS proxy returns relative paths — prepend API URL
-        const url = data.url.startsWith("/")
-          ? `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}${data.url}`
-          : data.url;
-        setStreamUrl(url);
+        setStreamUrl(resolveStreamUrl(data.url));
       })
       .catch(() => {
         /* stream URL errors handled by player error state */
