@@ -131,11 +131,19 @@ def test_get_me(client, auth_headers, test_user):
 
 def test_refresh_token(client, mock_db):
     """POST /auth/refresh — valid refresh token returns new access_token."""
+    from datetime import datetime, timedelta, timezone
+    from unittest.mock import MagicMock
+
     from apps.api.services.auth_service import create_refresh_token
 
     user = _mock_user("ref@example.com")
     refresh = create_refresh_token(str(user.id))
-    mock_db.first.return_value = user
+    token_row = MagicMock()
+    token_row.user_id = user.id
+    token_row.expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+    token_row.revoked_at = None
+    # order: stored refresh-token row lookup, then user lookup
+    mock_db.first.side_effect = [token_row, user]
 
     resp = client.post("/auth/refresh", json={"refresh_token": refresh})
     assert resp.status_code == 200

@@ -47,7 +47,8 @@ def test_create_reviewer_share_defaults_to_safe_asset_scope(
     project_id = uuid.uuid4()
     asset = _mock_asset(asset_id, project_id, test_user.id)
     member = _mock_member(project_id, test_user.id, ProjectRole.editor)
-    mock_db.first.side_effect = [asset, member]
+    # project-exists check runs before the member lookup
+    mock_db.first.side_effect = [asset, MagicMock(), member]
 
     response = client.post(
         f"/assets/{asset_id}/reviewer-share",
@@ -80,7 +81,8 @@ def test_create_reviewer_share_can_opt_into_download(
     project_id = uuid.uuid4()
     asset = _mock_asset(asset_id, project_id, test_user.id)
     member = _mock_member(project_id, test_user.id, ProjectRole.editor)
-    mock_db.first.side_effect = [asset, member]
+    # project-exists check runs before the member lookup
+    mock_db.first.side_effect = [asset, MagicMock(), member]
 
     response = client.post(
         f"/assets/{asset_id}/reviewer-share",
@@ -108,7 +110,8 @@ def test_create_reviewer_share_defaults_permission_to_comment(
     project_id = uuid.uuid4()
     asset = _mock_asset(asset_id, project_id, test_user.id)
     member = _mock_member(project_id, test_user.id, ProjectRole.editor)
-    mock_db.first.side_effect = [asset, member]
+    # project-exists check runs before the member lookup
+    mock_db.first.side_effect = [asset, MagicMock(), member]
 
     response = client.post(
         f"/assets/{asset_id}/reviewer-share",
@@ -132,7 +135,8 @@ def test_create_reviewer_share_rejects_non_editor(
     project_id = uuid.uuid4()
     asset = _mock_asset(asset_id, project_id, test_user.id)
     member = _mock_member(project_id, test_user.id, ProjectRole.reviewer)
-    mock_db.first.side_effect = [asset, member]
+    # project-exists check runs before the member lookup
+    mock_db.first.side_effect = [asset, MagicMock(), member]
 
     response = client.post(
         f"/assets/{asset_id}/reviewer-share",
@@ -153,7 +157,8 @@ def test_reviewer_share_token_resolves_to_single_asset(
     project_id = uuid.uuid4()
     asset = _mock_asset(asset_id, project_id, test_user.id)
     member = _mock_member(project_id, test_user.id, ProjectRole.editor)
-    mock_db.first.side_effect = [asset, member]
+    # project-exists check runs before the member lookup
+    mock_db.first.side_effect = [asset, MagicMock(), member]
 
     create_response = client.post(
         f"/assets/{asset_id}/reviewer-share",
@@ -170,7 +175,8 @@ def test_reviewer_share_token_resolves_to_single_asset(
     link.appearance = {}
     link.created_at = datetime.now(timezone.utc)
     link.deleted_at = None
-    mock_db.first.side_effect = [link, asset, None, None, None]
+    # validate_share_link now loads the asset and checks its project first
+    mock_db.first.side_effect = [link, asset, MagicMock(), asset, None, None, None]
 
     validate_response = client.get(f"/share/{link.token}")
 
