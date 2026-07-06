@@ -63,9 +63,12 @@ class TestRewriteManifest:
         from apps.api.routers.hls_proxy import _rewrite_manifest
 
         content = "#EXTM3U\n#EXT-X-VERSION:3\n#EXTINF:2.000,\nsegment0.ts\n#EXT-X-ENDLIST"
-        result = _rewrite_manifest(content, "hls/proj/ver", "720p/index.m3u8", "tok123")
+        result = _rewrite_manifest(content, "tok123")
 
-        assert "720p/segment0.ts?token=tok123" in result
+        # Must stay relative to the variant manifest URL — a "720p/" prefix
+        # here would resolve to 720p/720p/segment0.ts in the player
+        assert "\nsegment0.ts?token=tok123" in result
+        assert "720p/segment0.ts" not in result
         mock_presign.assert_not_called()
 
     @patch("apps.api.routers.hls_proxy.generate_presigned_get_url")
@@ -73,7 +76,7 @@ class TestRewriteManifest:
         from apps.api.routers.hls_proxy import _rewrite_manifest
 
         content = "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=800000\n720p/index.m3u8"
-        result = _rewrite_manifest(content, "hls/proj/ver", "master.m3u8", "tok123")
+        result = _rewrite_manifest(content, "tok123")
 
         assert "720p/index.m3u8?token=tok123" in result
         mock_presign.assert_not_called()
@@ -83,7 +86,7 @@ class TestRewriteManifest:
         from apps.api.routers.hls_proxy import _rewrite_manifest
 
         content = "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-ENDLIST"
-        result = _rewrite_manifest(content, "hls/proj/ver", "index.m3u8", "tok123")
+        result = _rewrite_manifest(content, "tok123")
 
         assert result == content
 

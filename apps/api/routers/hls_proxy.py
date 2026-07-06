@@ -136,8 +136,7 @@ def _revalidate_hls_token(db: Session, payload: dict, current_user: User | None)
     return payload["pfx"]
 
 
-def _rewrite_manifest(content: str, s3_prefix: str, manifest_path: str, token: str) -> str:
-    manifest_dir = posixpath.dirname(manifest_path)
+def _rewrite_manifest(content: str, token: str) -> str:
     lines = content.split("\n")
     result = []
 
@@ -149,17 +148,11 @@ def _rewrite_manifest(content: str, s3_prefix: str, manifest_path: str, token: s
             result.append(line)
             continue
 
-        # Resolve segment/playlist path relative to current manifest directory
-        if manifest_dir:
-            relative_key = f"{manifest_dir}/{stripped}"
-        else:
-            relative_key = stripped
-
-        if stripped.endswith(".m3u8"):
-            # Variant playlist -> proxy URL with token
-            result.append(f"{relative_key}?token={token}")
-        elif stripped.endswith(".ts"):
-            result.append(f"{relative_key}?token={token}")
+        # Manifest entries are already relative to the manifest's own URL,
+        # and the player resolves them against the proxy manifest URL —
+        # keep them as-is, just append the token.
+        if stripped.endswith((".m3u8", ".ts")):
+            result.append(f"{stripped}?token={token}")
         else:
             result.append(line)
 
@@ -205,7 +198,7 @@ def hls_proxy(
         logger.error("Failed to fetch HLS manifest %s: %s", s3_key, e)
         raise HTTPException(status_code=404, detail="Manifest not found")
 
-    rewritten = _rewrite_manifest(content, s3_prefix, normalised, token)
+    rewritten = _rewrite_manifest(content, token)
 
     return Response(
         content=rewritten,
