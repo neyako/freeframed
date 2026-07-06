@@ -1,4 +1,3 @@
-import json
 import os
 import re
 import boto3
@@ -122,27 +121,10 @@ def ensure_bucket_exists():
         except ClientError:
             pass  # CORS config failed, non-critical
 
-        # Set public-read policy on processed/ prefix so HLS sub-playlists
-        # and .ts segments can be fetched without presigned URLs
         try:
-            policy = {
-                "Version": "2012-10-17",
-                "Statement": [
-                    {
-                        "Sid": "PublicReadProcessed",
-                        "Effect": "Allow",
-                        "Principal": "*",
-                        "Action": "s3:GetObject",
-                        "Resource": f"arn:aws:s3:::{settings.s3_bucket}/processed/*",
-                    }
-                ],
-            }
-            s3.put_bucket_policy(
-                Bucket=settings.s3_bucket,
-                Policy=json.dumps(policy),
-            )
+            s3.delete_bucket_policy(Bucket=settings.s3_bucket)
         except ClientError:
-            pass  # Policy config failed, non-critical
+            pass
 
 
 def get_content_type(key: str) -> tuple[str, str]:

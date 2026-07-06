@@ -5,26 +5,32 @@ describe('Token management', () => {
   beforeEach(() => {
     localStorage.clear()
     vi.clearAllMocks()
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }))
   })
 
-  it('setTokens stores access and refresh tokens in localStorage', () => {
+  it('setTokens clears legacy localStorage tokens', () => {
+    localStorage.setItem('ff_access_token', 'old-access')
+    localStorage.setItem('ff_refresh_token', 'old-refresh')
+
     setTokens('access-123', 'refresh-456')
-    expect(localStorage.getItem('ff_access_token')).toBe('access-123')
-    expect(localStorage.getItem('ff_refresh_token')).toBe('refresh-456')
+    expect(localStorage.getItem('ff_access_token')).toBeNull()
+    expect(localStorage.getItem('ff_refresh_token')).toBeNull()
   })
 
-  it('getAccessToken retrieves access token from localStorage', () => {
+  it('getAccessToken returns null and clears legacy token', () => {
     localStorage.setItem('ff_access_token', 'my-access-token')
-    expect(getAccessToken()).toBe('my-access-token')
+    expect(getAccessToken()).toBeNull()
+    expect(localStorage.getItem('ff_access_token')).toBeNull()
   })
 
   it('getAccessToken returns null when no token stored', () => {
     expect(getAccessToken()).toBeNull()
   })
 
-  it('getRefreshToken retrieves refresh token from localStorage', () => {
+  it('getRefreshToken returns null and clears legacy token', () => {
     localStorage.setItem('ff_refresh_token', 'my-refresh-token')
-    expect(getRefreshToken()).toBe('my-refresh-token')
+    expect(getRefreshToken()).toBeNull()
+    expect(localStorage.getItem('ff_refresh_token')).toBeNull()
   })
 
   it('getRefreshToken returns null when no token stored', () => {
@@ -46,9 +52,13 @@ describe('Token management', () => {
 
     expect(localStorage.getItem('ff_access_token')).toBeNull()
     expect(localStorage.getItem('ff_refresh_token')).toBeNull()
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/auth/logout'),
+      expect.objectContaining({ credentials: 'include', method: 'POST' }),
+    )
   })
 
-  it('clearTokens redirects to /login', () => {
+  it('clearTokens redirects to /login', async () => {
     const locationMock = { href: '' }
     Object.defineProperty(window, 'location', {
       value: locationMock,
@@ -56,6 +66,7 @@ describe('Token management', () => {
     })
 
     clearTokens()
+    await Promise.resolve()
 
     expect(window.location.href).toBe('/login')
   })

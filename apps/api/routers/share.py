@@ -355,7 +355,14 @@ def validate_share_link_endpoint(
             if media_file.s3_key_processed:
                 if asset.asset_type == AssetType.video:
                     # Route through /stream/hls so S3 can stay private (#51)
-                    hls_token = create_hls_token(media_file.s3_key_processed)
+                    hls_token = create_hls_token(
+                        media_file.s3_key_processed,
+                        asset_id=asset.id,
+                        version_id=media_file.version_id,
+                        user_id=current_user.id if current_user else None,
+                        share_token=token,
+                        share_session=session_id,
+                    )
                     stream_url = f"/stream/hls/master.m3u8?token={hls_token}"
                 else:
                     stream_url = generate_presigned_get_url(media_file.s3_key_processed)
@@ -1499,7 +1506,14 @@ def get_share_stream_url(
             url = generate_presigned_get_url(s3_key, download_filename=filename)
         else:
             # Route through /stream/hls so S3 can stay private (#51)
-            hls_token = create_hls_token(media_file.s3_key_processed)
+            hls_token = create_hls_token(
+                media_file.s3_key_processed,
+                asset_id=asset.id,
+                version_id=media_file.version_id,
+                user_id=current_user.id if current_user else None,
+                share_token=token,
+                share_session=share_session,
+            )
             url = f"/stream/hls/master.m3u8?token={hls_token}"
     else:
         s3_key = media_file.s3_key_processed or media_file.s3_key_raw

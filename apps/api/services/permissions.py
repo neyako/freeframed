@@ -11,7 +11,16 @@ from ..services.redis_service import verify_share_session
 
 # ── Project-level ──────────────────────────────────────────────────────────────
 
+def _project_exists(db: Session, project_id: uuid.UUID) -> bool:
+    return db.query(Project.id).filter(
+        Project.id == project_id,
+        Project.deleted_at.is_(None),
+    ).first() is not None
+
+
 def get_project_member(db: Session, project_id: uuid.UUID, user_id: uuid.UUID) -> ProjectMember | None:
+    if not _project_exists(db, project_id):
+        return None
     return db.query(ProjectMember).filter(
         ProjectMember.project_id == project_id,
         ProjectMember.user_id == user_id,
@@ -59,6 +68,9 @@ def is_public_project(db: Session, project_id: uuid.UUID) -> bool:
 
 def can_access_asset(db: Session, asset: Asset, user: User) -> bool:
     """Check if user can access the asset via any path."""
+    if not _project_exists(db, asset.project_id):
+        return False
+
     # 1. Asset creator
     if asset.created_by == user.id:
         return True
@@ -117,13 +129,26 @@ def _is_descendant_of(db: Session, folder_id: uuid.UUID, ancestor_id: uuid.UUID)
         if current_id == ancestor_id:
             return True
         visited.add(current_id)
-        folder = db.query(Folder.parent_id).filter(Folder.id == current_id).first()
+        folder = db.query(Folder.parent_id).filter(
+            Folder.id == current_id,
+            Folder.deleted_at.is_(None),
+        ).first()
         current_id = folder.parent_id if folder else None
     return False
 
 
 def validate_asset_in_share(db: Session, link: ShareLink, asset: Asset) -> None:
+    if not _project_exists(db, asset.project_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+
     if link.folder_id:
+        folder = db.query(Folder).filter(
+            Folder.id == link.folder_id,
+            Folder.deleted_at.is_(None),
+            Folder.project_id == asset.project_id,
+        ).first()
+        if not folder:
+            raise HTTPException(status_code=404, detail="Shared folder not found")
         if asset.folder_id != link.folder_id:
             if not asset.folder_id or not _is_descendant_of(
                 db,
@@ -137,6 +162,8 @@ def validate_asset_in_share(db: Session, link: ShareLink, asset: Asset) -> None:
     elif link.project_id:
         if asset.project_id != link.project_id:
             raise HTTPException(status_code=403, detail="Asset is not within the shared project")
+        if not _project_exists(db, link.project_id):
+            raise HTTPException(status_code=404, detail="Project not found")
         multi_items = db.query(ShareLinkItem).filter(ShareLinkItem.share_link_id == link.id).all()
         if multi_items:
             multi_asset_ids = {item.asset_id for item in multi_items if item.asset_id}
@@ -171,6 +198,23 @@ def validate_share_link(db: Session, token: str) -> ShareLink:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Share link is disabled")
     if link.expires_at and link.expires_at < datetime.now(timezone.utc):
         raise HTTPException(status_code=status.HTTP_410_GONE, detail="Share link has expired")
+    if link.project_id:
+        if not _project_exists(db, link.project_id):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Share link not found")
+    if link.folder_id:
+        folder = db.query(Folder).filter(
+            Folder.id == link.folder_id,
+            Folder.deleted_at.is_(None),
+        ).first()
+        if not folder or not _project_exists(db, folder.project_id):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Share link not found")
+    if link.asset_id:
+        asset = db.query(Asset).filter(
+            Asset.id == link.asset_id,
+            Asset.deleted_at.is_(None),
+        ).first()
+        if not asset or not _project_exists(db, asset.project_id):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Share link not found")
     return link
 
 

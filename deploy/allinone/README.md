@@ -19,19 +19,19 @@ with `--build-arg ALLINONE_PLATFORM=linux/arm64`, but hardware encoder availabil
 CPU-only:
 
 ```bash
-docker run -d --name freeframe -p 80:80 -p 9000:9000 -v ff_data:/data freeframe:allinone
+docker run -d --name freeframe -p 80:80 -v ff_data:/data freeframe:allinone
 ```
 
 NVIDIA GPU hosts can add `--gpus all` when the NVIDIA Container Toolkit is installed:
 
 ```bash
-docker run -d --name freeframe --gpus all -p 80:80 -p 9000:9000 -v ff_data:/data freeframe:allinone
+docker run -d --name freeframe --gpus all -p 80:80 -v ff_data:/data freeframe:allinone
 ```
 
 Intel or AMD GPU hosts can pass the DRM device:
 
 ```bash
-docker run -d --name freeframe --device /dev/dri:/dev/dri -p 80:80 -p 9000:9000 -v ff_data:/data freeframe:allinone
+docker run -d --name freeframe --device /dev/dri:/dev/dri -p 80:80 -v ff_data:/data freeframe:allinone
 ```
 
 ## Environment
@@ -40,6 +40,8 @@ Common overrides:
 
 - `JWT_SECRET`: set this explicitly for production. If omitted, the container generates one and
   persists it in `/data/secrets.env`.
+- `SETUP_TOKEN`: set this explicitly or read the generated value from `/data/secrets.env` before
+  creating the first admin account.
 - `FRONTEND_URL`: set this to the public origin, such as `https://photos.example.com`, so generated
   links point at the right host.
 - `TRANSCODE_HWACCEL`: defaults to `auto`; set a specific backend only when troubleshooting host
@@ -52,7 +54,6 @@ Example:
 ```bash
 docker run -d --name freeframe \
   -p 80:80 \
-  -p 9000:9000 \
   -v ff_data:/data \
   -e JWT_SECRET='replace-with-a-long-random-secret' \
   -e FRONTEND_URL='https://photos.example.com' \
@@ -64,18 +65,17 @@ docker run -d --name freeframe \
 
 ## Uploads & Object Storage
 
-Uploads go directly from the browser to the bundled MinIO object store, so MinIO must be reachable
-from the browser. Always publish its port with `-p 9000:9000`; MinIO listens on `0.0.0.0:9000` inside
-the container.
+The bundled MinIO service listens on `127.0.0.1:9000` inside the container and is not published by
+default. For production, use an external S3-compatible endpoint and set `S3_PUBLIC_ENDPOINT` to the
+browser-reachable HTTPS origin for presigned uploads and downloads.
 
-`S3_PUBLIC_ENDPOINT` is the URL the browser uses for presigned uploads and downloads. It defaults to
-`http://localhost:9000`, which is correct for local testing. On a remote host you must override it to
-the public MinIO URL, for example `-e S3_PUBLIC_ENDPOINT=https://media.example.com:9000`.
+For local-only testing you may publish MinIO with `-e MINIO_ADDRESS=0.0.0.0:9000
+-p 127.0.0.1:9000:9000` and keep `S3_PUBLIC_ENDPOINT=http://localhost:9000`. Do not expose
+MinIO on a public interface.
 
-For remote hosts, also replace the bundled MinIO credentials and restrict port 9000 to trusted
-clients. Set `MINIO_ROOT_USER`/`MINIO_ROOT_PASSWORD` for MinIO and the matching
-`S3_ACCESS_KEY`/`S3_SECRET_KEY` values for FreeFrame. The default `minioadmin` credentials are only
-acceptable for local testing.
+If default `minioadmin` credentials are present in local mode, the entrypoint replaces them with
+random credentials persisted in `/data/secrets.env`. Outside local mode, startup refuses default
+MinIO/S3 credentials.
 
 Bucket CORS is derived from `FRONTEND_URL`. The browser's page origin must equal `FRONTEND_URL`
 exactly, including scheme, host, and port. For local testing on a non-default port, use
@@ -87,13 +87,12 @@ Remote host example:
 ```bash
 docker run -d --name freeframe \
   -p 80:80 \
-  -p 9000:9000 \
   -e FRONTEND_URL='https://review.example.com' \
-  -e S3_PUBLIC_ENDPOINT='https://review.example.com:9000' \
+  -e S3_STORAGE='s3' \
+  -e S3_ENDPOINT='https://s3.example.com' \
+  -e S3_PUBLIC_ENDPOINT='https://s3.example.com' \
   -e S3_ACCESS_KEY='replace-with-a-random-access-key' \
   -e S3_SECRET_KEY='replace-with-a-long-random-secret' \
-  -e MINIO_ROOT_USER='replace-with-a-random-access-key' \
-  -e MINIO_ROOT_PASSWORD='replace-with-a-long-random-secret' \
   -v ff_data:/data \
   freeframe:allinone
 ```

@@ -12,6 +12,7 @@ interface FormState {
   name: string
   password: string
   confirmPassword: string
+  setupToken: string
 }
 
 interface FormErrors {
@@ -19,6 +20,7 @@ interface FormErrors {
   name?: string
   password?: string
   confirmPassword?: string
+  setupToken?: string
   general?: string
 }
 
@@ -52,6 +54,7 @@ export function SetupWizard() {
     name: '',
     password: '',
     confirmPassword: '',
+    setupToken: '',
   })
   const [errors, setErrors] = useState<FormErrors>({})
   const [loading, setLoading] = useState(false)
@@ -84,6 +87,7 @@ export function SetupWizard() {
           email: form.email,
           name: form.name,
           password: form.password,
+          setup_token: form.setupToken || null,
         }
       )
       setTokens(res.access_token, res.refresh_token)
@@ -170,6 +174,16 @@ export function SetupWizard() {
           value={form.confirmPassword}
           onChange={handleChange('confirmPassword')}
           error={errors.confirmPassword}
+        />
+
+        <Input
+          label="Setup token"
+          type="password"
+          placeholder="Bootstrap token"
+          autoComplete="one-time-code"
+          value={form.setupToken}
+          onChange={handleChange('setupToken')}
+          error={errors.setupToken}
         />
 
         <Button

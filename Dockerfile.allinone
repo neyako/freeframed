@@ -64,6 +64,8 @@ RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/init-app.sh
 
 ENV DATABASE_URL=postgresql://freeframe:freeframe@127.0.0.1:5432/freeframe \
     REDIS_URL=redis://127.0.0.1:6379/0 \
+    APP_ENV=production \
+    LOCAL_MODE=true \
     S3_STORAGE=minio \
     S3_ENDPOINT=http://127.0.0.1:9000 \
     S3_PUBLIC_ENDPOINT=http://localhost:9000 \
@@ -72,6 +74,8 @@ ENV DATABASE_URL=postgresql://freeframe:freeframe@127.0.0.1:5432/freeframe \
     S3_BUCKET=freeframe \
     S3_REGION=us-east-1 \
     FRONTEND_URL=http://localhost \
+    CORS_ORIGINS=http://localhost \
+    MINIO_ADDRESS=127.0.0.1:9000 \
     DISABLE_DOCS=true \
     TRANSCODE_HWACCEL=auto \
     API_WORKERS=4 \
@@ -84,7 +88,7 @@ ENV DATABASE_URL=postgresql://freeframe:freeframe@127.0.0.1:5432/freeframe \
     PYTHONPATH=/workspace
 
 VOLUME ["/data"]
-EXPOSE 80 9000
+EXPOSE 80
 HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=5 \
     CMD curl -fsS http://127.0.0.1/api/health || exit 1
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

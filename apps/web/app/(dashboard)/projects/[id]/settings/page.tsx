@@ -131,9 +131,7 @@ function BrandingTab({ projectId }: { projectId: string }) {
         {
           method: 'POST',
           body: fd,
-          headers: {
-            Authorization: `Bearer ${document.cookie.match(/access_token=([^;]+)/)?.[1] ?? ''}`,
-          },
+          credentials: 'include',
         },
       )
       setLogoFile(null)

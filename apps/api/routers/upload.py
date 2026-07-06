@@ -7,6 +7,7 @@ from ..database import get_db
 from ..middleware.auth import get_current_user
 from ..models.user import User
 from ..models.asset import Asset, AssetVersion, MediaFile, AssetType, ProcessingStatus, FileType
+from ..models.folder import Folder
 from ..models.project import Project
 from ..services.s3_service import (
     create_multipart_upload, presign_upload_part,
@@ -22,6 +23,13 @@ from ..schemas.upload import (
 )
 
 router = APIRouter(prefix="/upload", tags=["upload"])
+
+
+def _get_upload_media_file(db: Session, version_id: uuid.UUID) -> MediaFile:
+    media_file = db.query(MediaFile).filter(MediaFile.version_id == version_id).first()
+    if not media_file or not media_file.upload_id:
+        raise HTTPException(status_code=404, detail="Upload not found")
+    return media_file
 
 @router.post("/initiate", response_model=InitiateUploadResponse)
 def initiate_upload(
@@ -40,6 +48,16 @@ def initiate_upload(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     require_project_role(db, body.project_id, current_user, ProjectRole.editor)
+
+    if body.folder_id:
+        folder = db.query(Folder).filter(
+            Folder.id == body.folder_id,
+            Folder.deleted_at.is_(None),
+        ).first()
+        if not folder:
+            raise HTTPException(status_code=404, detail="Folder not found")
+        if folder.project_id != body.project_id:
+            raise HTTPException(status_code=400, detail="Folder does not belong to the specified project")
 
     # Get or create asset
     if body.asset_id:
@@ -92,6 +110,7 @@ def initiate_upload(
         mime_type=body.mime_type,
         file_size_bytes=body.file_size_bytes,
         s3_key_raw=s3_key,
+        upload_id=upload_id,
     )
     db.add(media_file)
     db.commit()
@@ -117,11 +136,13 @@ def presign_part(
     media_file = db.query(MediaFile).filter(MediaFile.s3_key_raw == body.s3_key).first()
     if not media_file:
         raise HTTPException(status_code=404, detail="Upload not found")
+    if media_file.upload_id != body.upload_id:
+        raise HTTPException(status_code=400, detail="Upload mismatch")
     version = db.query(AssetVersion).filter(AssetVersion.id == media_file.version_id).first()
     if not version or version.created_by != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized for this upload")
 
-    url = presign_upload_part(body.s3_key, body.upload_id, body.part_number)
+    url = presign_upload_part(media_file.s3_key_raw, media_file.upload_id, body.part_number)
     return PresignPartResponse(presigned_url=url, part_number=body.part_number)
 
 
@@ -141,17 +162,23 @@ def complete_upload(
         raise HTTPException(status_code=404, detail="Version not found")
     if version.created_by != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized for this upload")
+    if version.asset_id != body.asset_id:
+        raise HTTPException(status_code=400, detail="Asset does not match upload")
+
+    media_file = _get_upload_media_file(db, version.id)
+    if media_file.s3_key_raw != body.s3_key or media_file.upload_id != body.upload_id:
+        raise HTTPException(status_code=400, detail="Upload mismatch")
 
     # Then complete S3 multipart
-    complete_multipart_upload(body.s3_key, body.upload_id, [p.model_dump() for p in body.parts])
+    complete_multipart_upload(media_file.s3_key_raw, media_file.upload_id, [p.model_dump() for p in body.parts])
 
     version.processing_status = ProcessingStatus.processing
     db.commit()
 
     # Trigger transcoding in background (task dispatched in Step 7)
-    background_tasks.add_task(_trigger_processing, body.asset_id, body.version_id)
+    background_tasks.add_task(_trigger_processing, version.asset_id, version.id)
 
-    return CompleteUploadResponse(status="processing", asset_id=body.asset_id, version_id=body.version_id)
+    return CompleteUploadResponse(status="processing", asset_id=version.asset_id, version_id=version.id)
 
 
 def _trigger_processing(asset_id: uuid.UUID, version_id: uuid.UUID):
@@ -176,6 +203,10 @@ def abort_upload(
     if version.created_by != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized for this upload")
 
-    abort_multipart_upload(body.s3_key, body.upload_id)
+    media_file = _get_upload_media_file(db, version.id)
+    if media_file.s3_key_raw != body.s3_key or media_file.upload_id != body.upload_id:
+        raise HTTPException(status_code=400, detail="Upload mismatch")
+
+    abort_multipart_upload(media_file.s3_key_raw, media_file.upload_id)
     version.processing_status = ProcessingStatus.failed
     db.commit()

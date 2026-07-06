@@ -143,20 +143,15 @@ export function ReviewProvider({
         // Share mode: fetch stream info to build a pseudo asset
         const API_URL =
           process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-        const headers: Record<string, string> = {};
-        try {
-          const t = localStorage.getItem("ff_access_token");
-          if (t) headers["Authorization"] = `Bearer ${t}`;
-        } catch {}
         const streamRes = await fetch(
           `${API_URL}/share/${shareToken}/stream/${assetId}?_=1${shareSessionParam}`,
-          { headers },
+          { credentials: "include" },
         );
         const streamData = streamRes.ok ? await streamRes.json() : null;
         let shareVersions: AssetVersion[] = [];
         const versionsRes = await fetch(
           `${API_URL}/share/${shareToken}/versions/${assetId}${shareSessionQuery}`,
-          { headers },
+          { credentials: "include" },
         );
         if (versionsRes.ok) {
           const versionsData: unknown = await versionsRes.json();
@@ -255,6 +250,7 @@ export function ReviewProvider({
           process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
         const res = await fetch(
           `${API_URL}/share/${shareToken}/comments?asset_id=${assetId}${shareSessionParam}`,
+          { credentials: "include" },
         );
         if (res.ok) {
           const json = await res.json();
@@ -285,6 +281,7 @@ export function ReviewProvider({
           process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
         const res = await fetch(
           `${API_URL}/share/${shareToken}/versions/${assetId}${shareSessionQuery}`,
+          { credentials: "include" },
         );
         if (!res.ok) return;
         const json: unknown = await res.json();
@@ -324,10 +321,6 @@ export function ReviewProvider({
         const headers: Record<string, string> = {
           "Content-Type": "application/json",
         };
-        try {
-          const t = localStorage.getItem("ff_access_token");
-          if (t) headers["Authorization"] = `Bearer ${t}`;
-        } catch {}
         // Include guest identity if available (for non-authenticated users)
         const guestFields: Record<string, string> = {};
         try {
@@ -342,6 +335,7 @@ export function ReviewProvider({
           method: "POST",
           headers,
           body: JSON.stringify({ ...payload, ...guestFields, asset_id: assetId }),
+          credentials: "include",
         });
         if (!res.ok) throw new Error("Failed to post comment");
         comment = await res.json();

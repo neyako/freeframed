@@ -40,6 +40,7 @@ async function request<T>(
       method,
       headers: buildHeaders(token),
       body: body !== undefined ? JSON.stringify(body) : undefined,
+      credentials: 'include',
     })
   }
 
@@ -106,6 +107,7 @@ async function uploadRequest<T>(path: string, formData: FormData): Promise<T> {
       method: 'POST',
       headers: buildHeaders(token),
       body: formData,
+      credentials: 'include',
     })
   }
 

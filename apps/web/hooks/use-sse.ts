@@ -135,7 +135,7 @@ export function useSSE(projectId: string | null | undefined, options: UseSSEOpti
         url.searchParams.set('token', token)
       }
 
-      es = new EventSource(url.toString())
+      es = new EventSource(url.toString(), { withCredentials: true })
 
       es.onopen = () => {
         if (destroyed) return

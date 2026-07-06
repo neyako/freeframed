@@ -3,33 +3,43 @@ const REFRESH_TOKEN_KEY = 'ff_refresh_token'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
+function clearLegacyTokens(): void {
+  if (typeof window === 'undefined') return
+  localStorage.removeItem(ACCESS_TOKEN_KEY)
+  localStorage.removeItem(REFRESH_TOKEN_KEY)
+  document.cookie = `${ACCESS_TOKEN_KEY}=; path=/; max-age=0`
+  document.cookie = `${REFRESH_TOKEN_KEY}=; path=/; max-age=0`
+}
+
 export function getAccessToken(): string | null {
   if (typeof window === 'undefined') return null
-  return localStorage.getItem(ACCESS_TOKEN_KEY)
+  clearLegacyTokens()
+  return null
 }
 
 export function getRefreshToken(): string | null {
   if (typeof window === 'undefined') return null
-  return localStorage.getItem(REFRESH_TOKEN_KEY)
+  clearLegacyTokens()
+  return null
 }
 
 export function setTokens(access: string, refresh: string): void {
   if (typeof window === 'undefined') return
-  localStorage.setItem(ACCESS_TOKEN_KEY, access)
-  localStorage.setItem(REFRESH_TOKEN_KEY, refresh)
-  // Set cookies so middleware can check auth on server side
-  document.cookie = `${ACCESS_TOKEN_KEY}=${access}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax`
-  document.cookie = `${REFRESH_TOKEN_KEY}=${refresh}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax`
+  void access
+  void refresh
+  clearLegacyTokens()
 }
 
 export function clearTokens(): void {
   if (typeof window === 'undefined') return
-  localStorage.removeItem(ACCESS_TOKEN_KEY)
-  localStorage.removeItem(REFRESH_TOKEN_KEY)
-  // Clear auth cookies
-  document.cookie = `${ACCESS_TOKEN_KEY}=; path=/; max-age=0`
-  document.cookie = `${REFRESH_TOKEN_KEY}=; path=/; max-age=0`
-  window.location.href = '/login'
+  clearLegacyTokens()
+  fetch(`${API_URL}/auth/logout`, {
+    method: 'POST',
+    credentials: 'include',
+    keepalive: true,
+  }).finally(() => {
+    window.location.href = '/login'
+  })
 }
 
 // Deduplicate concurrent refresh calls — when access token expires, multiple
@@ -48,17 +58,10 @@ export async function refreshAccessToken(): Promise<string | null> {
 }
 
 async function _doRefresh(): Promise<string | null> {
-  const refreshToken = getRefreshToken()
-  if (!refreshToken) {
-    clearTokens()
-    return null
-  }
-
   try {
     const response = await fetch(`${API_URL}/auth/refresh`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refresh_token: refreshToken }),
+      credentials: 'include',
     })
 
     if (!response.ok) {
@@ -68,9 +71,8 @@ async function _doRefresh(): Promise<string | null> {
 
     const data = await response.json()
     const newAccessToken: string = data.access_token
-    const newRefreshToken: string = data.refresh_token ?? refreshToken
 
-    setTokens(newAccessToken, newRefreshToken)
+    clearLegacyTokens()
     return newAccessToken
   } catch {
     clearTokens()

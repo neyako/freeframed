@@ -2,7 +2,7 @@
 # FreeFrame — Production Docker Compose
 # ============================================================
 # Usage:
-#   cp .env.example .env.prod        # configure your settings
+#   cp .env.prod.example .env.prod   # configure your settings
 #   docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
 #
 # SSL: Set DOMAIN and ACME_EMAIL in .env.prod for automatic

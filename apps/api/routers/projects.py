@@ -8,6 +8,8 @@ from ..middleware.auth import get_current_user
 from ..models.user import User
 from ..models.project import Project, ProjectMember, ProjectRole
 from ..models.asset import Asset, AssetVersion, MediaFile
+from ..models.folder import Folder
+from ..models.share import AssetShare, ShareLink
 from ..schemas.project import ProjectCreate, ProjectUpdate, ProjectResponse, ProjectMemberResponse, AddProjectMemberRequest, UpdateProjectMemberRequest
 from ..tasks.email_tasks import send_project_added_email
 from ..tasks.celery_app import send_task_safe
@@ -165,7 +167,61 @@ def update_project(project_id: uuid.UUID, body: ProjectUpdate, db: Session = Dep
 def delete_project(project_id: uuid.UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     project = _get_project(db, project_id)
     _require_project_owner(db, project_id, current_user)
-    project.deleted_at = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc)
+    asset_ids = [
+        row[0]
+        for row in db.query(Asset.id).filter(
+            Asset.project_id == project_id,
+            Asset.deleted_at.is_(None),
+        ).all()
+    ]
+    folder_ids = [
+        row[0]
+        for row in db.query(Folder.id).filter(
+            Folder.project_id == project_id,
+            Folder.deleted_at.is_(None),
+        ).all()
+    ]
+
+    project.deleted_at = now
+    db.query(ProjectMember).filter(
+        ProjectMember.project_id == project_id,
+        ProjectMember.deleted_at.is_(None),
+    ).update({"deleted_at": now}, synchronize_session="fetch")
+    db.query(Folder).filter(
+        Folder.project_id == project_id,
+        Folder.deleted_at.is_(None),
+    ).update({"deleted_at": now}, synchronize_session="fetch")
+    db.query(Asset).filter(
+        Asset.project_id == project_id,
+        Asset.deleted_at.is_(None),
+    ).update({"deleted_at": now}, synchronize_session="fetch")
+    if asset_ids:
+        db.query(AssetVersion).filter(
+            AssetVersion.asset_id.in_(asset_ids),
+            AssetVersion.deleted_at.is_(None),
+        ).update({"deleted_at": now}, synchronize_session="fetch")
+        db.query(AssetShare).filter(
+            AssetShare.asset_id.in_(asset_ids),
+            AssetShare.deleted_at.is_(None),
+        ).update({"deleted_at": now}, synchronize_session="fetch")
+        db.query(ShareLink).filter(
+            ShareLink.asset_id.in_(asset_ids),
+            ShareLink.deleted_at.is_(None),
+        ).update({"deleted_at": now}, synchronize_session="fetch")
+    if folder_ids:
+        db.query(AssetShare).filter(
+            AssetShare.folder_id.in_(folder_ids),
+            AssetShare.deleted_at.is_(None),
+        ).update({"deleted_at": now}, synchronize_session="fetch")
+        db.query(ShareLink).filter(
+            ShareLink.folder_id.in_(folder_ids),
+            ShareLink.deleted_at.is_(None),
+        ).update({"deleted_at": now}, synchronize_session="fetch")
+    db.query(ShareLink).filter(
+        ShareLink.project_id == project_id,
+        ShareLink.deleted_at.is_(None),
+    ).update({"deleted_at": now}, synchronize_session="fetch")
     db.commit()
 
 @router.get("/{project_id}/members", response_model=list[ProjectMemberResponse])

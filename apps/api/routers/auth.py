@@ -1,6 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
-import uuid
 import secrets
 from datetime import datetime, timedelta, timezone
 from ..database import get_db
@@ -10,9 +9,16 @@ from ..schemas.auth import (
     AcceptInviteRequest, InviteInfoResponse,
 )
 from ..services.auth_service import (
+    REFRESH_COOKIE,
+    clear_auth_cookies,
     hash_password, verify_password,
-    create_access_token, create_refresh_token, decode_token,
+    create_access_token,
     get_user_by_email, get_user_by_id,
+    issue_refresh_token,
+    revoke_refresh_token,
+    revoke_user_refresh_tokens,
+    rotate_refresh_token,
+    set_auth_cookies,
 )
 from ..tasks.email_tasks import send_invite_email
 from ..models.user import User, UserStatus
@@ -47,7 +53,11 @@ def get_invite_info(token: str, db: Session = Depends(get_db)):
 
 
 @router.post("/accept-invite", response_model=TokenResponse)
-def accept_invite(body: AcceptInviteRequest, db: Session = Depends(get_db)):
+def accept_invite(
+    body: AcceptInviteRequest,
+    response: Response,
+    db: Session = Depends(get_db),
+):
     """Accept invite and set password. Email is already verified via invite."""
     user = db.query(User).filter(
         User.invite_token == body.token,
@@ -66,11 +76,15 @@ def accept_invite(body: AcceptInviteRequest, db: Session = Depends(get_db)):
     user.status = UserStatus.active
     user.invite_token = None
     user.invite_token_expires_at = None
+    revoke_user_refresh_tokens(db, user.id)
+    refresh = issue_refresh_token(db, user.id)
+    access = create_access_token(str(user.id))
+    set_auth_cookies(response, access, refresh)
     db.commit()
     
     return TokenResponse(
-        access_token=create_access_token(str(user.id)),
-        refresh_token=create_refresh_token(str(user.id)),
+        access_token=access,
+        refresh_token=refresh,
         needs_password=False,
     )
 
@@ -93,7 +107,7 @@ def register(body: RegisterRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(body: LoginRequest, db: Session = Depends(get_db)):
+def login(body: LoginRequest, response: Response, db: Session = Depends(get_db)):
     """Login with email + password."""
     user = get_user_by_email(db, body.email)
     if (
@@ -103,26 +117,58 @@ def login(body: LoginRequest, db: Session = Depends(get_db)):
         or user.status == UserStatus.deactivated
     ):
         raise HTTPException(status_code=401, detail="Invalid credentials")
+    access = create_access_token(str(user.id))
+    refresh = issue_refresh_token(db, user.id)
+    set_auth_cookies(response, access, refresh)
+    db.commit()
     return TokenResponse(
-        access_token=create_access_token(str(user.id)),
-        refresh_token=create_refresh_token(str(user.id)),
+        access_token=access,
+        refresh_token=refresh,
         needs_password=False,
     )
 
 
 @router.post("/refresh", response_model=TokenResponse)
-def refresh_token(body: RefreshRequest, db: Session = Depends(get_db)):
-    payload = decode_token(body.refresh_token)
-    if not payload or payload.get("type") != "refresh":
+def refresh_token(
+    request: Request,
+    response: Response,
+    body: RefreshRequest | None = Body(default=None),
+    db: Session = Depends(get_db),
+):
+    refresh_value = (body.refresh_token if body else None) or request.cookies.get(REFRESH_COOKIE)
+    if not refresh_value:
         raise HTTPException(status_code=401, detail="Invalid refresh token")
-    user = get_user_by_id(db, uuid.UUID(payload["sub"]))
+    rotated = rotate_refresh_token(db, refresh_value)
+    if not rotated:
+        raise HTTPException(status_code=401, detail="Invalid refresh token")
+    user_id, new_refresh = rotated
+    user = get_user_by_id(db, user_id)
     if not user or user.status == UserStatus.deactivated:
+        revoke_refresh_token(db, new_refresh)
+        db.commit()
         raise HTTPException(status_code=401, detail="User not found")
+    access = create_access_token(str(user.id))
+    set_auth_cookies(response, access, new_refresh)
+    db.commit()
     return TokenResponse(
-        access_token=create_access_token(str(user.id)),
-        refresh_token=create_refresh_token(str(user.id)),
+        access_token=access,
+        refresh_token=new_refresh,
         needs_password=user.password_hash is None,
     )
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+def logout(
+    request: Request,
+    response: Response,
+    body: RefreshRequest | None = Body(default=None),
+    db: Session = Depends(get_db),
+):
+    refresh_value = (body.refresh_token if body else None) or request.cookies.get(REFRESH_COOKIE)
+    if refresh_value:
+        revoke_refresh_token(db, refresh_value)
+        db.commit()
+    clear_auth_cookies(response)
 
 
 @router.get("/me", response_model=UserResponse)

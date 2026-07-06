@@ -18,6 +18,7 @@ import {
   ArrowLeft,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { clearTokens } from '@/lib/auth'
 import { VersionSwitcher } from '@/components/review/version-switcher'
 import { fetchShareStreamInfo, resolveStreamUrl } from './share-stream'
 import type {
@@ -122,7 +123,9 @@ function triggerDownload(url: string) {
 async function fetchDownloadUrl(token: string, assetId: string, shareSession?: string | null): Promise<string | null> {
   const sp = shareSession ? `&share_session=${encodeURIComponent(shareSession)}` : ''
   try {
-    const response = await fetch(`${API_URL}/share/${token}/stream/${assetId}?download=true${sp}`)
+    const response = await fetch(`${API_URL}/share/${token}/stream/${assetId}?download=true${sp}`, {
+      credentials: 'include',
+    })
     if (!response.ok) return null
     const data = await response.json()
     return data?.url ?? null
@@ -145,7 +148,9 @@ async function collectAllAssetsRecursive(
   const sp = shareSession ? `&share_session=${encodeURIComponent(shareSession)}` : ''
   const folderParam = folderId ? `folder_id=${folderId}&` : ''
   try {
-    const res = await fetch(`${API_URL}/share/${token}/assets?${folderParam}page=1&per_page=500${sp}`)
+    const res = await fetch(`${API_URL}/share/${token}/assets?${folderParam}page=1&per_page=500${sp}`, {
+      credentials: 'include',
+    })
     if (!res.ok) return []
     const data = await res.json() as { assets?: { id: string; name: string }[]; subfolders?: { id: string }[] }
     const items: { id: string; name: string }[] = (data.assets ?? []).map((a) => ({ id: a.id, name: a.name }))
@@ -415,7 +420,9 @@ function RightPanel({ selectedAsset, token, permission, allowDownload, onOpenAss
       return
     }
     setLoadingComments(true)
-    fetch(`${API_URL}/share/${token}/comments?asset_id=${selectedAsset.id}`)
+    fetch(`${API_URL}/share/${token}/comments?asset_id=${selectedAsset.id}`, {
+      credentials: 'include',
+    })
       .then((r) => (r.ok ? r.json() : Promise.resolve([])))
       .then((data) => setComments(Array.isArray(data) ? data : (data.comments ?? [])))
       .catch(() => setComments([]))
@@ -571,8 +578,7 @@ function ShareCommentInput({ token, assetId, onCommentPosted }: ShareCommentInpu
   const [submitting, setSubmitting] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
 
-  // Check if user is logged in
-  const isLoggedIn = typeof window !== 'undefined' && !!localStorage.getItem('ff_access_token')
+  const isLoggedIn = false
 
   async function handleSubmit() {
     if (!body.trim()) return
@@ -585,8 +591,6 @@ function ShareCommentInput({ token, assetId, onCommentPosted }: ShareCommentInpu
     setError(null)
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-      const accessToken = localStorage.getItem('ff_access_token')
-      if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`
 
       const payload: Record<string, unknown> = { body: body.trim(), asset_id: assetId }
       if (!isLoggedIn) {
@@ -598,6 +602,7 @@ function ShareCommentInput({ token, assetId, onCommentPosted }: ShareCommentInpu
         method: 'POST',
         headers,
         body: JSON.stringify(payload),
+        credentials: 'include',
       })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
@@ -843,7 +848,7 @@ function ShareReviewInner({
       if (stored) setGuestIdentity(JSON.parse(stored))
     } catch {}
   }, [])
-  const isLoggedIn = typeof window !== 'undefined' && !!localStorage.getItem('ff_access_token')
+  const isLoggedIn = false
 
   const submitComment = React.useCallback(async (body: string, timecodeStart?: number, timecodeEnd?: number, annotationData?: Record<string, unknown>) => {
     const payload: Record<string, unknown> = { body }
@@ -989,9 +994,8 @@ function ShareReviewInner({
                     projectId=""
                     assetType={asset.asset_type}
                     onSubmit={async (body: string, timecodeStart?: number, timecodeEnd?: number, annotationData?: Record<string, unknown>) => {
-                      const hasAuth = !!localStorage.getItem('ff_access_token')
                       const hasGuest = !!localStorage.getItem('ff_guest_identity')
-                      if (!hasAuth && !hasGuest) {
+                      if (!hasGuest) {
                         pendingCommentRef.current = { body, timecodeStart, timecodeEnd, annotationData }
                         setShowGuestPrompt(true)
                         return
@@ -1212,6 +1216,7 @@ export function FolderShareViewer({
 
     fetch(
       `${API_URL}/share/${token}/assets?${currentSubfolderId ? `folder_id=${currentSubfolderId}&` : ''}page=1&per_page=${perPage}${sessionParam}`,
+      { credentials: 'include' },
     )
       .then((r) => {
         if (!r.ok) throw new Error('Failed to load assets')
@@ -1240,6 +1245,7 @@ export function FolderShareViewer({
     try {
       const r = await fetch(
         `${API_URL}/share/${token}/assets?${currentSubfolderId ? `folder_id=${currentSubfolderId}&` : ''}page=${nextPage}&per_page=${perPage}${sessionParam}`,
+        { credentials: 'include' },
       )
       if (!r.ok) throw new Error('Failed to load more')
       const data = (await r.json()) as FolderShareAssetsResponse
@@ -1345,12 +1351,7 @@ export function FolderShareViewer({
                 </div>
                 <button
                   onClick={() => {
-                    // Ensure cookie is set from localStorage before navigating
                     if (typeof window !== 'undefined') {
-                      const token = localStorage.getItem('ff_access_token')
-                      if (token) {
-                        document.cookie = `ff_access_token=${token}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax`
-                      }
                       window.location.href = '/projects'
                     }
                   }}
@@ -1360,12 +1361,7 @@ export function FolderShareViewer({
                 </button>
                 <button
                   onClick={() => {
-                    if (typeof window !== 'undefined') {
-                      localStorage.removeItem('ff_access_token')
-                      localStorage.removeItem('ff_refresh_token')
-                      document.cookie = 'ff_access_token=; path=/; max-age=0'
-                      window.location.href = '/login'
-                    }
+                    clearTokens()
                   }}
                   className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 transition-colors"
                 >

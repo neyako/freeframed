@@ -39,7 +39,9 @@ export async function fetchShareStreamInfo(
   if (opts.versionId) params.set('version_id', opts.versionId)
   if (opts.shareSession) params.set('share_session', opts.shareSession)
   const qs = params.toString() ? `?${params.toString()}` : ''
-  const res = await fetch(`${API_URL}/share/${token}/stream/${assetId}${qs}`)
+  const res = await fetch(`${API_URL}/share/${token}/stream/${assetId}${qs}`, {
+    credentials: 'include',
+  })
   if (!res.ok) throw new Error('Failed to load stream info')
   return parseShareStreamInfo(await res.json())
 }

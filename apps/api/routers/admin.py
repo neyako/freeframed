@@ -8,6 +8,7 @@ from ..database import get_db
 from ..middleware.auth import get_current_user
 from ..models.user import User, UserStatus
 from ..schemas.auth import UserResponse, UpdateUserRoleRequest
+from ..services.auth_service import revoke_user_refresh_tokens
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -54,6 +55,7 @@ def deactivate_user(
         raise HTTPException(status_code=404, detail="User not found")
 
     user.status = UserStatus.deactivated
+    revoke_user_refresh_tokens(db, user.id)
     db.commit()
     db.refresh(user)
     return user

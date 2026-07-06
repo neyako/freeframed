@@ -20,6 +20,7 @@ describe('fetchShareStreamInfo', () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       'http://localhost:8000/share/tok/stream/asset-1?version_id=v1&share_session=s1',
+      { credentials: 'include' },
     )
   })
 
@@ -34,6 +35,7 @@ describe('fetchShareStreamInfo', () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       'http://localhost:8000/share/tok/stream/asset-1',
+      { credentials: 'include' },
     )
   })
 

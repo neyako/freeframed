@@ -7,7 +7,7 @@ from ..database import get_db
 from ..schemas.auth import UserResponse, InviteRequest, UpdateProfileRequest
 from ..models.user import User, UserStatus
 from ..middleware.auth import get_current_user
-from ..services.auth_service import hash_password, get_user_by_email
+from ..services.auth_service import hash_password, get_user_by_email, revoke_user_refresh_tokens
 from ..tasks.email_tasks import send_invite_email
 from ..tasks.celery_app import send_task_safe
 from ..config import settings
@@ -99,6 +99,7 @@ def deactivate_user(user_id: uuid.UUID, db: Session = Depends(get_db), _: User =
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     user.status = UserStatus.deactivated
+    revoke_user_refresh_tokens(db, user.id)
     db.commit()
     db.refresh(user)
     return user
@@ -118,5 +119,6 @@ def delete_user(user_id: uuid.UUID, db: Session = Depends(get_db), _: User = Dep
     user = db.query(User).filter(User.id == user_id, User.deleted_at.is_(None)).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    revoke_user_refresh_tokens(db, user.id)
     user.deleted_at = datetime.now(timezone.utc)
     db.commit()

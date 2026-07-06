@@ -76,6 +76,7 @@ class MediaFile(Base):
     mime_type: Mapped[str] = mapped_column(String(100), nullable=False)
     file_size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
     s3_key_raw: Mapped[str] = mapped_column(String(1000), nullable=False)
+    upload_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     s3_key_processed: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
     s3_key_thumbnail: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
     width: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)

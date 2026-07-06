@@ -30,13 +30,12 @@ function applyToDOM(theme: Theme) {
 
 async function saveToServer(theme: Theme) {
   try {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('ff_access_token') : null
-    if (!token) return
     const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
     await fetch(`${API_URL}/auth/me/preferences`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ theme }),
+      credentials: 'include',
     })
   } catch {}
 }

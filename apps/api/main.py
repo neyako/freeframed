@@ -2,7 +2,7 @@ import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .config import settings
+from .config import get_cors_origins, settings, validate_runtime_settings
 from .routers import (
     auth,
     users,
@@ -30,6 +30,7 @@ from .middleware.setup_guard import SetupGuardMiddleware
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    validate_runtime_settings()
     ensure_bucket_exists()
     yield
 
@@ -50,11 +51,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        settings.frontend_url,
-        "http://localhost:3000",
-        "http://localhost:3001",
-    ],
+    allow_origins=get_cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

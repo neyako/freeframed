@@ -273,7 +273,12 @@ def get_stream_url(
             # Route through the HLS proxy so the master playlist, variant
             # playlists, and .ts segments all get served via short-lived
             # presigned URLs — the S3 bucket can stay fully private. (#51)
-            token = create_hls_token(media_file.s3_key_processed)
+            token = create_hls_token(
+                media_file.s3_key_processed,
+                asset_id=asset.id,
+                version_id=version.id,
+                user_id=current_user.id,
+            )
             url = f"/stream/hls/master.m3u8?token={token}"
     else:
         s3_key = media_file.s3_key_processed or media_file.s3_key_raw
@@ -331,6 +336,7 @@ def initiate_new_version(
         mime_type=body.mime_type,
         file_size_bytes=body.file_size_bytes,
         s3_key_raw=s3_key,
+        upload_id=upload_id,
     )
     db.add(media_file)
     db.commit()

@@ -143,6 +143,7 @@ export function GuestCommentInput({ token, onCommentPosted, className }: GuestCo
       const response = await fetch(`${API_URL}/share/${token}/comment`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           body: trimmed,
           guest_email: identity.email,
