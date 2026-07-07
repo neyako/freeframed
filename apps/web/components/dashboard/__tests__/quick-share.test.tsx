@@ -66,7 +66,7 @@ const mockedApi = vi.mocked(api);
 const writeText = vi.fn<(text: string) => Promise<void>>();
 
 function renderQuickShare() {
-  const cache = new Map<string, unknown>();
+  const cache = new Map();
   function Ui() {
     return (
       <SWRConfig value={{ provider: () => cache, dedupingInterval: 0 }}>

@@ -93,7 +93,7 @@ export function SetupWizard() {
       setTokens(res.access_token, res.refresh_token)
       setSuccess(true)
       setTimeout(() => {
-        router.replace('/projects')
+        router.replace('/')
       }, 1800)
     } catch (err) {
       if (err instanceof ApiError) {

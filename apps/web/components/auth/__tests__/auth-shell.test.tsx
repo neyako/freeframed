@@ -96,6 +96,6 @@ describe('AuthLayout', () => {
     })
     expect(mocks.setTokens).toHaveBeenCalledWith('access-token', 'refresh-token')
     expect(mocks.fetchUser).toHaveBeenCalledOnce()
-    expect(mocks.replace).toHaveBeenCalledWith('/projects')
+    expect(mocks.replace).toHaveBeenCalledWith('/')
   })
 })

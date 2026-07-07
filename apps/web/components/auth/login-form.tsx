@@ -34,7 +34,7 @@ export function LoginForm() {
       })
       setTokens(res.access_token, res.refresh_token)
       await useAuthStore.getState().fetchUser()
-      router.replace('/projects')
+      router.replace('/')
     } catch (err) {
       if (err instanceof ApiError) {
         setClassicError(err.detail)
