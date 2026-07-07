@@ -23,6 +23,10 @@ interface MockUploadFile {
   readonly createdAt: number;
 }
 
+interface MockStartUploadOptions {
+  readonly source?: "quick-share";
+}
+
 const mocks = vi.hoisted(() => {
   const uploadState: { files: MockUploadFile[] } = { files: [] };
   return {
@@ -33,6 +37,8 @@ const mocks = vi.hoisted(() => {
         projectId: string,
         assetName: string,
         projectName?: string,
+        folderId?: string | null,
+        options?: MockStartUploadOptions,
       ) => string
     >(() => "upload-1"),
   };
@@ -56,6 +62,8 @@ vi.mock("@/lib/api", () => ({
 }));
 
 vi.mock("@/stores/upload-store", () => ({
+  getUploadDisplayProgress: (upload: MockUploadFile) =>
+    upload.status === "processing" ? upload.processingProgress : upload.progress,
   useUploadStore: () => ({
     files: mocks.uploadState.files,
     startUpload: mocks.startUpload,
@@ -123,7 +131,6 @@ describe("QuickShare", () => {
       configurable: true,
     });
     mockedApi.get.mockImplementation(async (path: string) => {
-      if (path === "/projects/project-quick/assets?folder_id=root") return [];
       if (path === "/assets/asset-1/shares") return [];
       return [];
     });
@@ -152,6 +159,7 @@ describe("QuickShare", () => {
     expect(
       screen.getByRole("button", { name: "Choose video" }),
     ).toBeInTheDocument();
+    expect(screen.queryByText("Recent quick shares")).not.toBeInTheDocument();
   });
 
   it("posts to quick-share and starts an upload on file select", async () => {
@@ -169,6 +177,8 @@ describe("QuickShare", () => {
       "project-quick",
       "hero.mov",
       "Quick Shares",
+      null,
+      { source: "quick-share" },
     );
   });
 
@@ -184,6 +194,8 @@ describe("QuickShare", () => {
         "project-quick",
         "hero.mov",
         "Quick Shares",
+        null,
+        { source: "quick-share" },
       );
     });
     mocks.uploadState.files = [completedUpload()];

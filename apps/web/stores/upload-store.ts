@@ -54,6 +54,11 @@ function putPartWithProgress(
 const HISTORY_PAGE_SIZE = 20
 
 export type UploadStatus = 'pending' | 'uploading' | 'processing' | 'complete' | 'failed' | 'cancelled'
+export type UploadSource = 'quick-share'
+
+interface StartUploadOptions {
+  source?: UploadSource
+}
 
 export interface UploadFile {
   id: string
@@ -70,7 +75,18 @@ export interface UploadFile {
   assetId?: string
   versionId?: string
   uploadId?: string
+  source?: UploadSource
   createdAt: number // timestamp for grouping
+}
+
+export function getUploadDisplayProgress(
+  upload: Pick<UploadFile, 'status' | 'progress' | 'processingProgress'>,
+): number {
+  return upload.status === 'processing' ? upload.processingProgress : upload.progress
+}
+
+export function isQuickShareUpload(upload: Pick<UploadFile, 'source'>): boolean {
+  return upload.source === 'quick-share'
 }
 
 interface InitiateResponse {
@@ -99,7 +115,7 @@ interface UploadStore {
   historySkip: number
   setPanelOpen: (open: boolean) => void
   togglePanel: () => void
-  startUpload: (file: File, projectId: string, assetName: string, projectName?: string, folderId?: string | null) => string
+  startUpload: (file: File, projectId: string, assetName: string, projectName?: string, folderId?: string | null, options?: StartUploadOptions) => string
   startVersionUpload: (file: File, assetId: string, assetName: string, projectId: string) => string
   cancelUpload: (fileId: string) => void
   removeFile: (fileId: string) => void
@@ -170,7 +186,7 @@ const storeCreator: StateCreator<UploadStore, [['zustand/persist', unknown]]> = 
   setPanelOpen: (open) => set({ panelOpen: open }),
   togglePanel: () => set((s) => ({ panelOpen: !s.panelOpen })),
 
-  startUpload: (file, projectId, assetName, projectName, folderId) => {
+  startUpload: (file, projectId, assetName, projectName, folderId, options) => {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`
 
     const entry: UploadFile = {
@@ -185,6 +201,7 @@ const storeCreator: StateCreator<UploadStore, [['zustand/persist', unknown]]> = 
       processingProgress: 0,
       status: 'pending',
       createdAt: Date.now(),
+      ...(options?.source ? { source: options.source } : {}),
     }
 
     set((s) => ({ files: [entry, ...s.files], panelOpen: true }))

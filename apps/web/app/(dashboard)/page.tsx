@@ -124,13 +124,8 @@ export default function HomePage() {
     () => api.get<Asset[]>("/me/assets?filter=assigned"),
   );
 
-  const { data: dueSoonAssets, isLoading: loadingDueSoon } = useSWR(
-    "/me/assets?filter=due_soon",
-    () => api.get<Asset[]>("/me/assets?filter=due_soon"),
-  );
-
   return (
-    <div className="p-6 space-y-8">
+    <div className="mx-auto w-full max-w-[1360px] px-4 sm:px-8 lg:px-10 pt-6 sm:pt-10 pb-24 space-y-8">
       {/* Greeting */}
       <div>
         <h1 className="text-xl font-semibold text-text-primary">
@@ -163,15 +158,6 @@ export default function HomePage() {
         isLoading={loadingAssigned}
         emptyTitle="Nothing assigned"
         emptyDescription="Assets assigned to you for review will appear here."
-      />
-
-      <Section
-        title="Due soon"
-        icon={Clock}
-        assets={dueSoonAssets}
-        isLoading={loadingDueSoon}
-        emptyTitle="No upcoming deadlines"
-        emptyDescription="Assets due within the next 7 days will appear here."
       />
     </div>
   );

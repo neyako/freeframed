@@ -31,7 +31,6 @@ import {
   MessageSquare,
   Upload,
 } from 'lucide-react'
-import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { usePageTitle } from '@/hooks/use-page-title'
 import type { Project, AssetResponse, ProjectMember, FolderTreeNode } from '@/types'
@@ -165,6 +164,14 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
 
   const navigateAsset = (assetId: string) => {
     router.push(`/projects/${projectId}/assets/${assetId}`)
+  }
+
+  const handleBack = () => {
+    if (window.history.length > 1) {
+      router.back()
+    } else {
+      router.push(`/projects/${asset?.project_id ?? projectId}`)
+    }
   }
 
   // Keyboard navigation for prev/next asset
@@ -332,12 +339,14 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
       <div className="flex items-center justify-between border-b border-border px-3 sm:px-5 h-14 bg-bg-primary shrink-0">
         {/* Left: back + breadcrumb */}
         <div className="flex items-center gap-1 min-w-0 flex-1">
-          <Link
-            href={`/projects/${asset.project_id}`}
+          <button
+            type="button"
+            onClick={handleBack}
             className="flex items-center justify-center h-8 w-8 rounded border border-transparent text-text-secondary hover:text-text-primary hover:border-border transition-colors shrink-0"
+            aria-label="Back"
           >
             <ArrowLeft className="h-4 w-4" />
-          </Link>
+          </button>
 
           {/* Asset name only */}
           <span className="text-sm font-semibold tracking-[-0.01em] text-text-primary truncate">

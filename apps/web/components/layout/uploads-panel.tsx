@@ -1,6 +1,7 @@
 'use client'
 
 import * as React from 'react'
+import { usePathname } from 'next/navigation'
 import {
   X,
   CheckCircle,
@@ -15,7 +16,13 @@ import {
   Cog,
 } from 'lucide-react'
 import { cn, formatBytes, formatRelativeTime } from '@/lib/utils'
-import { useUploadStore, type UploadFile, type UploadStatus } from '@/stores/upload-store'
+import {
+  getUploadDisplayProgress,
+  isQuickShareUpload,
+  useUploadStore,
+  type UploadFile,
+  type UploadStatus,
+} from '@/stores/upload-store'
 import { ProgressTrack } from '@/components/ui/progress'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -29,10 +36,14 @@ function getFileIcon(fileType: string) {
 
 type FilterTab = 'all' | 'active' | 'complete' | 'failed'
 
+function isActiveStatus(status: UploadStatus): boolean {
+  return status === 'pending' || status === 'uploading' || status === 'processing'
+}
+
 function matchesFilter(status: UploadStatus, filter: FilterTab): boolean {
   switch (filter) {
     case 'all': return true
-    case 'active': return status === 'pending' || status === 'uploading' || status === 'processing'
+    case 'active': return isActiveStatus(status)
     case 'complete': return status === 'complete'
     case 'failed': return status === 'failed' || status === 'cancelled'
   }
@@ -91,7 +102,7 @@ function UploadItem({ upload }: { upload: UploadFile }) {
   const isProcessing = upload.status === 'processing'
   const showProgress = isUploading || isProcessing
 
-  const progressValue = isProcessing ? upload.processingProgress : upload.progress
+  const progressValue = getUploadDisplayProgress(upload)
 
   return (
     <div className="group flex items-start gap-3 px-4 py-3 hover:bg-bg-hover/50 transition-colors">
@@ -181,6 +192,7 @@ function UploadItem({ upload }: { upload: UploadFile }) {
 // ─── Panel ────────────────────────────────────────────────────────────────────
 
 export function UploadsPanel() {
+  const pathname = usePathname()
   const { files, panelOpen, setPanelOpen, clearCompleted, fetchHistory, fetchMoreHistory, historyHasMore, historyLoading } = useUploadStore()
   const [filter, setFilter] = React.useState<FilterTab>('all')
   const scrollRef = React.useRef<HTMLDivElement>(null)
@@ -213,16 +225,30 @@ export function UploadsPanel() {
 
   if (!panelOpen) return null
 
+  const hideQuickShareUploads = pathname === '/'
+  const visibleFiles = hideQuickShareUploads
+    ? files.filter((file) => !isQuickShareUpload(file))
+    : files
+  const hiddenQuickShareFiles = hideQuickShareUploads
+    ? files.filter((file) => isQuickShareUpload(file))
+    : []
+  const hasHiddenQuickShareUpload = hiddenQuickShareFiles.some(
+    (file) => file.status !== 'failed' && file.status !== 'cancelled',
+  )
+  const hasVisibleActiveUpload = visibleFiles.some((file) => isActiveStatus(file.status))
+
+  if (hasHiddenQuickShareUpload && !hasVisibleActiveUpload) return null
+
   // Sort descending by createdAt
-  const sorted = [...files].sort((a, b) => b.createdAt - a.createdAt)
+  const sorted = [...visibleFiles].sort((a, b) => b.createdAt - a.createdAt)
   const filtered = sorted.filter((f) => matchesFilter(f.status, filter))
   const groups = groupByDate(filtered)
 
   const counts = {
-    all: files.length,
-    active: files.filter((f) => f.status === 'pending' || f.status === 'uploading' || f.status === 'processing').length,
-    complete: files.filter((f) => f.status === 'complete').length,
-    failed: files.filter((f) => f.status === 'failed' || f.status === 'cancelled').length,
+    all: visibleFiles.length,
+    active: visibleFiles.filter((f) => isActiveStatus(f.status)).length,
+    complete: visibleFiles.filter((f) => f.status === 'complete').length,
+    failed: visibleFiles.filter((f) => f.status === 'failed' || f.status === 'cancelled').length,
   }
 
   const tabs: { id: FilterTab; label: string; count: number }[] = [
