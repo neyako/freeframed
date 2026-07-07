@@ -3,7 +3,7 @@
 import * as React from "react";
 import useSWR, { mutate } from "swr";
 import * as Dialog from "@radix-ui/react-dialog";
-import { Users, Plus, X, Shield, Link2, Check } from "lucide-react";
+import { Users, Plus, X, Shield, Link2, Check, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -200,6 +200,22 @@ export default function AdminPage() {
     }
   };
 
+  const handleDelete = async (u: User) => {
+    const prompt =
+      u.status === "pending_invite"
+        ? `Revoke the invite for ${u.email}? The invite link will stop working.`
+        : `Delete ${u.email}? They will lose access immediately.`;
+    if (!window.confirm(prompt)) return;
+    try {
+      await api.delete(`/users/${u.id}`);
+      mutate("/admin/users");
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : "Failed to delete user";
+      alert(message);
+    }
+  };
+
   const [copiedId, setCopiedId] = React.useState<string | null>(null);
 
   const handleCopyInviteLink = (u: User) => {
@@ -383,6 +399,22 @@ export default function AdminPage() {
                             You
                           </span>
                         ) : null}
+                        {u.id !== user?.id && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDelete(u)}
+                            className="text-status-error hover:text-status-error"
+                            title={
+                              u.status === "pending_invite"
+                                ? "Revoke invite"
+                                : "Delete user"
+                            }
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            {u.status === "pending_invite" ? "Revoke" : "Delete"}
+                          </Button>
+                        )}
                       </div>
                     </td>
                   </tr>

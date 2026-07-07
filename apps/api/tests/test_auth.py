@@ -285,3 +285,38 @@ def test_get_invite_info_includes_workspace_and_inviter(client, mock_db):
         "org_name": "Studio",
         "inviter_name": "Admin User",
     }
+
+
+def test_invite_resurrects_soft_deleted_user(client, auth_headers, mock_db, test_user):
+    """Re-inviting a soft-deleted email must reuse the row, not re-insert it."""
+    from datetime import datetime, timezone
+    from unittest.mock import patch, MagicMock
+    from apps.api.models.user import UserStatus
+
+    test_user.is_superadmin = True
+
+    deleted = MagicMock()
+    deleted.id = uuid.uuid4()
+    deleted.email = "gone@example.com"
+    deleted.name = "Old Name"
+    deleted.avatar_url = None
+    deleted.email_verified = False
+    deleted.preferences = {}
+    deleted.deleted_at = datetime.now(timezone.utc)
+    mock_db.first.return_value = deleted
+
+    with patch("apps.api.routers.users.send_task_safe"):
+        resp = client.post(
+            "/users/invite",
+            headers=auth_headers,
+            json={"email": "gone@example.com", "name": "Gone"},
+        )
+
+    assert resp.status_code == 201
+    assert deleted.deleted_at is None
+    assert deleted.status == UserStatus.pending_invite
+    assert deleted.password_hash is None
+    assert deleted.is_superadmin is False
+    assert deleted.invite_token is not None
+    mock_db.add.assert_not_called()
+    mock_db.commit.assert_called_once()

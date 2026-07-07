@@ -54,23 +54,38 @@ def require_admin(current_user: User = Depends(get_current_user)) -> User:
 
 @router.post("/invite", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 def invite_user(body: InviteRequest, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
-    if get_user_by_email(db, body.email):
+    # Look up including soft-deleted rows: the unique email constraint still
+    # holds them, so a deleted user must be resurrected, not re-inserted.
+    existing = db.query(User).filter(User.email == body.email).first()
+    if existing and existing.deleted_at is None:
         raise HTTPException(status_code=400, detail="Email already registered")
-    
+
     # Generate invite token
     invite_token = secrets.token_urlsafe(48)
     invite_expires = datetime.now(timezone.utc) + timedelta(days=7)
     workspace_name = get_workspace_name(db)
-    
-    user = User(
-        email=body.email,
-        name=body.name,
-        status=UserStatus.pending_invite,
-        invited_by_id=current_user.id,
-        invite_token=invite_token,
-        invite_token_expires_at=invite_expires,
-    )
-    db.add(user)
+
+    if existing:
+        # Resurrect the soft-deleted row as a fresh invite
+        user = existing
+        user.deleted_at = None
+        user.name = body.name
+        user.status = UserStatus.pending_invite
+        user.password_hash = None
+        user.is_superadmin = False
+        user.invited_by_id = current_user.id
+        user.invite_token = invite_token
+        user.invite_token_expires_at = invite_expires
+    else:
+        user = User(
+            email=body.email,
+            name=body.name,
+            status=UserStatus.pending_invite,
+            invited_by_id=current_user.id,
+            invite_token=invite_token,
+            invite_token_expires_at=invite_expires,
+        )
+        db.add(user)
     db.commit()
     db.refresh(user)
     
