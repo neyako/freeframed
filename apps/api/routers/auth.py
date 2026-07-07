@@ -1,13 +1,17 @@
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
 import secrets
+import uuid
 from datetime import datetime, timedelta, timezone
 from ..database import get_db
 from ..schemas.auth import (
     RegisterRequest, LoginRequest, TokenResponse,
     RefreshRequest, UserResponse, InviteRequest,
     AcceptInviteRequest, InviteInfoResponse,
+    ForgotPasswordRequest, ResetPasswordRequest,
 )
+from ..config import settings
+from ..middleware.rate_limit import rate_limit
 from ..services.auth_service import (
     REFRESH_COOKIE,
     clear_auth_cookies,
@@ -20,7 +24,13 @@ from ..services.auth_service import (
     rotate_refresh_token,
     set_auth_cookies,
 )
-from ..tasks.email_tasks import send_invite_email
+from ..services.redis_service import (
+    delete_password_reset_token,
+    get_user_id_from_password_reset_token,
+    store_password_reset_token,
+)
+from ..tasks.celery_app import send_task_safe
+from ..tasks.email_tasks import send_invite_email, send_password_reset_email
 from ..models.user import User, UserStatus
 from ..middleware.auth import get_current_user
 
@@ -82,6 +92,59 @@ def accept_invite(
     set_auth_cookies(response, access, refresh)
     db.commit()
     
+    return TokenResponse(
+        access_token=access,
+        refresh_token=refresh,
+        needs_password=False,
+    )
+
+
+@router.post("/forgot-password", dependencies=[Depends(rate_limit("forgot_password", 5, 900))])
+def forgot_password(body: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    detail = "If that email is registered, a reset link has been sent."
+    user = get_user_by_email(db, body.email)
+    if (
+        user
+        and user.deleted_at is None
+        and user.status != UserStatus.deactivated
+        and user.password_hash is not None
+    ):
+        token = secrets.token_urlsafe(48)
+        store_password_reset_token(token, str(user.id))
+        reset_url = f"{settings.frontend_url}/reset-password/{token}"
+        send_task_safe(send_password_reset_email, user.email, reset_url)
+
+    return {"detail": detail}
+
+
+@router.post("/reset-password", response_model=TokenResponse)
+def reset_password(
+    body: ResetPasswordRequest,
+    response: Response,
+    db: Session = Depends(get_db),
+):
+    user_id = get_user_id_from_password_reset_token(body.token)
+    if user_id is None:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset link")
+
+    try:
+        user_uuid = uuid.UUID(user_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset link")
+
+    user = get_user_by_id(db, user_uuid)
+    if not user or user.deleted_at is not None or user.status == UserStatus.deactivated:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset link")
+
+    delete_password_reset_token(body.token)
+    user.password_hash = hash_password(body.password)
+    user.email_verified = True
+    revoke_user_refresh_tokens(db, user.id)
+    refresh = issue_refresh_token(db, user.id)
+    access = create_access_token(str(user.id))
+    set_auth_cookies(response, access, refresh)
+    db.commit()
+
     return TokenResponse(
         access_token=access,
         refresh_token=refresh,

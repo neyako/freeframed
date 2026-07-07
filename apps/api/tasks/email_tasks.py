@@ -69,6 +69,31 @@ def send_invite_email(
         self.retry(exc=exc)
 
 
+@shared_task(bind=True, queue="email_high", max_retries=3, default_retry_delay=60)
+def send_password_reset_email(self, to_email: str, reset_link: str, expiry_minutes: int = 60):
+    try:
+        subject = "Reset your FreeFrame password"
+        html_body = render_template(
+            "email/password_reset.html",
+            subject=subject,
+            reset_link=reset_link,
+            expiry_minutes=expiry_minutes,
+        )
+        text_body = (
+            "We received a request to reset your password.\n\n"
+            f"Reset here: {reset_link}\n\n"
+            f"This link expires in {expiry_minutes} minutes. "
+            "If you didn't request this, you can safely ignore this email."
+        )
+
+        success = _send_email(to_email, subject, html_body, text_body)
+        if not success:
+            raise Exception("Email sending failed")
+        return {"status": "sent", "to": to_email}
+    except Exception as exc:
+        self.retry(exc=exc)
+
+
 # ============================================================================
 # MEDIUM PRIORITY EMAILS (email_low queue)
 # ============================================================================

@@ -4,11 +4,13 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 import uuid
 
+from ..config import settings
 from ..database import get_db
 from ..middleware.auth import get_current_user
 from ..models.user import User, UserStatus
 from ..schemas.auth import UserResponse, UpdateUserRoleRequest
 from ..services.auth_service import revoke_user_refresh_tokens
+from ..services.email_service import email_service
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -29,6 +31,26 @@ def list_all_users(
 
     users = db.query(User).filter(User.deleted_at.is_(None)).all()
     return users
+
+@router.post("/test-email")
+def test_email(current_user: User = Depends(get_current_user)):
+    if not current_user.is_superadmin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admins can access this endpoint"
+        )
+
+    try:
+        ok = email_service.send_email(
+            current_user.email,
+            "FreeFrame test email",
+            "<p>SMTP/SES configuration works.</p>",
+            "SMTP/SES configuration works.",
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return {"sent": ok, "provider": settings.mail_provider, "to": current_user.email}
 
 @router.patch("/users/{user_id}/deactivate", response_model=UserResponse)
 def deactivate_user(

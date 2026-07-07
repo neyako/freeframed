@@ -46,6 +46,13 @@ class InviteInfoResponse(BaseModel):
     name: str
     org_name: str | None = None
 
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    password: str
+
 class UpdateProfileRequest(BaseModel):
     name: str | None = None
     avatar_url: str | None = None

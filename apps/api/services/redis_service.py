@@ -55,6 +55,28 @@ def delete_invite_token(token: str) -> None:
     r.delete(key)
 
 
+PASSWORD_RESET_PREFIX = "pwreset:"
+PASSWORD_RESET_EXPIRY_SECONDS = 3600
+
+
+def store_password_reset_token(token: str, user_id: str) -> None:
+    r = get_redis()
+    key = f"{PASSWORD_RESET_PREFIX}{token}"
+    r.setex(key, PASSWORD_RESET_EXPIRY_SECONDS, user_id)
+
+
+def get_user_id_from_password_reset_token(token: str) -> Optional[str]:
+    r = get_redis()
+    key = f"{PASSWORD_RESET_PREFIX}{token}"
+    return r.get(key)
+
+
+def delete_password_reset_token(token: str) -> None:
+    r = get_redis()
+    key = f"{PASSWORD_RESET_PREFIX}{token}"
+    r.delete(key)
+
+
 # ── IP-based rate limiting ────────────────────────────────────────────────────
 
 RATE_LIMIT_PREFIX = "rl:"

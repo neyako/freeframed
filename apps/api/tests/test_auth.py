@@ -37,6 +37,7 @@ def _mock_user(
 # Patch bcrypt hashing so tests don't depend on the local bcrypt installation.
 _HASH_PATCH = "apps.api.routers.auth.hash_password"
 _VERIFY_PATCH = "apps.api.routers.auth.verify_password"
+_FORGOT_PASSWORD_DETAIL = "If that email is registered, a reset link has been sent."
 
 
 def test_register_success(client, mock_db):
@@ -120,6 +121,104 @@ def test_login_nonexistent_user(client, mock_db):
         json={"email": "nobody@example.com", "password": "anypassword"},
     )
     assert resp.status_code == 401
+
+
+def test_forgot_password_unknown_email_returns_generic_response(client):
+    with (
+        patch("apps.api.routers.auth.get_user_by_email", return_value=None),
+        patch("apps.api.routers.auth.store_password_reset_token") as store_token,
+        patch("apps.api.routers.auth.send_task_safe") as send_task,
+    ):
+        resp = client.post(
+            "/auth/forgot-password",
+            json={"email": "missing@example.com"},
+        )
+
+    assert resp.status_code == 200
+    assert resp.json() == {"detail": _FORGOT_PASSWORD_DETAIL}
+    store_token.assert_not_called()
+    send_task.assert_not_called()
+
+
+def test_forgot_password_known_user_dispatches_reset_email(client):
+    user = _mock_user("known@example.com")
+
+    with (
+        patch("apps.api.routers.auth.get_user_by_email", return_value=user),
+        patch("apps.api.routers.auth.secrets.token_urlsafe", return_value="reset-token"),
+        patch("apps.api.routers.auth.store_password_reset_token") as store_token,
+        patch("apps.api.routers.auth.send_task_safe") as send_task,
+    ):
+        resp = client.post(
+            "/auth/forgot-password",
+            json={"email": "known@example.com"},
+        )
+
+    assert resp.status_code == 200
+    assert resp.json() == {"detail": _FORGOT_PASSWORD_DETAIL}
+    store_token.assert_called_once_with("reset-token", str(user.id))
+    task, to_email, reset_url = send_task.call_args.args
+    assert getattr(task, "name", "").endswith("send_password_reset_email")
+    assert to_email == user.email
+    assert reset_url == "http://localhost:3000/reset-password/reset-token"
+
+
+def test_forgot_password_deactivated_user_does_not_dispatch_email(client):
+    user = _mock_user("disabled@example.com")
+    user.status = UserStatus.deactivated
+
+    with (
+        patch("apps.api.routers.auth.get_user_by_email", return_value=user),
+        patch("apps.api.routers.auth.store_password_reset_token") as store_token,
+        patch("apps.api.routers.auth.send_task_safe") as send_task,
+    ):
+        resp = client.post(
+            "/auth/forgot-password",
+            json={"email": "disabled@example.com"},
+        )
+
+    assert resp.status_code == 200
+    assert resp.json() == {"detail": _FORGOT_PASSWORD_DETAIL}
+    store_token.assert_not_called()
+    send_task.assert_not_called()
+
+
+def test_reset_password_invalid_token_returns_400(client):
+    with patch("apps.api.routers.auth.get_user_id_from_password_reset_token", return_value=None):
+        resp = client.post(
+            "/auth/reset-password",
+            json={"token": "bad-token", "password": "newpassword123"},
+        )
+
+    assert resp.status_code == 400
+    assert resp.json()["detail"] == "Invalid or expired reset link"
+
+
+def test_reset_password_happy_path_sets_password_and_logs_in(client, mock_db):
+    user = _mock_user("reset@example.com")
+
+    with (
+        patch("apps.api.routers.auth.get_user_id_from_password_reset_token", return_value=str(user.id)),
+        patch("apps.api.routers.auth.get_user_by_id", return_value=user),
+        patch("apps.api.routers.auth.delete_password_reset_token") as delete_token,
+        patch(_HASH_PATCH, return_value="hashed-reset-password"),
+        patch("apps.api.routers.auth.revoke_user_refresh_tokens") as revoke_tokens,
+        patch("apps.api.routers.auth.issue_refresh_token", return_value="refresh-token"),
+        patch("apps.api.routers.auth.create_access_token", return_value="access-token"),
+    ):
+        resp = client.post(
+            "/auth/reset-password",
+            json={"token": "reset-token", "password": "newpassword123"},
+        )
+
+    assert resp.status_code == 200
+    assert resp.json()["access_token"] == "access-token"
+    assert resp.json()["refresh_token"] == "refresh-token"
+    assert user.password_hash == "hashed-reset-password"
+    assert user.email_verified is True
+    delete_token.assert_called_once_with("reset-token")
+    revoke_tokens.assert_called_once_with(mock_db, user.id)
+    mock_db.commit.assert_called_once()
 
 
 def test_get_me(client, auth_headers, test_user):

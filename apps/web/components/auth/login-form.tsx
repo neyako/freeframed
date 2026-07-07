@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, type FormEvent } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { api, ApiError } from '@/lib/api'
 import { setTokens } from '@/lib/auth'
@@ -76,6 +77,12 @@ export function LoginForm() {
           value={classicPassword}
           onChange={(e) => { setClassicPassword(e.target.value); setClassicError('') }}
         />
+
+        <div className="flex justify-end">
+          <Link href="/forgot-password" className="text-xs text-text-secondary hover:text-text-primary">
+            Forgot password?
+          </Link>
+        </div>
 
         <Button type="submit" size="lg" loading={loading} className="mt-2 w-full">
           Sign in
