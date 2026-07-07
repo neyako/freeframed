@@ -8,7 +8,7 @@ import uuid
 from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
-from apps.api.models.project import ProjectType, ProjectRole
+from apps.api.models.project import Project, ProjectMember, ProjectType, ProjectRole
 
 
 def _mock_project(
@@ -27,6 +27,7 @@ def _mock_project(
     p.created_at = datetime.now(timezone.utc)
     p.deleted_at = None
     p.is_public = False
+    p.is_quick_share = False
     p.poster_url = None
     p.poster_s3_key = None
     p.asset_count = 0
@@ -59,6 +60,7 @@ def test_create_project(client, auth_headers, mock_db, test_user):
         obj.description = None
         obj.project_type = ProjectType.personal
         obj.is_public = False
+        obj.is_quick_share = False
         obj.poster_url = None
         obj.created_by = test_user.id
         obj.org_id = org_id
@@ -73,6 +75,53 @@ def test_create_project(client, auth_headers, mock_db, test_user):
     )
     assert resp.status_code == 201
     assert resp.json()["name"] == "Test Project"
+
+
+def test_quick_share_returns_existing_project(client, auth_headers, mock_db, test_user):
+    org_id = uuid.uuid4()
+    proj = _mock_project(org_id, test_user.id, "Quick Shares")
+    proj.is_quick_share = True
+    mock_db.first.return_value = proj
+
+    resp = client.post("/projects/quick-share", headers=auth_headers)
+
+    assert resp.status_code == 200
+    assert resp.json()["name"] == "Quick Shares"
+    assert resp.json()["is_quick_share"] is True
+    mock_db.add.assert_not_called()
+
+
+def test_quick_share_creates_project(client, auth_headers, mock_db, test_user):
+    mock_db.first.return_value = None
+
+    def _refresh_side_effect(obj):
+        obj.id = uuid.uuid4()
+        obj.created_at = datetime.now(timezone.utc)
+        obj.deleted_at = None
+        obj.description = None
+        obj.project_type = ProjectType.personal
+        obj.is_public = False
+        obj.is_quick_share = True
+        obj.poster_url = None
+        obj.created_by = test_user.id
+        obj.name = "Quick Shares"
+
+    mock_db.refresh.side_effect = _refresh_side_effect
+
+    resp = client.post("/projects/quick-share", headers=auth_headers)
+
+    assert resp.status_code == 200
+    assert resp.json()["name"] == "Quick Shares"
+    assert resp.json()["is_quick_share"] is True
+    added_project = next(
+        call.args[0] for call in mock_db.add.call_args_list if isinstance(call.args[0], Project)
+    )
+    added_member = next(
+        call.args[0] for call in mock_db.add.call_args_list if isinstance(call.args[0], ProjectMember)
+    )
+    assert added_project.is_quick_share is True
+    assert added_member.user_id == test_user.id
+    assert added_member.role == ProjectRole.owner
 
 
 def test_list_projects(client, auth_headers, mock_db, test_user):

@@ -60,9 +60,16 @@ function ProjectListRow({
         <FolderOpen className="h-4 w-4 text-text-tertiary" />
       </div>
       <div className="flex-1 min-w-0">
-        <span className="text-sm font-medium text-text-primary truncate block">
-          {project.name}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-text-primary truncate">
+            {project.name}
+          </span>
+          {project.is_quick_share && (
+            <span className="shrink-0 rounded-[2px] border border-accent-line px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.12em] text-accent">
+              QUICK SHARES
+            </span>
+          )}
+        </div>
         <span className="font-mono text-[10px] tracking-[0.04em] text-text-tertiary">
           {(project.asset_count ?? 0) > 0
             ? `${project.asset_count} item${(project.asset_count ?? 0) !== 1 ? "s" : ""} · ${formatBytes(project.storage_bytes ?? 0)}`
@@ -196,6 +203,12 @@ function ProjectSection({
   );
 }
 
+function sortQuickShareFirst(projects: Project[]) {
+  return [...projects].sort(
+    (a, b) => Number(Boolean(b.is_quick_share)) - Number(Boolean(a.is_quick_share)),
+  );
+}
+
 export default function ProjectsPage() {
   usePageTitle("Projects");
   const router = useRouter();
@@ -218,19 +231,21 @@ export default function ProjectsPage() {
   } = useSWR<Project[]>("/projects", () => api.get<Project[]>("/projects"));
 
   const myProjects = React.useMemo(
-    () => (projects ?? []).filter((p) => p.created_by === user?.id),
+    () => sortQuickShareFirst((projects ?? []).filter((p) => p.created_by === user?.id)),
     [projects, user?.id],
   );
 
   const sharedProjects = React.useMemo(
-    () => (projects ?? []).filter((p) => p.created_by !== user?.id && p.role),
+    () => sortQuickShareFirst((projects ?? []).filter((p) => p.created_by !== user?.id && p.role)),
     [projects, user?.id],
   );
 
   const publicProjects = React.useMemo(
     () =>
-      (projects ?? []).filter(
-        (p) => p.is_public && p.created_by !== user?.id && !p.role,
+      sortQuickShareFirst(
+        (projects ?? []).filter(
+          (p) => p.is_public && p.created_by !== user?.id && !p.role,
+        ),
       ),
     [projects, user?.id],
   );

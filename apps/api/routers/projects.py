@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from ..database import get_db
 from ..middleware.auth import get_current_user
 from ..models.user import User
-from ..models.project import Project, ProjectMember, ProjectRole
+from ..models.project import Project, ProjectMember, ProjectRole, ProjectType
 from ..models.asset import Asset, AssetVersion, MediaFile
 from ..models.folder import Folder
 from ..models.share import AssetShare, ShareLink
@@ -46,6 +46,31 @@ def create_project(body: ProjectCreate, db: Session = Depends(get_db), current_u
         description=body.description,
         project_type=body.project_type,
         created_by=current_user.id,
+    )
+    db.add(project)
+    db.flush()
+    member = ProjectMember(project_id=project.id, user_id=current_user.id, role=ProjectRole.owner)
+    db.add(member)
+    db.commit()
+    db.refresh(project)
+    return project
+
+@router.post("/quick-share", response_model=ProjectResponse, status_code=status.HTTP_200_OK)
+def get_or_create_quick_share_project(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    project = db.query(Project).filter(
+        Project.created_by == current_user.id,
+        Project.is_quick_share.is_(True),
+        Project.deleted_at.is_(None),
+    ).first()
+    if project is not None:
+        return project
+
+    project = Project(
+        name="Quick Shares",
+        description=None,
+        project_type=ProjectType.personal,
+        created_by=current_user.id,
+        is_quick_share=True,
     )
     db.add(project)
     db.flush()

@@ -88,6 +88,11 @@ export function ProjectCard({
             {/* Public/role badges */}
             <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5">
               {/* needs-review corner dot: blocked on a Project.needs_review field */}
+              {project.is_quick_share && (
+                <span className="inline-flex items-center rounded-none bg-black/55 backdrop-blur px-2 py-1 font-mono text-[9px] uppercase tracking-[0.1em] text-white/90">
+                  QUICK SHARES
+                </span>
+              )}
               {project.is_public && (
                 <span className="inline-flex items-center gap-1 rounded-none bg-black/55 backdrop-blur px-2 py-1 font-mono text-[9px] uppercase tracking-[0.1em] text-white/90">
                   <Globe className="h-2.5 w-2.5" />

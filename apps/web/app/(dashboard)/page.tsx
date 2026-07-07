@@ -7,6 +7,7 @@ import { FolderOpen, Clock, UserCheck, type LucideIcon } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth-store";
 import { formatRelativeTime } from "@/lib/utils";
+import { QuickShare } from "@/components/dashboard/quick-share";
 import { EmptyState } from "@/components/shared/empty-state";
 import type { Asset } from "@/types";
 
@@ -144,6 +145,8 @@ export default function HomePage() {
       </div>
 
       {/* Sections */}
+      <QuickShare />
+
       <Section
         title="Recent"
         icon={Clock}

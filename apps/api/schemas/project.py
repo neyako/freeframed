@@ -22,6 +22,7 @@ class ProjectResponse(BaseModel):
     created_at: datetime
     poster_url: str | None = None
     is_public: bool = False
+    is_quick_share: bool = False
     asset_count: int = 0
     storage_bytes: int = 0
     member_count: int = 0
