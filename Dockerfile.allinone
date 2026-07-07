@@ -57,7 +57,7 @@ COPY --from=web-builder /app/.next/static /app/web/.next/static
 COPY --from=web-builder /app/public /app/web/public
 
 COPY deploy/allinone/supervisord.conf /etc/supervisor/conf.d/freeframe.conf
-COPY deploy/allinone/nginx.conf /etc/nginx/sites-available/default
+COPY deploy/allinone/nginx.conf /etc/nginx/freeframe.conf.template
 COPY deploy/allinone/entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY deploy/allinone/init-app.sh /usr/local/bin/init-app.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/init-app.sh
@@ -68,7 +68,6 @@ ENV DATABASE_URL=postgresql://freeframe:freeframe@127.0.0.1:5432/freeframe \
     LOCAL_MODE=true \
     S3_STORAGE=minio \
     S3_ENDPOINT=http://127.0.0.1:9000 \
-    S3_PUBLIC_ENDPOINT=http://localhost:9000 \
     S3_ACCESS_KEY=minioadmin \
     S3_SECRET_KEY=minioadmin \
     S3_BUCKET=freeframe \

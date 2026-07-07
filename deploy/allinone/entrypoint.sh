@@ -67,5 +67,22 @@ fi
 
 export JWT_SECRET SETUP_TOKEN S3_ACCESS_KEY S3_SECRET_KEY MINIO_ROOT_USER MINIO_ROOT_PASSWORD
 
+# Same-origin object storage: when the bundled MinIO is in use, presigned
+# URLs default to the app origin itself; nginx routes /<bucket>/ to MinIO.
+# One domain to reverse-proxy, no published MinIO port, no S3 CORS.
+if [ -z "${S3_PUBLIC_ENDPOINT:-}" ] && [ "${S3_ENDPOINT:-}" = "http://127.0.0.1:9000" ]; then
+  S3_PUBLIC_ENDPOINT="${FRONTEND_URL%/}"
+fi
+export S3_PUBLIC_ENDPOINT
+
+case "${S3_BUCKET:?S3_BUCKET must be set}" in
+  *[!a-z0-9.-]*)
+    echo "[entrypoint] invalid S3_BUCKET '${S3_BUCKET}' (allowed: a-z 0-9 . -)" >&2
+    exit 1
+    ;;
+esac
+sed "s|\${S3_BUCKET}|${S3_BUCKET}|g" /etc/nginx/freeframe.conf.template \
+  > /etc/nginx/sites-available/default
+
 echo "[entrypoint] starting supervisord"
 exec supervisord -c /etc/supervisor/conf.d/freeframe.conf

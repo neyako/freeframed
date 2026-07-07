@@ -1,8 +1,9 @@
-# FreeFrame All-In-One Image
+# freeframed All-In-One Image
 
-This image is the single-box deployment path for FreeFrame: web, API, workers, Postgres, Redis,
-MinIO, nginx, and supervisor run in one container. Use the multi-container deployment when you need
-horizontal scaling or independently managed stateful services.
+This image is the primary deployment path for freeframed — built for a NAS, mini PC, or office
+workstation: web, API, workers, Postgres, Redis, MinIO, nginx, and supervisor run in one container
+with all state in a single bind mount. It is the only deployment path this fork ships; if you need
+independently managed services, use mainline [FreeFrame](https://github.com/Techiebutler/freeframe).
 
 ## Get the image
 
@@ -48,10 +49,11 @@ docker run -d --name freeframe --device /dev/dri:/dev/dri -p 8080:80 -v /srv/fre
 
 ## Reverse proxy (optional)
 
-The container serves everything on one plain-HTTP port; no proxy is required on a
-trusted LAN. To put it behind your own proxy, forward to that port with websocket
-support and unlimited body size, and set `FRONTEND_URL` and `CORS_ORIGINS` to the
-public origin.
+The container serves everything on one plain-HTTP port — app, API, uploads, and video
+segments all ride the same origin, so there is exactly one domain to proxy and no
+separate S3/MinIO host. No proxy is required on a trusted LAN. To put it behind your
+own proxy, forward to that port with websocket support and unlimited body size, and
+set `FRONTEND_URL` and `CORS_ORIGINS` to the public origin.
 
 Nginx Proxy Manager: add a Proxy Host → forward to `<host>:8080`, enable
 "Websockets Support", and set client_max_body_size 0 under Advanced → Custom
@@ -121,24 +123,22 @@ docker run -d --name freeframe \
 
 ## Uploads & Object Storage
 
-The bundled MinIO service listens on `127.0.0.1:9000` inside the container and is not published by
-default. For production, use an external S3-compatible endpoint and set `S3_PUBLIC_ENDPOINT` to the
-browser-reachable HTTPS origin for presigned uploads and downloads.
+Media traffic (uploads, playback segments, thumbnails, downloads) is served on the same
+origin as the app: presigned URLs are path-style (`/<bucket>/<key>?...`) and the bundled
+nginx routes the bucket path to the internal MinIO. One port, one domain — nothing else
+to publish or proxy. MinIO itself stays on `127.0.0.1:9000` inside the container.
 
-For local-only testing you may publish MinIO with `-e MINIO_ADDRESS=0.0.0.0:9000
--p 127.0.0.1:9000:9000` and keep `S3_PUBLIC_ENDPOINT=http://localhost:9000`. Do not expose
-MinIO on a public interface.
+`S3_PUBLIC_ENDPOINT` defaults to `FRONTEND_URL`, so the only rule is the one the app
+already has: `FRONTEND_URL` must equal the origin users type into their browser, exactly
+— scheme, host, and port. If uploads or video playback fail, a mismatched `FRONTEND_URL`
+is the usual cause.
 
 If default `minioadmin` credentials are present in local mode, the entrypoint replaces them with
 random credentials persisted in `/data/secrets.env`. Outside local mode, startup refuses default
 MinIO/S3 credentials.
 
-Bucket CORS is derived from `FRONTEND_URL`. The browser's page origin must equal `FRONTEND_URL`
-exactly, including scheme, host, and port. For local testing on a non-default port, use
-`-e FRONTEND_URL=http://localhost:8080`. If uploads fail with `Failed to fetch`, a `FRONTEND_URL` that
-does not match the page origin, or an unpublished port 9000, is the usual cause.
-
-Remote host example:
+To use external S3-compatible storage instead of the bundled MinIO, set `S3_PUBLIC_ENDPOINT`
+to the browser-reachable origin of that service:
 
 ```bash
 docker run -d --name freeframe \

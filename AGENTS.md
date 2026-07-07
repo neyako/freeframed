@@ -1,6 +1,17 @@
-# AGENTS.md — FreeFrame
+# AGENTS.md — freeframed
 
-Self-hosted media review platform (Frame.io alternative). Monorepo:
+Self-hosted media review platform (Frame.io alternative). Fork of
+[FreeFrame](https://github.com/Techiebutler/freeframe).
+
+## Project direction
+
+freeframed targets creators/individuals self-hosting on a NAS in their home or
+office — homelab-first, single-box, low-ops. The all-in-one image is the
+primary deployment path. It is NOT building toward SaaS, multi-tenant, or
+production-house team deployments; that work belongs upstream in mainline
+FreeFrame. Weigh new features against this lens — don't drift.
+
+Monorepo:
 
 - `apps/api` — FastAPI + SQLAlchemy 2 + Pydantic v2. Postgres, Redis,
   S3/MinIO (presigned multipart uploads), Celery workers (transcode via
@@ -82,3 +93,7 @@ components ad hoc; that territory is claimed.
 - Uploads: browser → presigned S3 multipart → `/upload/complete` → Celery
   `process_asset`. The upload UI state machine lives in
   `stores/upload-store.ts`.
+- Presigned URLs are path-style (`/<bucket>/<key>`); in the all-in-one image
+  they resolve same-origin — `S3_PUBLIC_ENDPOINT` defaults to `FRONTEND_URL`
+  and nginx routes the bucket path to internal MinIO. Don't reintroduce a
+  separate browser-facing S3 host.

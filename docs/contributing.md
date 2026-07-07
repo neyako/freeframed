@@ -1,6 +1,12 @@
-# Contributing to FreeFrame
+# Contributing to freeframed
 
-Thanks for your interest in contributing! This guide will help you get set up for development.
+Thanks for your interest in contributing. freeframed is a NAS-first fork of
+[FreeFrame](https://github.com/Techiebutler/freeframe), focused on individual
+creators and small teams self-hosting on one box.
+
+Contributions that improve the single-box, low-ops creator workflow belong here.
+Changes aimed at SaaS, multi-tenant, or production-house team deployments belong
+upstream in mainline FreeFrame.
 
 ---
 
@@ -17,8 +23,8 @@ Thanks for your interest in contributing! This guide will help you get set up fo
 
 ```bash
 # 1. Fork the repository on GitHub, then clone your fork
-git clone https://github.com/YOUR_USERNAME/freeframe.git
-cd freeframe
+git clone https://github.com/YOUR_USERNAME/freeframed.git
+cd freeframed
 
 # 2. Copy the example environment file
 cp .env.example .env
@@ -26,7 +32,7 @@ cp .env.example .env
 # 3. Start the development environment
 docker compose -f docker-compose.dev.yml up --build
 
-# 4. Open FreeFrame
+# 4. Open freeframed
 open http://localhost:3000
 ```
 
@@ -47,7 +53,7 @@ All services start automatically: PostgreSQL, Redis, MinIO (S3), API, Celery wor
 ## Project Structure
 
 ```
-freeframe/
+freeframed/
 ├── apps/
 │   ├── api/                # FastAPI backend
 │   │   ├── main.py         # App entry point
@@ -67,7 +73,7 @@ freeframe/
 │   └── transcoder/         # Video/audio transcoding package
 ├── docs/                   # Documentation
 ├── docker-compose.dev.yml  # Development environment
-└── docker-compose.prod.yml # Production environment
+└── docker-compose.aio.yml  # NAS / all-in-one deployment
 ```
 
 ---
@@ -155,6 +161,10 @@ Always review auto-generated migrations before committing.
 - Include screenshots for UI changes
 - Add tests for new features
 - Update documentation if you're changing user-facing behavior
+- Keep product direction aligned with this fork: individual creators, small
+  teams, NAS/home-office self-hosting, and low-ops deployment.
+- Send SaaS, multi-tenant, production-house workflow, or horizontal-scaling work
+  to mainline [FreeFrame](https://github.com/Techiebutler/freeframe).
 
 ---
 
@@ -173,5 +183,5 @@ For feature requests, describe the use case and why it would be valuable.
 
 ## Need Help?
 
-- Check existing [issues](https://github.com/Techiebutler/freeframe/issues) for similar questions
+- Check existing [freeframed issues](https://github.com/neyako/freeframed/issues) for similar questions
 - Open a new issue with the "question" label

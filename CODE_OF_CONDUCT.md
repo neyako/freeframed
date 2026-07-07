@@ -20,7 +20,7 @@ We as members, contributors, and leaders pledge to make participation in our com
 
 ## Enforcement
 
-Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to the project team at **support@techiebutler.com**. All complaints will be reviewed and investigated.
+Instances of abusive, harassing, or otherwise unacceptable behavior may be reported privately to the maintainer via [GitHub](https://github.com/neyako/freeframed). All complaints will be reviewed and investigated.
 
 ## Attribution
 

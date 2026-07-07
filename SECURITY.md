@@ -10,7 +10,7 @@
 
 **Please do NOT open a public issue for security vulnerabilities.**
 
-Instead, report vulnerabilities by emailing **support@techiebutler.com** or via [GitHub Security Advisories](https://github.com/Techiebutler/freeframe/security/advisories/new).
+Instead, report vulnerabilities via [GitHub Security Advisories](https://github.com/neyako/freeframed/security/advisories/new). If the issue also affects upstream [FreeFrame](https://github.com/Techiebutler/freeframe), please report it there too ([upstream advisories](https://github.com/Techiebutler/freeframe/security/advisories/new)).
 
 Include:
 - Description of the vulnerability

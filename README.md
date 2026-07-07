@@ -1,111 +1,106 @@
-# FreeFrame
+# freeframed
 
-**Self-hostable, open-source media review platform. A collaborative alternative to Frame.io.**
+**Homelab-first media review for individual creators and small teams.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker)](docker-compose.prod.yml)
+[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker)](docker-compose.aio.yml)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](docs/contributing.md)
 
-FreeFrame gives production houses and creative teams a self-hosted platform for reviewing video, image, and audio assets with frame-accurate commenting, annotations, and approval workflows. Your media stays on your infrastructure.
+freeframed is a fork of [FreeFrame](https://github.com/Techiebutler/freeframe), tuned for
+individual creators and small teams who want to self-host media review on a NAS,
+mini PC, or office workstation. The default deployment is one container, one bind
+mount, and low operational overhead.
+
+This fork is not aimed at SaaS, multi-tenant, or production-house team
+deployments. If that is the direction you want, use or contribute to mainline
+[FreeFrame](https://github.com/Techiebutler/freeframe).
 
 ---
 
 ## Features
 
-- **Video review** with HLS adaptive streaming and frame-accurate timecoded comments
+- **Single-box install** for a NAS or small home/office server
+- **Video review** with HLS playback and timecoded comments
 - **Image and audio review** with annotations and waveform visualization
-- **Drawing annotations** on any frame using canvas tools
+- **Drawing annotations** on frames and stills
 - **Threaded comments** with mentions, reactions, and attachments
-- **Approval workflows** with per-reviewer status tracking
-- **Version management** to compare iterations side-by-side
-- **Folder organization** within projects
-- **Team collaboration** with role-based permissions (org, team, project levels)
-- **Share links** for external reviewers (password-protected, expiring)
-- **Guest commenting** via share links (no account required)
-- **Due date tracking** with email reminders
-- **Real-time updates** via Server-Sent Events
-- **Self-hosted** with Docker Compose — runs on any server or cloud VM
+- **Version management** for client notes and creator revisions
+- **Folders and projects** without needing a full production-management stack
+- **Private share links** for reviewers, including guest commenting
+- **Due dates and email reminders** for small-team follow-up
+- **Server-Sent Events** for live review updates without WebSocket complexity
 
-## Quick Start (Development)
+## Quick Start: NAS / All-In-One
 
-**Prerequisites:** Docker and Docker Compose
+The primary deployment path is [`docker-compose.aio.yml`](docker-compose.aio.yml)
+and [`deploy/allinone`](deploy/allinone/README.md). It runs the web UI, API,
+workers, PostgreSQL, Redis, MinIO, nginx, and supervisor in one container. All
+state lives in a bind mount.
+
+**Prerequisites:** Docker and Docker Compose.
 
 ```bash
-git clone https://github.com/Techiebutler/freeframe.git
-cd freeframe
+git clone https://github.com/neyako/freeframed.git
+cd freeframed
+docker compose -f docker-compose.aio.yml up -d
+```
+
+Open `http://<host>:8080`. The first-admin `SETUP_TOKEN` is generated in
+`./data/secrets.env` by the default compose bind mount.
+
+Plain Docker works too:
+
+```bash
+docker run -d --name freeframe -p 8080:80 -v /srv/freeframe:/data ghcr.io/neyako/freeframe:edge
+```
+
+Reverse proxy is optional on a trusted LAN. If you put nginx, Nginx Proxy
+Manager, Caddy, or another proxy in front, forward it to port `8080` and set
+`FRONTEND_URL` and `CORS_ORIGINS` to the public origin.
+
+See [deploy/allinone/README.md](deploy/allinone/README.md) for GPU flags,
+reverse proxy examples, backups, and object-storage notes.
+
+Full deployment details are in [docs/deployment.md](docs/deployment.md). If you
+need a multi-container stack with separately managed services, use mainline
+[FreeFrame](https://github.com/Techiebutler/freeframe) — this fork ships only
+the all-in-one path.
+
+## Development
+
+```bash
+git clone https://github.com/neyako/freeframed.git
+cd freeframed
 cp .env.example .env
 docker compose -f docker-compose.dev.yml up --build
 ```
 
-Open [http://localhost:3000](http://localhost:3000) to access FreeFrame. The first user to sign up becomes the super admin.
+Open [http://localhost:3000](http://localhost:3000). Development services:
 
-**Services running in dev:**
-
-| Service     | URL                          |
-|-------------|------------------------------|
-| Frontend    | http://localhost:3000         |
-| API         | http://localhost:8000         |
-| API Docs    | http://localhost:8000/docs    |
-| MinIO Console | http://localhost:9001       |
-
-## Production Deployment
-
-**All-in-one (recommended for homelabs)** — one container with everything bundled,
-all state in a bind-mounted host directory. Prebuilt images are published to GHCR
-on every push to main (`:edge`) and on version tags (`:latest`, `:x.y.z`):
-
-```bash
-docker run -d --name freeframe -p 8080:80 -v /srv/freeframe:/data ghcr.io/neyako/freeframe:edge
-# or, from a repo checkout:
-docker compose -f docker-compose.aio.yml up -d
-# open http://<host>:8080 — first-admin token is in <data dir>/secrets.env
-```
-
-**Multi-container** — separate Postgres/Redis/API/worker services for bigger installs:
-
-```bash
-cp .env.prod.example .env.prod
-# Edit .env.prod — set your credentials, S3, email config
-docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
-```
-
-Both serve plain HTTP on port 8080. TLS is bring-your-own: front it with whatever
-reverse proxy you already run (nginx, Nginx Proxy Manager, Caddy, ...) or use it
-as-is on a trusted LAN. See [deploy/allinone/README.md](deploy/allinone/README.md)
-for proxy examples.
-
-For the full guide including **bring-your-own infrastructure** (external database, Redis, S3, SMTP), scaling, and troubleshooting, see:
-
-**[Production Deployment Guide](docs/deployment.md)**
+| Service | URL |
+|---------|-----|
+| Frontend | http://localhost:3000 |
+| API | http://localhost:8000 |
+| API Docs | http://localhost:8000/docs |
+| MinIO | http://localhost:9000 |
+| MinIO Console | http://localhost:9001 |
+| PostgreSQL | localhost:5433 |
 
 ## Architecture
 
 ```
-                    ┌──────────────┐
-                    │    nginx     │
-                    │    :8080     │
-                    └──────┬───────┘
-                           │
-               ┌───────────┴───────────┐
-               ▼                       ▼
-        ┌─────────────┐        ┌─────────────┐
-        │   Next.js    │        │   FastAPI    │
-        │   Frontend   │        │   Backend    │
-        └─────────────┘        └──────┬───────┘
-                                      │
-                    ┌─────────────────┼─────────────────┐
-                    ▼                 ▼                  ▼
-             ┌───────────┐    ┌───────────┐     ┌───────────────┐
-             │ PostgreSQL │    │   Redis    │     │  S3 Storage   │
-             │            │    │           │     │ (AWS/R2/MinIO) │
-             └───────────┘    └─────┬─────┘     └───────────────┘
-                                    │
-                         ┌──────────┴──────────┐
-                         ▼                     ▼
-                  ┌─────────────┐      ┌─────────────┐
-                  │   Celery     │      │   Celery     │
-                  │  Transcoder  │      │   Email      │
-                  └─────────────┘      └─────────────┘
+Browser
+  │
+  ▼
+nginx :80 in container, usually published as host :8080
+  ├── /          → Next.js web server on 127.0.0.1:3000
+  ├── /<bucket>/ → MinIO on 127.0.0.1:9000 (same-origin presigned media URLs)
+  └── /api/      → FastAPI on 127.0.0.1:8000
+                │
+                ├── PostgreSQL on 127.0.0.1:5432
+                ├── Redis on 127.0.0.1:6379
+                ├── MinIO on 127.0.0.1:9000
+                └── Celery workers for transcoding and email
 ```
 
 ## Tech Stack
@@ -117,42 +112,26 @@ For the full guide including **bring-your-own infrastructure** (external databas
 | Database     | PostgreSQL 15                                     |
 | Queue        | Celery + Redis                                    |
 | Transcoding  | FFmpeg (multi-bitrate HLS)                        |
-| Storage      | Any S3-compatible (AWS, R2, B2, MinIO)           |
-| Proxy        | nginx router; bring your own TLS proxy (optional) |
+| Storage      | MinIO in all-in-one, or any S3-compatible service |
+| Proxy        | nginx in the container; bring your own TLS proxy  |
 | Auth         | JWT + magic code email login                      |
 
 ## Documentation
 
 | Guide | Description |
 |-------|-------------|
-| [Production Deployment](docs/deployment.md) | SSL, bring-your-own infra, scaling, troubleshooting |
+| [Deployment](docs/deployment.md) | NAS all-in-one setup, proxy, storage, backups |
 | [Architecture](docs/architecture.md) | System design, data flow, media pipeline, permissions |
 | [Contributing](docs/contributing.md) | Dev setup, testing, code style, PR process |
 | [Environment Variables](.env.example) | Full config reference with comments |
 
 ## Contributing
 
-We welcome contributions! Please read our [Contributing Guide](docs/contributing.md) to get started.
+Contributions that improve the single-box creator workflow belong here. Work
+aimed at SaaS, multi-tenant, or production-house deployments belongs upstream in
+[FreeFrame](https://github.com/Techiebutler/freeframe). See
+[docs/contributing.md](docs/contributing.md).
 
 ## License
 
 MIT License — see [LICENSE](LICENSE) for details.
-
----
-
-## Contact & Support
-
-<div align="center">
-
-**A project by [Techiebutler](https://techiebutler.com)**
-
-Have questions? Need help?
-
-**Email:** [support@techiebutler.com](mailto:support@techiebutler.com)
-
-[![Instagram](https://img.shields.io/badge/Instagram-%23E4405F.svg?style=for-the-badge&logo=Instagram&logoColor=white)](https://www.instagram.com/techie_butler/)
-[![LinkedIn](https://img.shields.io/badge/LinkedIn-%230077B5.svg?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/company/techiebutler/)
-
-Star the repo if FreeFrame is useful to you!
-
-</div>

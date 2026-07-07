@@ -1,16 +1,21 @@
-# Contributing to FreeFrame
+# Contributing to freeframed
 
-Thanks for your interest in contributing! See the full guide:
+freeframed is a NAS-first fork of [FreeFrame](https://github.com/Techiebutler/freeframe)
+for individual creators and small teams self-hosting on one box. Contributions that
+improve the single-box, low-ops creator workflow belong here; work aimed at SaaS,
+multi-tenant, or production-house deployments belongs upstream in mainline FreeFrame.
+
+See the full guides:
 
 - **[Development Setup & Contributing Guide](docs/contributing.md)** — prerequisites, dev environment, coding standards
 - **[Architecture Overview](docs/architecture.md)** — system design, tech stack, data flow
-- **[Deployment Guide](docs/deployment.md)** — production setup, Docker, environment variables
+- **[Deployment Guide](docs/deployment.md)** — NAS all-in-one setup, Docker, environment variables
 
 ## Quick Start
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/freeframe.git
-cd freeframe
+git clone https://github.com/YOUR_USERNAME/freeframed.git
+cd freeframed
 cp .env.example .env
 docker compose -f docker-compose.dev.yml up --build
 # Open http://localhost:3000
@@ -25,8 +30,8 @@ docker compose -f docker-compose.dev.yml up --build
 
 ## Reporting Issues
 
-- **Bugs**: Use the [bug report template](https://github.com/Techiebutler/freeframe/issues/new?template=bug_report.yml)
-- **Features**: Use the [feature request template](https://github.com/Techiebutler/freeframe/issues/new?template=feature_request.yml)
+- **Bugs & features**: open an issue on [neyako/freeframed](https://github.com/neyako/freeframed/issues)
+- **Upstream FreeFrame issues**: [Techiebutler/freeframe](https://github.com/Techiebutler/freeframe/issues)
 - **Security**: See [SECURITY.md](SECURITY.md)
 
 ## License

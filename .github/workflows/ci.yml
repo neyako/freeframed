@@ -242,20 +242,14 @@ jobs:
       - name: Build API image (dev)
         run: docker build -t freeframe-api:test -f apps/api/Dockerfile .
 
-      - name: Build API image (prod)
-        run: docker build -t freeframe-api:prod -f apps/api/Dockerfile.prod .
-
       - name: Build Web image (dev)
         run: docker build -t freeframe-web:test -f apps/web/Dockerfile apps/web/
-
-      - name: Build Web image (prod)
-        run: docker build -t freeframe-web:prod -f apps/web/Dockerfile.prod apps/web/
 
       - name: Verify docker-compose syntax
         run: |
           # Validate compose file syntax (skip env file resolution)
           python3 -c "import yaml; yaml.safe_load(open('docker-compose.dev.yml'))" && echo "Dev compose YAML is valid"
-          python3 -c "import yaml; yaml.safe_load(open('docker-compose.prod.yml'))" && echo "Prod compose YAML is valid"
+          python3 -c "import yaml; yaml.safe_load(open('docker-compose.aio.yml'))" && echo "AIO compose YAML is valid"
 
       - name: Build all-in-one image (no push)
         run: docker build -f Dockerfile.allinone -t freeframe-allinone:ci .

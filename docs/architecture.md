@@ -1,51 +1,45 @@
 # Architecture Overview
 
-This document explains how FreeFrame's components work together.
+This document explains how freeframed's components work together. freeframed is
+a NAS-first fork of [FreeFrame](https://github.com/Techiebutler/freeframe), with
+the all-in-one single-box deployment treated as the primary topology.
 
 ---
 
 ## System Overview
 
-FreeFrame is a monorepo with two main applications and supporting infrastructure:
+freeframed is a monorepo with two main applications and supporting
+infrastructure. The default all-in-one image runs everything on one machine:
 
 ```
-                         ┌──────────────┐
-           Users ──────▶ │   Traefik    │
-                         │   :80/:443   │
-                         └──────┬───────┘
-                                │
-                    ┌───────────┴───────────┐
-                    ▼                       ▼
-             ┌─────────────┐        ┌─────────────┐
-             │   Next.js    │        │   FastAPI    │──── SSE ──▶ Clients
-             │   Frontend   │        │   Backend    │
-             └─────────────┘        └──────┬───────┘
-                                           │
-                     ┌─────────────────────┼────────────────────┐
-                     ▼                     ▼                    ▼
-              ┌───────────┐         ┌───────────┐       ┌──────────────┐
-              │ PostgreSQL │         │   Redis    │       │  S3 Storage   │
-              │            │         │           │       │              │
-              └───────────┘         └─────┬─────┘       └──────────────┘
-                                          │
-                               ┌──────────┴──────────┐
-                               ▼                     ▼
-                        ┌─────────────┐       ┌─────────────┐
-                        │  Transcoding │       │    Email     │
-                        │   Workers    │       │   Workers    │
-                        └─────────────┘       └─────────────┘
+Browser / optional LAN reverse proxy
+    │
+    ▼
+nginx in all-in-one container (:80, published as :8080 by docker-compose.aio.yml)
+    ├── /          → Next.js web server (127.0.0.1:3000)
+    ├── /<bucket>/ → MinIO (127.0.0.1:9000) — same-origin presigned media URLs
+    └── /api/      → FastAPI backend (127.0.0.1:8000) ── SSE ──▶ Clients
+                    │
+                    ├── PostgreSQL (127.0.0.1:5432)
+                    ├── Redis (127.0.0.1:6379)
+                    ├── MinIO (127.0.0.1:9000)
+                    └── Celery workers for transcoding, email, and beat
 ```
 
 | Component | Role |
 |-----------|------|
-| **Traefik** | Reverse proxy, automatic SSL via Let's Encrypt, routes `/api/*` to backend and `/` to frontend |
+| **nginx** | Routes `/api/*` to FastAPI and `/` to Next.js; TLS is handled by an optional external proxy |
 | **Next.js** | Server-rendered frontend, handles UI, auth cookies, client-side media playback |
 | **FastAPI** | REST API, auth, business logic, SSE events, S3 presigned URLs |
 | **PostgreSQL** | Primary datastore for all entities (users, projects, assets, comments, etc.) |
 | **Redis** | Message broker for Celery task queues, magic code TTL storage |
-| **S3 Storage** | Stores all media files (originals, transcoded outputs, thumbnails) |
+| **MinIO / S3 Storage** | Stores originals, transcoded outputs, and thumbnails |
 | **Transcoding Workers** | Celery workers that process video/audio/image files via FFmpeg |
 | **Email Workers** | Celery workers that send transactional emails (invites, magic codes, notifications) |
+
+This fork ships only the all-in-one topology (plus the multi-service dev
+compose for local development). SaaS, multi-tenant, and larger production-house
+architecture work should target mainline FreeFrame instead of this fork.
 
 ---
 
@@ -157,7 +151,7 @@ Guest users (via share links) use the `GuestUser` table — they provide email +
 
 ## Real-Time Updates (SSE)
 
-FreeFrame uses **Server-Sent Events** (not WebSockets) for real-time updates. A single SSE endpoint per project streams all events:
+freeframed uses **Server-Sent Events** (not WebSockets) for real-time updates. A single SSE endpoint per project streams all events:
 
 ```
 GET /events/{project_id}
