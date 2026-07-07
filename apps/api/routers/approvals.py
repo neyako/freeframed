@@ -12,6 +12,7 @@ from ..models.activity import ActivityLog, ActivityAction, Notification, Notific
 from ..models.project import ProjectRole
 from ..schemas.approval import ApprovalCreate, ApprovalResponse
 from ..services.permissions import require_asset_access, require_project_role
+from ..services.workspace_service import get_workspace_name
 from ..tasks.email_tasks import send_approval_email
 from ..tasks.celery_app import send_task_safe
 from ..config import settings
@@ -91,6 +92,7 @@ def approve_asset(
                 status="approved",
                 asset_link=asset_link,
                 note=body.note,
+                workspace_name=get_workspace_name(db),
             )
     db.commit()
 
@@ -124,6 +126,7 @@ def reject_asset(
                 status="rejected",
                 asset_link=asset_link,
                 note=body.note,
+                workspace_name=get_workspace_name(db),
             )
     db.commit()
 

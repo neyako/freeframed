@@ -46,10 +46,11 @@ def send_invite_email(
     invite_link: str,
     team_name: Optional[str] = None,
     expiry_days: int = 7,
+    workspace_name: str = "FreeFrame",
 ):
     """Send organization/team invite email - high priority."""
     try:
-        subject = f"You've been invited to join {org_name} on FreeFrame"
+        subject = f"You've been invited to join {org_name}"
         html_body = render_template(
             "email/invite.html",
             subject=subject,
@@ -58,8 +59,9 @@ def send_invite_email(
             team_name=team_name,
             invite_link=invite_link,
             expiry_days=expiry_days,
+            workspace_name=workspace_name,
         )
-        text_body = f"{inviter_name} has invited you to join {org_name} on FreeFrame. Accept here: {invite_link}"
+        text_body = f"{inviter_name} has invited you to join {org_name}. Accept here: {invite_link}"
         
         success = _send_email(to_email, subject, html_body, text_body)
         if not success:
@@ -70,14 +72,21 @@ def send_invite_email(
 
 
 @shared_task(bind=True, queue="email_high", max_retries=3, default_retry_delay=60)
-def send_password_reset_email(self, to_email: str, reset_link: str, expiry_minutes: int = 60):
+def send_password_reset_email(
+    self,
+    to_email: str,
+    reset_link: str,
+    expiry_minutes: int = 60,
+    workspace_name: str = "FreeFrame",
+):
     try:
-        subject = "Reset your FreeFrame password"
+        subject = f"Reset your {workspace_name} password"
         html_body = render_template(
             "email/password_reset.html",
             subject=subject,
             reset_link=reset_link,
             expiry_minutes=expiry_minutes,
+            workspace_name=workspace_name,
         )
         text_body = (
             "We received a request to reset your password.\n\n"
@@ -106,6 +115,7 @@ def send_mention_email(
     asset_name: str,
     comment_preview: str,
     asset_link: str,
+    workspace_name: str = "FreeFrame",
 ):
     """Send mention notification email."""
     try:
@@ -117,6 +127,7 @@ def send_mention_email(
             asset_name=asset_name,
             comment_preview=comment_preview,
             asset_link=asset_link,
+            workspace_name=workspace_name,
         )
         text_body = f"{mentioner_name} mentioned you on {asset_name}: {comment_preview}\n\nView: {asset_link}"
         
@@ -136,6 +147,7 @@ def send_comment_email(
     asset_name: str,
     comment_preview: str,
     asset_link: str,
+    workspace_name: str = "FreeFrame",
 ):
     """Send new comment notification email."""
     try:
@@ -147,6 +159,7 @@ def send_comment_email(
             asset_name=asset_name,
             comment_preview=comment_preview,
             asset_link=asset_link,
+            workspace_name=workspace_name,
         )
         text_body = f"{commenter_name} commented on {asset_name}: {comment_preview}\n\nView: {asset_link}"
         
@@ -167,6 +180,7 @@ def send_assignment_email(
     asset_link: str,
     due_date: Optional[str] = None,
     project_name: Optional[str] = None,
+    workspace_name: str = "FreeFrame",
 ):
     """Send assignment notification email."""
     try:
@@ -180,6 +194,7 @@ def send_assignment_email(
             asset_link=asset_link,
             due_date=due_date,
             project_name=project_name,
+            workspace_name=workspace_name,
         )
         text_body = f"{assigner_name} assigned you to review {asset_name}.{' Due: ' + due_date if due_date else ''}\n\nView: {asset_link}"
         
@@ -200,6 +215,7 @@ def send_share_email(
     asset_link: str,
     permission: Optional[str] = None,
     message: Optional[str] = None,
+    workspace_name: str = "FreeFrame",
 ):
     """Send asset shared notification email."""
     try:
@@ -212,6 +228,7 @@ def send_share_email(
             asset_link=asset_link,
             permission=permission,
             message=message,
+            workspace_name=workspace_name,
         )
         text_body = f"{sharer_name} shared {asset_name} with you.\n\nView: {asset_link}"
         
@@ -232,6 +249,7 @@ def send_approval_email(
     status: str,  # "approved" or "rejected"
     asset_link: str,
     note: Optional[str] = None,
+    workspace_name: str = "FreeFrame",
 ):
     """Send approval/rejection notification email."""
     try:
@@ -245,6 +263,7 @@ def send_approval_email(
             status=status,
             asset_link=asset_link,
             note=note,
+            workspace_name=workspace_name,
         )
         text_body = f"{reviewer_name} {status} {asset_name}.{' Note: ' + note if note else ''}\n\nView: {asset_link}"
         
@@ -265,6 +284,7 @@ def send_project_added_email(
     project_link: str,
     org_name: Optional[str] = None,
     role: Optional[str] = None,
+    workspace_name: str = "FreeFrame",
 ):
     """Send project added notification email."""
     try:
@@ -277,6 +297,7 @@ def send_project_added_email(
             project_link=project_link,
             org_name=org_name,
             role=role,
+            workspace_name=workspace_name,
         )
         text_body = f"{adder_name} added you to {project_name}.\n\nView: {project_link}"
         

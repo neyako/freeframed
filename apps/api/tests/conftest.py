@@ -54,6 +54,7 @@ def _make_user(
     u.is_superadmin = False
     u.email_verified = False
     u.preferences = {}
+    u.invited_by_id = None
     u.invite_token = None
     return u
 

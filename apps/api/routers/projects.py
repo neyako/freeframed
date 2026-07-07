@@ -14,6 +14,7 @@ from ..schemas.project import ProjectCreate, ProjectUpdate, ProjectResponse, Pro
 from ..tasks.email_tasks import send_project_added_email
 from ..tasks.celery_app import send_task_safe
 from ..services.s3_service import put_object, generate_presigned_get_url, delete_object
+from ..services.workspace_service import get_workspace_name
 from ..config import settings
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -298,6 +299,7 @@ def add_project_member(project_id: uuid.UUID, body: AddProjectMemberRequest, db:
             project_name=project.name,
             project_link=project_link,
             role=body.role.value if body.role else None,
+            workspace_name=get_workspace_name(db),
         )
 
     return member

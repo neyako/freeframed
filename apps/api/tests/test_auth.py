@@ -31,6 +31,7 @@ def _mock_user(
     u.avatar_url = None
     u.created_at = datetime.now(timezone.utc)
     u.deleted_at = None
+    u.invited_by_id = None
     return u
 
 
@@ -259,3 +260,28 @@ def test_get_me_no_auth(client):
     """GET /auth/me without token should return 401 or 403 (no bearer scheme)."""
     resp = client.get("/auth/me")
     assert resp.status_code in (401, 403)
+
+
+def test_get_invite_info_includes_workspace_and_inviter(client, mock_db):
+    invitee = _mock_user("invitee@example.com")
+    invitee.name = "Invitee User"
+    invitee.invite_token = "invite-token"
+    invitee.invite_token_expires_at = datetime.now(timezone.utc).replace(year=2099)
+    inviter = _mock_user("admin@example.com")
+    inviter.name = "Admin User"
+    invitee.invited_by_id = inviter.id
+
+    from apps.api.models.branding import WorkspaceSettings
+
+    workspace = WorkspaceSettings(id=1, name="Studio")
+    mock_db.first.side_effect = [invitee, inviter, workspace]
+
+    resp = client.get("/auth/invite/invite-token")
+
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "email": "invitee@example.com",
+        "name": "Invitee User",
+        "org_name": "Studio",
+        "inviter_name": "Admin User",
+    }

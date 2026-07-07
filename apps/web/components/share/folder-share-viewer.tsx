@@ -19,6 +19,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { clearTokens } from '@/lib/auth'
+import { useBrandingStore } from '@/stores/branding-store'
 import { VersionSwitcher } from '@/components/review/version-switcher'
 import { fetchShareStreamInfo, resolveStreamUrl } from './share-stream'
 import type {
@@ -1099,10 +1100,11 @@ export function FolderShareViewer({
   const viewerMenuRef = React.useRef<HTMLDivElement>(null)
 
   // Set page title
+  const orgName = useBrandingStore((s) => s.orgName)
   React.useEffect(() => {
-    document.title = title ? `${title} – FreeFrame` : 'FreeFrame'
+    document.title = title ? `${title} – ${orgName}` : orgName
     return () => { document.title = 'FreeFrame' }
-  }, [title])
+  }, [title, orgName])
   React.useEffect(() => {
     setIsTouch(window.matchMedia('(hover: none)').matches)
   }, [])

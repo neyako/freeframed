@@ -5,6 +5,7 @@ from pydantic import BaseModel, field_validator, model_validator
 
 
 HEX_COLOR_RE = re.compile(r'^#[0-9A-Fa-f]{6}$')
+MAX_WORKSPACE_LOGO_CHARS = 3_000_000
 
 
 def _validate_hex_color(v: Optional[str]) -> Optional[str]:
@@ -53,6 +54,43 @@ class BrandingResponse(BaseModel):
 class BrandingLogoUploadResponse(BaseModel):
     upload_url: str
     key: str
+
+
+# ── Workspace ─────────────────────────────────────────────────────────────────
+
+class WorkspaceResponse(BaseModel):
+    name: str
+    logo_dark: str | None = None
+    logo_light: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class WorkspaceUpdate(BaseModel):
+    name: str | None = None
+    logo_dark: str | None = None
+    logo_light: str | None = None
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v):
+        if v is None:
+            return None
+        name = v.strip()
+        if not name or len(name) > 255:
+            raise ValueError("name must be between 1 and 255 characters")
+        return name
+
+    @field_validator("logo_dark", "logo_light")
+    @classmethod
+    def validate_logo(cls, v):
+        if v is None:
+            return None
+        if len(v) > MAX_WORKSPACE_LOGO_CHARS:
+            raise ValueError("logo must be 3,000,000 characters or less")
+        if not v.startswith("data:image/"):
+            raise ValueError("logo must be a data:image/ URL")
+        return v
 
 
 # ── Watermark ─────────────────────────────────────────────────────────────────

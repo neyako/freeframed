@@ -33,6 +33,7 @@ from ..tasks.celery_app import send_task_safe
 from ..tasks.email_tasks import send_invite_email, send_password_reset_email
 from ..models.user import User, UserStatus
 from ..middleware.auth import get_current_user
+from ..services.workspace_service import get_workspace_name
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -56,9 +57,20 @@ def get_invite_info(token: str, db: Session = Depends(get_db)):
     if user.invite_token_expires_at and user.invite_token_expires_at < datetime.now(timezone.utc):
         raise HTTPException(status_code=400, detail="Invite link expired")
     
+    inviter_name = None
+    if user.invited_by_id:
+        inviter = db.query(User).filter(
+            User.id == user.invited_by_id,
+            User.deleted_at.is_(None),
+        ).first()
+        if inviter:
+            inviter_name = inviter.name
+
     return InviteInfoResponse(
         email=user.email,
         name=user.name,
+        org_name=get_workspace_name(db),
+        inviter_name=inviter_name,
     )
 
 
@@ -112,7 +124,12 @@ def forgot_password(body: ForgotPasswordRequest, db: Session = Depends(get_db)):
         token = secrets.token_urlsafe(48)
         store_password_reset_token(token, str(user.id))
         reset_url = f"{settings.frontend_url}/reset-password/{token}"
-        send_task_safe(send_password_reset_email, user.email, reset_url)
+        send_task_safe(
+            send_password_reset_email,
+            user.email,
+            reset_url,
+            workspace_name=get_workspace_name(db),
+        )
 
     return {"detail": detail}
 

@@ -21,6 +21,7 @@ EXEMPT_PREFIXES = (
     "/docs",
     "/redoc",
     "/openapi.json",
+    "/workspace",
     "/share/",     # Public share links should work regardless
 )
 

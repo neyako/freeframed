@@ -11,6 +11,7 @@ from ..services.auth_service import hash_password, get_user_by_email, revoke_use
 from ..tasks.email_tasks import send_invite_email
 from ..tasks.celery_app import send_task_safe
 from ..config import settings
+from ..services.workspace_service import get_workspace_name
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -59,11 +60,13 @@ def invite_user(body: InviteRequest, db: Session = Depends(get_db), current_user
     # Generate invite token
     invite_token = secrets.token_urlsafe(48)
     invite_expires = datetime.now(timezone.utc) + timedelta(days=7)
+    workspace_name = get_workspace_name(db)
     
     user = User(
         email=body.email,
         name=body.name,
         status=UserStatus.pending_invite,
+        invited_by_id=current_user.id,
         invite_token=invite_token,
         invite_token_expires_at=invite_expires,
     )
@@ -73,7 +76,14 @@ def invite_user(body: InviteRequest, db: Session = Depends(get_db), current_user
     
     # Send invite email
     invite_url = f"{settings.frontend_url}/invite/{invite_token}"
-    send_task_safe(send_invite_email, user.email, current_user.name or "Admin", "FreeFrame", invite_url)
+    send_task_safe(
+        send_invite_email,
+        user.email,
+        current_user.name or "Admin",
+        workspace_name,
+        invite_url,
+        workspace_name=workspace_name,
+    )
     
     return user
 

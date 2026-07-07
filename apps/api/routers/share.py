@@ -44,6 +44,7 @@ from ..services.permissions import (
 )
 from ..services.redis_service import create_share_session
 from ..services.s3_service import generate_presigned_get_url, build_download_filename
+from ..services.workspace_service import get_workspace_name
 from ..services.crypto_service import encrypt_password, decrypt_password
 from .hls_proxy import create_hls_token
 from ..models.project import Project, ProjectRole
@@ -631,6 +632,7 @@ def share_project_with_user(
             asset_name=project.name,
             asset_link=project_link,
             permission=body.permission.value if body.permission else None,
+            workspace_name=get_workspace_name(db),
         )
 
     return DirectShareResponse(
@@ -721,6 +723,7 @@ def share_folder_with_user(
             asset_name=folder.name,
             asset_link=folder_link,
             permission=body.permission.value if body.permission else None,
+            workspace_name=get_workspace_name(db),
         )
 
     return share
@@ -886,6 +889,7 @@ def share_with_user(
             asset_name=asset.name,
             asset_link=asset_link,
             permission=body.permission.value if body.permission else None,
+            workspace_name=get_workspace_name(db),
         )
 
     return share

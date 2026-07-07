@@ -37,6 +37,7 @@ from ..services.permissions import (
     validate_asset_in_share,
     validate_share_link_with_session,
 )
+from ..services.workspace_service import get_workspace_name
 from ..tasks.email_tasks import send_mention_email, send_comment_email
 from ..tasks.celery_app import send_task_safe
 
@@ -237,6 +238,10 @@ def _create_mentions(db: Session, comment: Comment, asset: Asset, body: str, aut
             if user and user.id != comment.author_id:
                 mentioned_users.append(user)
 
+    if not mentioned_users:
+        return
+
+    workspace_name = get_workspace_name(db)
     for user in mentioned_users:
         mention = Mention(comment_id=comment.id, mentioned_user_id=user.id)
         db.add(mention)
@@ -255,6 +260,7 @@ def _create_mentions(db: Session, comment: Comment, asset: Asset, body: str, aut
             asset_name=asset.name,
             comment_preview=body[:200],
             asset_link=asset_link,
+            workspace_name=workspace_name,
         )
 
 

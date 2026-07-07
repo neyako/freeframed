@@ -7,13 +7,12 @@ import { setTokens } from '@/lib/auth'
 import { useAuthStore } from '@/stores/auth-store'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import type { AuthTokens, OrgRole } from '@/types'
+import type { AuthTokens } from '@/types'
 
 interface InviteDetails {
-  email: string
-  org_name: string
-  inviter_name: string
-  role: OrgRole
+  readonly email: string
+  readonly org_name: string
+  readonly inviter_name: string | null
 }
 
 interface InviteAcceptProps {
@@ -128,10 +127,11 @@ export function InviteAccept({ token }: InviteAcceptProps) {
         <div className="mb-8 rounded-lg border border-border bg-bg-secondary p-4">
           <p className="text-xs text-text-tertiary uppercase tracking-wider mb-2">You&apos;ve been invited to</p>
           <p className="text-base font-medium tracking-[-0.02em] text-text-primary mb-1">{invite.org_name}</p>
-          <p className="text-sm text-text-secondary">
-            Invited by <span className="text-text-primary">{invite.inviter_name}</span>{' '}
-            as <span className="capitalize text-text-primary">{invite.role}</span>
-          </p>
+          {invite.inviter_name && (
+            <p className="text-sm text-text-secondary">
+              Invited by <span className="text-text-primary">{invite.inviter_name}</span>
+            </p>
+          )}
           <p className="text-sm text-text-tertiary mt-1">{invite.email}</p>
         </div>
       )}

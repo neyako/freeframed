@@ -6,5 +6,5 @@ from .comment import Comment, Annotation, CommentAttachment, CommentReaction
 from .approval import Approval
 from .share import ShareLink, AssetShare, ShareLinkActivity, ShareActivityAction, ShareVisibility
 from .metadata import MetadataField, AssetMetadata, Collection, CollectionShare
-from .branding import ProjectBranding, WatermarkSettings
+from .branding import ProjectBranding, WatermarkSettings, WorkspaceSettings
 from .activity import Mention, ActivityLog, Notification

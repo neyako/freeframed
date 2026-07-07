@@ -3,6 +3,7 @@ import { Space_Grotesk, Space_Mono } from "next/font/google";
 import localFont from "next/font/local";
 import { ToastProvider } from "@/components/shared/toast";
 import { ThemeInitializer } from "@/components/shared/theme-initializer";
+import { BrandingInitializer } from "@/components/shared/branding-initializer";
 import "./globals.css";
 
 const spaceGrotesk = Space_Grotesk({
@@ -58,6 +59,7 @@ export default function RootLayout({
       </head>
       <body className="font-sans antialiased">
         <ThemeInitializer />
+        <BrandingInitializer />
         <ToastProvider>{children}</ToastProvider>
       </body>
     </html>

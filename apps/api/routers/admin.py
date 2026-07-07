@@ -8,9 +8,11 @@ from ..config import settings
 from ..database import get_db
 from ..middleware.auth import get_current_user
 from ..models.user import User, UserStatus
+from ..schemas.branding import WorkspaceResponse, WorkspaceUpdate
 from ..schemas.auth import UserResponse, UpdateUserRoleRequest
 from ..services.auth_service import revoke_user_refresh_tokens
 from ..services.email_service import email_service
+from ..services.workspace_service import get_workspace_name, get_workspace_settings
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -33,7 +35,10 @@ def list_all_users(
     return users
 
 @router.post("/test-email")
-def test_email(current_user: User = Depends(get_current_user)):
+def test_email(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     if not current_user.is_superadmin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -43,7 +48,7 @@ def test_email(current_user: User = Depends(get_current_user)):
     try:
         ok = email_service.send_email(
             current_user.email,
-            "FreeFrame test email",
+            f"{get_workspace_name(db)} test email",
             "<p>SMTP/SES configuration works.</p>",
             "SMTP/SES configuration works.",
         )
@@ -51,6 +56,30 @@ def test_email(current_user: User = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     return {"sent": ok, "provider": settings.mail_provider, "to": current_user.email}
+
+
+@router.put("/workspace", response_model=WorkspaceResponse)
+def update_workspace(
+    body: WorkspaceUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not current_user.is_superadmin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admins can access this endpoint"
+        )
+
+    workspace = get_workspace_settings(db)
+    if "name" in body.model_fields_set and body.name is not None:
+        workspace.name = body.name
+    if "logo_dark" in body.model_fields_set:
+        workspace.logo_dark = body.logo_dark
+    if "logo_light" in body.model_fields_set:
+        workspace.logo_light = body.logo_light
+    db.commit()
+    db.refresh(workspace)
+    return workspace
 
 @router.patch("/users/{user_id}/deactivate", response_model=UserResponse)
 def deactivate_user(

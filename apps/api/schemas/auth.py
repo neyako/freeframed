@@ -44,7 +44,8 @@ class AcceptInviteRequest(BaseModel):
 class InviteInfoResponse(BaseModel):
     email: str
     name: str
-    org_name: str | None = None
+    org_name: str
+    inviter_name: str | None = None
 
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
