@@ -137,17 +137,22 @@ export default function HomePage() {
 
   return (
     <div className="mx-auto w-full max-w-[1360px] px-4 sm:px-8 lg:px-10 pt-6 sm:pt-10 pb-24 space-y-8">
-      {/* Greeting */}
-      <div>
-        <h1 className="text-xl font-semibold text-text-primary">
-          {getGreeting()},{" "}
-          <span className="text-accent">
-            {user?.name?.split(" ")[0] ?? "there"}
-          </span>
-        </h1>
-        <p className="mt-1 text-sm text-text-secondary">
-          Here&apos;s what&apos;s happening with your assets today.
-        </p>
+      {/* Greeting + storage */}
+      <div className="flex items-start justify-between gap-6">
+        <div>
+          <h1 className="text-xl font-semibold text-text-primary">
+            {getGreeting()},{" "}
+            <span className="text-accent">
+              {user?.name?.split(" ")[0] ?? "there"}
+            </span>
+          </h1>
+          <p className="mt-1 text-sm text-text-secondary">
+            Here&apos;s what&apos;s happening with your assets today.
+          </p>
+        </div>
+        <div className="hidden sm:block w-56 shrink-0 pt-1">
+          <StorageMeter />
+        </div>
       </div>
 
       {/* Sections */}
@@ -171,9 +176,6 @@ export default function HomePage() {
         emptyDescription="Assets assigned to you for review will appear here."
       />
 
-      <div className="max-w-sm border-t border-border pt-6">
-        <StorageMeter />
-      </div>
     </div>
   );
 }

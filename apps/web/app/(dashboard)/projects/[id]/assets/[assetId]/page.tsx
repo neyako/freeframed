@@ -25,6 +25,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Download,
   Info,
   Loader2,
   Columns2,
@@ -55,6 +56,27 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
   usePageTitle(asset?.name ?? null)
   const [annotationData, setAnnotationData] = useState<Record<string, unknown> | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [downloading, setDownloading] = useState(false)
+
+  async function handleDownload() {
+    if (!asset || downloading) return
+    setDownloading(true)
+    try {
+      const res = await api.get<{ url: string }>(`/assets/${asset.id}/stream?download=true`)
+      // Let the server's Content-Disposition filename win — don't set `a.download`
+      const a = document.createElement('a')
+      a.href = res.url
+      a.rel = 'noopener noreferrer'
+      a.style.display = 'none'
+      document.body.appendChild(a)
+      a.click()
+      setTimeout(() => a.remove(), 1000)
+    } catch {
+      // presign failed — button simply re-enables
+    } finally {
+      setDownloading(false)
+    }
+  }
   const deepLinkApplied = useRef(false)
   const autoOpenedRef = useRef(false)
 
@@ -404,6 +426,15 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
           >
             <Upload className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">New version</span>
+          </button>
+          <button
+            onClick={handleDownload}
+            disabled={downloading}
+            className="inline-flex h-[34px] items-center gap-2 rounded border border-border-strong px-3.5 font-mono text-[11px] uppercase tracking-[0.08em] text-text-primary hover:border-text-primary hover:bg-bg-hover transition-colors disabled:opacity-50"
+            title="Download original file"
+          >
+            {downloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+            <span className="hidden sm:inline">Download</span>
           </button>
           <div className="hidden md:block">
             <ShareDialog assetId={asset.id} assetName={asset.name} projectId={projectId} asset={asset} />
