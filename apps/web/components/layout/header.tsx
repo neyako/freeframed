@@ -109,7 +109,7 @@ export function Header({ onSearchOpen }: HeaderProps) {
       )}>
         {/* Left: logo + breadcrumbs */}
         <div className="flex items-center gap-3 min-w-0">
-          <Link href="/projects" className="flex items-center gap-2 shrink-0" onClick={() => setNotifOpen(false)}>
+          <Link href="/" className="flex items-center gap-2 shrink-0" onClick={() => setNotifOpen(false)}>
             {customLogo ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img

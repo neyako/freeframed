@@ -404,7 +404,8 @@ def validate_share_link_endpoint(
         description=link.description,
         permission=link.permission,
         visibility=link.visibility,
-        allow_download=link.allow_download,
+        # Effective for this viewer: team members can always download
+        allow_download=link.allow_download or current_user is not None,
         show_versions=link.show_versions,
         show_watermark=link.show_watermark,
         appearance=link.appearance,
@@ -1478,8 +1479,9 @@ def get_share_stream_url(
     """Public endpoint — optional auth. Returns presigned stream URL for an asset in a share link."""
     link = validate_share_link_with_session(db, token, share_session=share_session, current_user=current_user)
 
-    # Enforce allow_download when explicit download is requested
-    if download and not link.allow_download:
+    # Enforce allow_download when explicit download is requested.
+    # Logged-in team members can always download; the flag gates guests only.
+    if download and not link.allow_download and current_user is None:
         raise HTTPException(status_code=403, detail="Downloads are not allowed for this share link")
 
     asset = _get_asset(db, asset_id)

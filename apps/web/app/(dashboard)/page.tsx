@@ -8,6 +8,7 @@ import { api } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth-store";
 import { formatRelativeTime } from "@/lib/utils";
 import { QuickShare } from "@/components/dashboard/quick-share";
+import { StorageMeter } from "@/components/dashboard/storage-meter";
 import { EmptyState } from "@/components/shared/empty-state";
 import type { AssetResponse } from "@/types";
 
@@ -169,6 +170,10 @@ export default function HomePage() {
         emptyTitle="Nothing assigned"
         emptyDescription="Assets assigned to you for review will appear here."
       />
+
+      <div className="max-w-sm border-t border-border pt-6">
+        <StorageMeter />
+      </div>
     </div>
   );
 }

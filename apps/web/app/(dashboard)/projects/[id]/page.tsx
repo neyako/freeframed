@@ -22,6 +22,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { cn, formatRelativeTime, formatBytes } from "@/lib/utils";
+import { StorageMeter } from "@/components/dashboard/storage-meter";
 import { api } from "@/lib/api";
 import { findVersionCandidate } from "@/lib/version-match";
 import { Button } from "@/components/ui/button";
@@ -440,33 +441,10 @@ export default function ProjectDetailPage() {
         {/* Spacer */}
         <div className="flex-1" />
 
-        {/* Storage indicator — matches global sidebar bottom section (p-2 + space-y-1) */}
-        {(() => {
-          const used = project?.storage_bytes ?? 0;
-          const limit = 10 * 1024 * 1024 * 1024; // 10 GB default limit
-          const pct = limit > 0 ? Math.min((used / limit) * 100, 100) : 0;
-          return (
-            <div className="border-t border-border shrink-0 px-4 pb-5 pt-4 space-y-2">
-              <div className="flex flex-col gap-1">
-                <div className="flex items-center justify-between">
-                  <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-text-tertiary">Storage</span>
-                  <span className={cn(
-                    "font-mono text-[10px] tracking-[0.02em] tabular-nums",
-                    pct >= 90 ? "text-accent" : "text-text-secondary",
-                  )}>
-                    {formatBytes(used)} / {formatBytes(limit)}
-                  </span>
-                </div>
-                <div className="h-1 w-full rounded-full bg-bg-hover overflow-hidden">
-                  <div
-                    className="h-full rounded-full bg-accent transition-all duration-300"
-                    style={{ width: `${Math.max(pct, 1)}%` }}
-                  />
-                </div>
-              </div>
-            </div>
-          );
-        })()}
+        {/* Storage indicator — project usage against real disk capacity */}
+        <div className="border-t border-border shrink-0 px-4 pb-5 pt-4 space-y-2">
+          <StorageMeter usedBytes={project?.storage_bytes ?? 0} />
+        </div>
       </div>
       )}
 
