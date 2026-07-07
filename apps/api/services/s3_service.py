@@ -1,6 +1,7 @@
 import os
 import re
 import boto3
+from botocore.client import Config
 from botocore.exceptions import ClientError
 from ..config import settings
 
@@ -63,6 +64,10 @@ def _get_presign_client():
     }
     if endpoint:
         kwargs["endpoint_url"] = endpoint
+        # Path-style (/<bucket>/<key>) so presigned URLs work on endpoints
+        # without wildcard DNS — e.g. the all-in-one image serves them on the
+        # app origin itself via an nginx route for the bucket path.
+        kwargs["config"] = Config(s3={"addressing_style": "path"})
     return boto3.client("s3", **kwargs)
 
 
