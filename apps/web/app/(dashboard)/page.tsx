@@ -3,13 +3,13 @@
 import * as React from "react";
 import useSWR from "swr";
 import Link from "next/link";
-import { FolderOpen, Clock, UserCheck, type LucideIcon } from "lucide-react";
+import { Film, Clock, UserCheck, type LucideIcon } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth-store";
 import { formatRelativeTime } from "@/lib/utils";
 import { QuickShare } from "@/components/dashboard/quick-share";
 import { EmptyState } from "@/components/shared/empty-state";
-import type { Asset } from "@/types";
+import type { AssetResponse } from "@/types";
 
 function getGreeting(): string {
   const hour = new Date().getHours();
@@ -19,18 +19,28 @@ function getGreeting(): string {
 }
 
 interface AssetCardProps {
-  asset: Asset;
+  asset: AssetResponse;
 }
 
 function AssetCard({ asset }: AssetCardProps) {
+  const [imgError, setImgError] = React.useState(false);
   return (
     <Link
       href={`/assets/${asset.id}`}
-      className="flex flex-col gap-2 rounded-lg border border-border bg-bg-secondary p-3 hover:border-border-strong transition-colors"
+      className="group flex flex-col gap-2 rounded-lg border border-border bg-bg-secondary p-3 hover:border-border-strong transition-colors"
     >
-      {/* Thumbnail placeholder */}
       <div className="aspect-video w-full rounded-md bg-bg-tertiary overflow-hidden flex items-center justify-center text-text-tertiary">
-        <FolderOpen className="h-6 w-6" />
+        {asset.thumbnail_url && !imgError ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={asset.thumbnail_url}
+            alt={asset.name}
+            onError={() => setImgError(true)}
+            className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.02]"
+          />
+        ) : (
+          <Film className="h-6 w-6" />
+        )}
       </div>
 
       <div className="flex flex-col gap-1">
@@ -55,7 +65,7 @@ function AssetCard({ asset }: AssetCardProps) {
 interface SectionProps {
   title: string;
   icon: LucideIcon;
-  assets: Asset[] | undefined;
+  assets: AssetResponse[] | undefined;
   isLoading: boolean;
   emptyTitle: string;
   emptyDescription: string;
@@ -114,14 +124,14 @@ function Section({
 export default function HomePage() {
   const { user } = useAuthStore();
 
-  const { data: recentAssets, isLoading: loadingRecent } = useSWR(
+  const { data: recentAssets, isLoading: loadingRecent } = useSWR<AssetResponse[]>(
     "/me/assets?filter=owned",
-    () => api.get<Asset[]>("/me/assets?filter=owned"),
+    () => api.get<AssetResponse[]>("/me/assets?filter=owned"),
   );
 
-  const { data: assignedAssets, isLoading: loadingAssigned } = useSWR(
+  const { data: assignedAssets, isLoading: loadingAssigned } = useSWR<AssetResponse[]>(
     "/me/assets?filter=assigned",
-    () => api.get<Asset[]>("/me/assets?filter=assigned"),
+    () => api.get<AssetResponse[]>("/me/assets?filter=assigned"),
   );
 
   return (
