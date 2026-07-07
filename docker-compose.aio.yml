@@ -30,11 +30,14 @@ services:
       - "8080:80"
     volumes:
       - ./data:/data          # bind mount — change to e.g. /srv/freeframe:/data
+    env_file:
+      - path: .env            # optional overrides (SMTP, FRONTEND_URL, ...)
+        required: false
     environment:
-      # Set to the origin users type into their browser
-      FRONTEND_URL: http://localhost:8080
-      CORS_ORIGINS: http://localhost:8080
-      TRANSCODE_HWACCEL: auto
+      # Set to the origin users type into their browser (here or in .env)
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:8080}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}
+      TRANSCODE_HWACCEL: ${TRANSCODE_HWACCEL:-auto}
       # API_WORKERS: 4
       # TRANSCODING_CONCURRENCY: 2
     # Intel/AMD GPU transcoding: uncomment
