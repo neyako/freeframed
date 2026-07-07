@@ -14,6 +14,7 @@ import {
   MousePointer,
   Square,
   Minus,
+  Plus,
   RotateCcw,
   Trash2,
   Globe,
@@ -213,6 +214,8 @@ export function CommentInput({
   >("public");
   const [visDropdownOpen, setVisDropdownOpen] = React.useState(false);
   const [timecodeAttached, setTimecodeAttached] = React.useState(true);
+  // In-point of a time range; end tracks the playhead until submit
+  const [rangeStart, setRangeStart] = React.useState<number | null>(null);
   const visRef = React.useRef<HTMLDivElement>(null);
 
   // Emoji picker state
@@ -354,12 +357,24 @@ export function CommentInput({
         finalAnnotation = annotationData;
       }
 
+      const attachTime =
+        hasTimecode &&
+        timecodeAttached &&
+        (playheadTime > 0 || rangeStart !== null);
+      let timecodeStart: number | undefined;
+      let timecodeEnd: number | undefined;
+      if (attachTime) {
+        timecodeStart = playheadTime;
+        if (rangeStart !== null && rangeStart !== playheadTime) {
+          timecodeStart = Math.min(rangeStart, playheadTime);
+          timecodeEnd = Math.max(rangeStart, playheadTime);
+        }
+      }
+
       await onSubmit(
         trimmed,
-        hasTimecode && timecodeAttached && playheadTime > 0
-          ? playheadTime
-          : undefined,
-        undefined,
+        timecodeStart,
+        timecodeEnd,
         finalAnnotation,
         replyToId ?? undefined,
         commentVisibility,
@@ -367,6 +382,7 @@ export function CommentInput({
       );
 
       setBody("");
+      setRangeStart(null);
       setMentionUserIds([]);
       setPendingAnnotation(null);
       clear(); // Clear Fabric.js canvas so stale annotations don't attach to next comment
@@ -406,8 +422,32 @@ export function CommentInput({
           <div className="flex items-start gap-0 rounded-lg border border-border bg-bg-tertiary focus-within:border-accent/50 focus-within:ring-1 focus-within:ring-accent/20">
             {/* Inline timecode badge — show when timecode attached (normal mode) or in drawing mode */}
             {hasTimecode && (timecodeAttached || isDrawingMode) && (
-              <span className="shrink-0 ml-2.5 mt-2.5 rounded bg-accent-muted border border-accent-line px-1.5 py-0 font-mono text-[11px] text-accent leading-[19.5px] select-none">
-                {displayTime(playheadTime)}
+              <span className="shrink-0 ml-2.5 mt-2.5 flex items-center gap-1 rounded bg-accent-muted border border-accent-line px-1.5 py-0 font-mono text-[11px] text-accent leading-[19.5px] select-none">
+                {rangeStart !== null ? (
+                  <>
+                    {displayTime(Math.min(rangeStart, playheadTime))}
+                    <span className="text-accent/60">→</span>
+                    {displayTime(Math.max(rangeStart, playheadTime))}
+                    <button
+                      onClick={() => setRangeStart(null)}
+                      className="ml-0.5 text-accent/60 hover:text-accent transition-colors"
+                      title="Clear range"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    {displayTime(playheadTime)}
+                    <button
+                      onClick={() => setRangeStart(playheadTime)}
+                      className="ml-0.5 text-accent/60 hover:text-accent transition-colors"
+                      title="Set range start"
+                    >
+                      <Plus className="h-3 w-3" />
+                    </button>
+                  </>
+                )}
               </span>
             )}
             <textarea
@@ -523,7 +563,10 @@ export function CommentInput({
                       ? "text-accent bg-accent-muted"
                       : "text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary",
                   )}
-                  onClick={() => setTimecodeAttached((p) => !p)}
+                  onClick={() => {
+                    setTimecodeAttached((p) => !p);
+                    setRangeStart(null);
+                  }}
                   title={
                     timecodeAttached ? "Detach timecode" : "Attach timecode"
                   }
