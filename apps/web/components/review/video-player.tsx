@@ -125,7 +125,7 @@ function VideoFrameConstraint({
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-const SPEED_OPTIONS = [0.5, 0.75, 1, 1.25, 1.5, 2] as const;
+const SPEED_OPTIONS = [1, 1.25, 1.5, 2, 4, 8, 16] as const;
 
 export function VideoPlayer({
   assetId,
