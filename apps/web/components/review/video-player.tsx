@@ -244,8 +244,27 @@ export function VideoPlayer({
     }
   }, [currentTime, setPlayheadTime]);
 
+  const handleSpeedCycle = useCallback(() => {
+    const idx = SPEED_OPTIONS.indexOf(
+      playbackRate as (typeof SPEED_OPTIONS)[number],
+    );
+    const next = SPEED_OPTIONS[(idx + 1) % SPEED_OPTIONS.length];
+    setPlaybackRate(next);
+  }, [playbackRate, setPlaybackRate]);
+
   // Keyboard shortcuts
   useEffect(() => {
+    const stepFrame = (direction: 1 | -1) => {
+      const video = videoRef.current;
+      if (!video) return;
+      pause();
+      const fps =
+        useReviewStore.getState().currentVersion?.files?.find((f) => f.fps)
+          ?.fps ?? 24;
+      // Read time off the element — the state value lags behind timeupdate
+      seek(video.currentTime + direction / fps);
+    };
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (
         e.target instanceof HTMLInputElement ||
@@ -275,7 +294,13 @@ export function VideoPlayer({
           togglePlay();
           break;
         case "KeyL":
-          seek(currentTime + 10);
+          handleSpeedCycle();
+          break;
+        case "Comma":
+          stepFrame(-1);
+          break;
+        case "Period":
+          stepFrame(1);
           break;
         case "KeyI":
           useReviewStore.getState().setRangeStart(currentTime);
@@ -288,7 +313,7 @@ export function VideoPlayer({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [togglePlay, seek, currentTime, isDrawingMode]);
+  }, [togglePlay, seek, currentTime, isDrawingMode, handleSpeedCycle, pause, videoRef]);
 
   const handleContainerClick = useCallback(() => {
     if (holdSuppressClickRef.current) {
@@ -362,14 +387,6 @@ export function VideoPlayer({
       toggleFullscreen(containerRef.current);
     }
   }, [toggleFullscreen]);
-
-  const handleSpeedCycle = useCallback(() => {
-    const idx = SPEED_OPTIONS.indexOf(
-      playbackRate as (typeof SPEED_OPTIONS)[number],
-    );
-    const next = SPEED_OPTIONS[(idx + 1) % SPEED_OPTIONS.length];
-    setPlaybackRate(next);
-  }, [playbackRate, setPlaybackRate]);
 
   return (
     <div
