@@ -51,6 +51,7 @@ def test_quick_share_upload_assigns_designated_reviewer(db, make_project, make_u
     project, _owner = make_project()
     project.is_quick_share = True
     uploader = make_user("uploader@example.com", "Uploader")
+    uploader.is_superadmin = True  # satisfy setup guard
     reviewer = make_user("reviewer@example.com", "Reviewer")
     _add_member(db, project.id, uploader.id, ProjectRole.editor)
     _add_member(db, project.id, reviewer.id, ProjectRole.reviewer)
@@ -80,6 +81,7 @@ def test_non_quick_share_upload_leaves_asset_unassigned(db, make_project, make_u
     # Given
     project, _owner = make_project()
     uploader = make_user("uploader@example.com", "Uploader")
+    uploader.is_superadmin = True  # satisfy setup guard
     reviewer = make_user("reviewer@example.com", "Reviewer")
     _add_member(db, project.id, uploader.id, ProjectRole.editor)
     _add_member(db, project.id, reviewer.id, ProjectRole.reviewer)
