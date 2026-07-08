@@ -98,6 +98,23 @@ function getPreferredVersion(
   );
 }
 
+function shouldPollVersion(version: AssetVersion | null | undefined): boolean {
+  return (
+    version?.processing_status === "uploading" ||
+    version?.processing_status === "processing"
+  );
+}
+
+function getRefreshedCurrentVersion(
+  assetId: string,
+  allVersions: AssetVersion[],
+): AssetVersion | undefined {
+  const currentVersion = useReviewStore.getState().currentVersion;
+  return currentVersion?.asset_id === assetId
+    ? allVersions.find((version) => version.id === currentVersion.id)
+    : undefined;
+}
+
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
 interface ReviewProviderProps {
@@ -120,7 +137,7 @@ export function ReviewProvider({
   const [error, setError] = useState<string | null>(null);
   const pauseHandlerRef = useRef<(() => void) | null>(null);
 
-  const { setCurrentAsset, setCurrentVersion, setPlayheadTime } =
+  const { currentVersion, setCurrentAsset, setCurrentVersion, setPlayheadTime } =
     useReviewStore();
 
   // Track whether component is still mounted to avoid state updates after unmount
@@ -192,11 +209,13 @@ export function ReviewProvider({
         if (!mountedRef.current) return;
         setVersions(shareVersions);
 
-        const currentVersion = useReviewStore.getState().currentVersion;
-        const keepCurrentVersion =
-          currentVersion?.asset_id === assetId &&
-          shareVersions.some((version) => version.id === currentVersion.id);
-        if (!keepCurrentVersion) {
+        const refreshedCurrentVersion = getRefreshedCurrentVersion(
+          assetId,
+          shareVersions,
+        );
+        if (refreshedCurrentVersion) {
+          setCurrentVersion(refreshedCurrentVersion);
+        } else {
           const preferredVersion = getPreferredVersion(
             shareVersions,
             data.latest_version,
@@ -222,11 +241,13 @@ export function ReviewProvider({
         if (!mountedRef.current) return;
         setVersions(allVersions ?? []);
 
-        const currentVersion = useReviewStore.getState().currentVersion;
-        const keepCurrentVersion =
-          currentVersion?.asset_id === assetId &&
-          (allVersions ?? []).some((version) => version.id === currentVersion.id);
-        if (!keepCurrentVersion) {
+        const refreshedCurrentVersion = getRefreshedCurrentVersion(
+          assetId,
+          allVersions ?? [],
+        );
+        if (refreshedCurrentVersion) {
+          setCurrentVersion(refreshedCurrentVersion);
+        } else {
           const preferredVersion = getPreferredVersion(
             allVersions ?? [],
             data.latest_version,
@@ -291,11 +312,13 @@ export function ReviewProvider({
       }
       if (!mountedRef.current) return;
       setVersions(allVersions ?? []);
-      const currentVersion = useReviewStore.getState().currentVersion;
-      const keepCurrentVersion =
-        currentVersion?.asset_id === assetId &&
-        (allVersions ?? []).some((version) => version.id === currentVersion.id);
-      if (!keepCurrentVersion) {
+      const refreshedCurrentVersion = getRefreshedCurrentVersion(
+        assetId,
+        allVersions ?? [],
+      );
+      if (refreshedCurrentVersion) {
+        setCurrentVersion(refreshedCurrentVersion);
+      } else {
         const preferredVersion = getPreferredVersion(allVersions ?? [], null);
         if (preferredVersion) setCurrentVersion(preferredVersion);
       }
@@ -311,6 +334,22 @@ export function ReviewProvider({
       if (mountedRef.current) setIsLoading(false);
     });
   }, [fetchAsset, fetchComments]);
+
+  useEffect(() => {
+    const pollProcessing =
+      versions.some(
+        (version) => version.asset_id === assetId && shouldPollVersion(version),
+      ) ||
+      (currentVersion?.asset_id === assetId && shouldPollVersion(currentVersion));
+    if (!pollProcessing) return;
+
+    // Transcodes finish server-side, so refresh until processing settles.
+    const intervalId = window.setInterval(() => {
+      void fetchAsset();
+    }, 5000);
+
+    return () => window.clearInterval(intervalId);
+  }, [assetId, currentVersion, fetchAsset, versions]);
 
   const addComment = useCallback(
     async (payload: CreateCommentPayload): Promise<Comment> => {
