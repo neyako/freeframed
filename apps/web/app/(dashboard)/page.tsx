@@ -3,13 +3,14 @@
 import * as React from "react";
 import useSWR from "swr";
 import Link from "next/link";
-import { Film, Clock, UserCheck, type LucideIcon } from "lucide-react";
+import { Film, Clock, Trash2, UserCheck, type LucideIcon } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth-store";
 import { formatRelativeTime } from "@/lib/utils";
 import { QuickShare } from "@/components/dashboard/quick-share";
 import { StorageMeter } from "@/components/dashboard/storage-meter";
 import { EmptyState } from "@/components/shared/empty-state";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import type { AssetResponse } from "@/types";
 
 function getGreeting(): string {
@@ -21,45 +22,97 @@ function getGreeting(): string {
 
 interface AssetCardProps {
   asset: AssetResponse;
+  onDelete: (asset: AssetResponse) => Promise<void>;
 }
 
-function AssetCard({ asset }: AssetCardProps) {
+function AssetCard({ asset, onDelete }: AssetCardProps) {
   const [imgError, setImgError] = React.useState(false);
-  return (
-    <Link
-      href={`/assets/${asset.id}`}
-      className="group flex flex-col gap-2 rounded-lg border border-border bg-bg-secondary p-3 hover:border-border-strong transition-colors"
-    >
-      <div className="aspect-video w-full rounded-md bg-bg-tertiary overflow-hidden flex items-center justify-center text-text-tertiary">
-        {asset.thumbnail_url && !imgError ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={asset.thumbnail_url}
-            alt={asset.name}
-            onError={() => setImgError(true)}
-            className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.02]"
-          />
-        ) : (
-          <Film className="h-6 w-6" />
-        )}
-      </div>
+  const [confirmOpen, setConfirmOpen] = React.useState(false);
+  const [deleteError, setDeleteError] = React.useState<string | null>(null);
 
-      <div className="flex flex-col gap-1">
-        <div className="flex items-start justify-between gap-2">
-          <p className="text-sm font-medium text-text-primary line-clamp-1">
-            {asset.name}
-          </p>
+  function handleDeleteClick(event: React.MouseEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    setDeleteError(null);
+    setConfirmOpen(true);
+  }
+
+  function handleDialogOpenChange(open: boolean) {
+    setConfirmOpen(open);
+    if (!open) setDeleteError(null);
+  }
+
+  async function handleConfirmDelete() {
+    setDeleteError(null);
+    try {
+      await onDelete(asset);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unable to delete asset.";
+      setDeleteError(message);
+      throw error instanceof Error ? error : new Error(message);
+    }
+  }
+
+  return (
+    <div className="group relative">
+      <Link
+        href={`/assets/${asset.id}`}
+        className="flex flex-col gap-2 rounded-lg border border-border bg-bg-secondary p-3 hover:border-border-strong transition-colors"
+      >
+        <div className="aspect-video w-full rounded-md bg-bg-tertiary overflow-hidden flex items-center justify-center text-text-tertiary">
+          {asset.thumbnail_url && !imgError ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={asset.thumbnail_url}
+              alt={asset.name}
+              onError={() => setImgError(true)}
+              className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.02]"
+            />
+          ) : (
+            <Film className="h-6 w-6" />
+          )}
         </div>
-        <p className="text-xs text-text-tertiary">
-          {formatRelativeTime(asset.updated_at)}
-        </p>
-        {asset.due_date && (
-          <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-text-secondary">
-            Due {new Date(asset.due_date).toLocaleDateString()}
+
+        <div className="flex flex-col gap-1">
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-sm font-medium text-text-primary line-clamp-1">
+              {asset.name}
+            </p>
+          </div>
+          <p className="text-xs text-text-tertiary">
+            {formatRelativeTime(asset.updated_at)}
           </p>
-        )}
-      </div>
-    </Link>
+          {asset.due_date && (
+            <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-text-secondary">
+              Due {new Date(asset.due_date).toLocaleDateString()}
+            </p>
+          )}
+        </div>
+      </Link>
+      <button
+        type="button"
+        onClick={handleDeleteClick}
+        className="pointer-events-none absolute right-5 top-5 flex h-7 w-7 items-center justify-center rounded bg-bg-secondary/90 text-text-tertiary opacity-0 shadow-sm transition-colors hover:bg-bg-hover hover:text-accent group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent pointer-coarse:pointer-events-auto pointer-coarse:opacity-100"
+        aria-label={`Delete ${asset.name}`}
+        title={`Delete ${asset.name}`}
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+      </button>
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={handleDialogOpenChange}
+        title={`Delete "${asset.name}"?`}
+        description={
+          deleteError
+            ? `Could not delete "${asset.name}": ${deleteError}`
+            : "This will move the asset to the trash. You can restore it later from Recently Deleted."
+        }
+        confirmLabel="Delete asset"
+        variant="danger"
+        onConfirm={handleConfirmDelete}
+      />
+    </div>
   );
 }
 
@@ -70,6 +123,7 @@ interface SectionProps {
   isLoading: boolean;
   emptyTitle: string;
   emptyDescription: string;
+  onDelete: (asset: AssetResponse) => Promise<void>;
 }
 
 function Section({
@@ -79,6 +133,7 @@ function Section({
   isLoading,
   emptyTitle,
   emptyDescription,
+  onDelete,
 }: SectionProps) {
   return (
     <div className="flex flex-col gap-3">
@@ -114,7 +169,7 @@ function Section({
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {assets.slice(0, 8).map((asset) => (
-            <AssetCard key={asset.id} asset={asset} />
+            <AssetCard key={asset.id} asset={asset} onDelete={onDelete} />
           ))}
         </div>
       )}
@@ -125,14 +180,30 @@ function Section({
 export default function HomePage() {
   const { user } = useAuthStore();
 
-  const { data: recentAssets, isLoading: loadingRecent } = useSWR<AssetResponse[]>(
+  const {
+    data: recentAssets,
+    isLoading: loadingRecent,
+    mutate: mutateRecentAssets,
+  } = useSWR<AssetResponse[]>(
     "/me/assets?filter=owned",
     () => api.get<AssetResponse[]>("/me/assets?filter=owned"),
   );
 
-  const { data: assignedAssets, isLoading: loadingAssigned } = useSWR<AssetResponse[]>(
+  const {
+    data: assignedAssets,
+    isLoading: loadingAssigned,
+    mutate: mutateAssignedAssets,
+  } = useSWR<AssetResponse[]>(
     "/me/assets?filter=assigned",
     () => api.get<AssetResponse[]>("/me/assets?filter=assigned"),
+  );
+
+  const handleDeleteAsset = React.useCallback(
+    async (asset: AssetResponse) => {
+      await api.delete<void>(`/assets/${asset.id}`);
+      await Promise.all([mutateRecentAssets(), mutateAssignedAssets()]);
+    },
+    [mutateAssignedAssets, mutateRecentAssets],
   );
 
   return (
@@ -165,6 +236,7 @@ export default function HomePage() {
         isLoading={loadingRecent}
         emptyTitle="No assets yet"
         emptyDescription="Assets you create or own will appear here."
+        onDelete={handleDeleteAsset}
       />
 
       <Section
@@ -174,6 +246,7 @@ export default function HomePage() {
         isLoading={loadingAssigned}
         emptyTitle="Nothing assigned"
         emptyDescription="Assets assigned to you for review will appear here."
+        onDelete={handleDeleteAsset}
       />
 
     </div>
