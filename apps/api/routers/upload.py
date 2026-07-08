@@ -3,18 +3,19 @@ from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
 import uuid
 from datetime import datetime, timezone
+from typing import Optional
 from ..database import get_db
 from ..middleware.auth import get_current_user
 from ..models.user import User
 from ..models.asset import Asset, AssetVersion, MediaFile, AssetType, ProcessingStatus, FileType
 from ..models.folder import Folder
-from ..models.project import Project
+from ..models.project import Project, ProjectMember, ProjectRole
+from ..models.activity import Notification, NotificationType
 from ..services.s3_service import (
     create_multipart_upload, presign_upload_part,
     complete_multipart_upload, abort_multipart_upload,
 )
 from ..services.permissions import get_project_member, require_project_role
-from ..models.project import ProjectRole
 from ..schemas.upload import (
     InitiateUploadRequest, InitiateUploadResponse,
     PresignPartRequest, PresignPartResponse,
@@ -23,6 +24,23 @@ from ..schemas.upload import (
 )
 
 router = APIRouter(prefix="/upload", tags=["upload"])
+
+
+def find_quick_share_reviewer_id(db: Session, project: Project) -> Optional[uuid.UUID]:
+    """Return the user_id of the designated reviewer for a quick-share project, or None."""
+    if not project.is_quick_share:
+        return None
+    member = (
+        db.query(ProjectMember)
+        .filter(
+            ProjectMember.project_id == project.id,
+            ProjectMember.role == ProjectRole.reviewer,
+            ProjectMember.deleted_at.is_(None),
+        )
+        .order_by(ProjectMember.invited_at.asc())
+        .first()
+    )
+    return member.user_id if member else None
 
 
 def _get_upload_media_file(db: Session, version_id: uuid.UUID) -> MediaFile:
@@ -77,6 +95,15 @@ def initiate_upload(
         )
         db.add(asset)
         db.flush()
+        reviewer_id = find_quick_share_reviewer_id(db, project)
+        if reviewer_id is not None and reviewer_id != current_user.id:
+            asset.assignee_id = reviewer_id
+            notification = Notification(
+                user_id=reviewer_id,
+                type=NotificationType.assignment,
+                asset_id=asset.id,
+            )
+            db.add(notification)
 
     # Get next version number
     last_version = db.query(AssetVersion).filter(
