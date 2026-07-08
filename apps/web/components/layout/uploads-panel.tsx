@@ -4,6 +4,8 @@ import * as React from 'react'
 import { usePathname } from 'next/navigation'
 import {
   X,
+  Link,
+  Check,
   CheckCircle,
   AlertCircle,
   Loader2,
@@ -98,11 +100,28 @@ function StatusBadge({ status }: { status: UploadStatus }) {
 
 function UploadItem({ upload }: { upload: UploadFile }) {
   const { cancelUpload, removeFile } = useUploadStore()
+  const [linkCopied, setLinkCopied] = React.useState(false)
   const isUploading = upload.status === 'pending' || upload.status === 'uploading'
   const isProcessing = upload.status === 'processing'
+  const canCopyAssetLink =
+    Boolean(upload.assetId) &&
+    (upload.status === 'processing' || upload.status === 'complete')
   const showProgress = isUploading || isProcessing
 
   const progressValue = getUploadDisplayProgress(upload)
+
+  const copyAssetLink = React.useCallback(async () => {
+    if (!upload.assetId) return
+
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}/assets/${upload.assetId}`)
+      setLinkCopied(true)
+      window.setTimeout(() => setLinkCopied(false), 2000)
+    } catch (err) {
+      if (err instanceof Error) return
+      throw err
+    }
+  }, [upload.assetId])
 
   return (
     <div className="group flex items-start gap-3 px-4 py-3 hover:bg-bg-hover/50 transition-colors">
@@ -157,6 +176,15 @@ function UploadItem({ upload }: { upload: UploadFile }) {
 
       {/* Actions */}
       <div className="shrink-0 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity">
+        {canCopyAssetLink && (
+          <button
+            onClick={() => void copyAssetLink()}
+            className="h-6 w-6 flex items-center justify-center rounded text-text-tertiary hover:text-text-primary hover:bg-bg-hover transition-colors"
+            title={linkCopied ? 'Copied' : 'Copy asset link'}
+          >
+            {linkCopied ? <Check className="h-3.5 w-3.5" /> : <Link className="h-3.5 w-3.5" />}
+          </button>
+        )}
         {isUploading && (
           <button
             onClick={() => cancelUpload(upload.id)}
