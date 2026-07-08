@@ -79,19 +79,79 @@ def test_create_project(client, auth_headers, mock_db, test_user):
 
 def test_quick_share_returns_existing_project(client, auth_headers, mock_db, test_user):
     org_id = uuid.uuid4()
-    proj = _mock_project(org_id, test_user.id, "Quick Shares")
+    proj = _mock_project(org_id, uuid.uuid4(), "Quick Shares")
     proj.is_quick_share = True
-    mock_db.first.return_value = proj
+    mock_db.order_by.return_value = mock_db
+    mock_db.first.side_effect = [proj, None]
 
     resp = client.post("/projects/quick-share", headers=auth_headers)
 
     assert resp.status_code == 200
     assert resp.json()["name"] == "Quick Shares"
     assert resp.json()["is_quick_share"] is True
-    mock_db.add.assert_not_called()
+    added_member = next(
+        call.args[0]
+        for call in mock_db.add.call_args_list
+        if isinstance(call.args[0], ProjectMember)
+    )
+    assert added_member.project_id == proj.id
+    assert added_member.user_id == test_user.id
+    assert added_member.role == ProjectRole.editor
+    mock_db.commit.assert_called_once()
+
+
+def test_quick_share_existing_project_does_not_duplicate_member(
+    client, auth_headers, mock_db, test_user
+):
+    org_id = uuid.uuid4()
+    proj = _mock_project(org_id, uuid.uuid4(), "Quick Shares")
+    proj.is_quick_share = True
+    member = _mock_project_member(proj.id, test_user.id, ProjectRole.editor)
+    mock_db.order_by.return_value = mock_db
+    mock_db.first.side_effect = [proj, member]
+
+    resp = client.post("/projects/quick-share", headers=auth_headers)
+
+    assert resp.status_code == 200
+    assert resp.json()["name"] == "Quick Shares"
+    assert resp.json()["is_quick_share"] is True
+    assert mock_db.first.call_count == 2
+    added_members = [
+        call.args[0]
+        for call in mock_db.add.call_args_list
+        if isinstance(call.args[0], ProjectMember)
+    ]
+    assert added_members == []
+    mock_db.commit.assert_not_called()
+
+
+def test_quick_share_reactivates_soft_deleted_member(
+    client, auth_headers, mock_db, test_user
+):
+    org_id = uuid.uuid4()
+    proj = _mock_project(org_id, uuid.uuid4(), "Quick Shares")
+    proj.is_quick_share = True
+    member = _mock_project_member(proj.id, test_user.id, ProjectRole.editor)
+    member.deleted_at = datetime.now(timezone.utc)
+    mock_db.order_by.return_value = mock_db
+    mock_db.first.side_effect = [proj, member]
+
+    resp = client.post("/projects/quick-share", headers=auth_headers)
+
+    assert resp.status_code == 200
+    added_members = [
+        call.args[0]
+        for call in mock_db.add.call_args_list
+        if isinstance(call.args[0], ProjectMember)
+    ]
+    assert added_members == []
+    assert member.deleted_at is None
+    assert member.role == ProjectRole.editor
+    mock_db.commit.assert_called_once()
 
 
 def test_quick_share_creates_project(client, auth_headers, mock_db, test_user):
+    mock_db.order_by.return_value = mock_db
     mock_db.first.return_value = None
 
     def _refresh_side_effect(obj):

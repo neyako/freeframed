@@ -59,11 +59,28 @@ def create_project(body: ProjectCreate, db: Session = Depends(get_db), current_u
 @router.post("/quick-share", response_model=ProjectResponse, status_code=status.HTTP_200_OK)
 def get_or_create_quick_share_project(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     project = db.query(Project).filter(
-        Project.created_by == current_user.id,
         Project.is_quick_share.is_(True),
         Project.deleted_at.is_(None),
-    ).first()
+    ).order_by(Project.created_at.asc()).first()
     if project is not None:
+        member = db.query(ProjectMember).filter(
+            ProjectMember.project_id == project.id,
+            ProjectMember.user_id == current_user.id,
+        ).first()
+        if member is None:
+            db.add(
+                ProjectMember(
+                    project_id=project.id,
+                    user_id=current_user.id,
+                    role=ProjectRole.editor,
+                )
+            )
+            db.commit()
+        elif member.deleted_at is not None:
+            # Reactivate soft-deleted membership (unique constraint forbids a second row)
+            member.deleted_at = None
+            member.role = ProjectRole.editor
+            db.commit()
         return project
 
     project = Project(
