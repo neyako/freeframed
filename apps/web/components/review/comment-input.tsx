@@ -191,12 +191,16 @@ export function CommentInput({
     drawingTool,
     drawingColor,
     playheadTime,
+    rangeStart,
+    rangeEnd,
     timeFormat,
     pendingAnnotation,
     toggleDrawingMode,
     setIsDrawingMode,
     setDrawingTool,
     setDrawingColor,
+    setRangeStart,
+    clearRange,
     setPendingAnnotation,
     setActiveAnnotation,
   } = useReviewStore();
@@ -214,8 +218,6 @@ export function CommentInput({
   >("public");
   const [visDropdownOpen, setVisDropdownOpen] = React.useState(false);
   const [timecodeAttached, setTimecodeAttached] = React.useState(true);
-  // In-point of a time range; end tracks the playhead until submit
-  const [rangeStart, setRangeStart] = React.useState<number | null>(null);
   const visRef = React.useRef<HTMLDivElement>(null);
 
   // Emoji picker state
@@ -357,17 +359,22 @@ export function CommentInput({
         finalAnnotation = annotationData;
       }
 
+      const rangeActive = rangeStart !== null || rangeEnd !== null;
       const attachTime =
-        hasTimecode &&
-        timecodeAttached &&
-        (playheadTime > 0 || rangeStart !== null);
+        hasTimecode && timecodeAttached && (playheadTime > 0 || rangeActive);
       let timecodeStart: number | undefined;
       let timecodeEnd: number | undefined;
       if (attachTime) {
         timecodeStart = playheadTime;
-        if (rangeStart !== null && rangeStart !== playheadTime) {
-          timecodeStart = Math.min(rangeStart, playheadTime);
-          timecodeEnd = Math.max(rangeStart, playheadTime);
+        if (rangeActive) {
+          const inPoint = rangeStart ?? playheadTime;
+          const outPoint = rangeEnd ?? playheadTime;
+          if (inPoint !== outPoint) {
+            timecodeStart = Math.min(inPoint, outPoint);
+            timecodeEnd = Math.max(inPoint, outPoint);
+          } else {
+            timecodeStart = inPoint;
+          }
         }
       }
 
@@ -382,7 +389,7 @@ export function CommentInput({
       );
 
       setBody("");
-      setRangeStart(null);
+      clearRange();
       setMentionUserIds([]);
       setPendingAnnotation(null);
       clear(); // Clear Fabric.js canvas so stale annotations don't attach to next comment
@@ -422,14 +429,25 @@ export function CommentInput({
           <div className="flex items-start gap-0 rounded-lg border border-border bg-bg-tertiary focus-within:border-accent/50 focus-within:ring-1 focus-within:ring-accent/20">
             {/* Inline timecode badge — show when timecode attached (normal mode) or in drawing mode */}
             {hasTimecode && (timecodeAttached || isDrawingMode) && (
-              <span className="shrink-0 ml-2.5 mt-2.5 flex items-center gap-1 rounded bg-accent-muted border border-accent-line px-1.5 py-0 font-mono text-[11px] text-accent leading-[19.5px] select-none">
-                {rangeStart !== null ? (
+              <span className="shrink-0 ml-2.5 mt-2.5 flex items-center gap-1 whitespace-nowrap rounded bg-accent-muted border border-accent-line px-1.5 py-0 font-mono text-[11px] text-accent leading-[19.5px] select-none">
+                {rangeStart !== null || rangeEnd !== null ? (
+                  // Range mode — compact m:ss so the chip never crowds the textarea
                   <>
-                    {displayTime(Math.min(rangeStart, playheadTime))}
+                    {formatTime(
+                      Math.min(
+                        rangeStart ?? playheadTime,
+                        rangeEnd ?? playheadTime,
+                      ),
+                    )}
                     <span className="text-accent/60">→</span>
-                    {displayTime(Math.max(rangeStart, playheadTime))}
+                    {formatTime(
+                      Math.max(
+                        rangeStart ?? playheadTime,
+                        rangeEnd ?? playheadTime,
+                      ),
+                    )}
                     <button
-                      onClick={() => setRangeStart(null)}
+                      onClick={() => clearRange()}
                       className="ml-0.5 text-accent/60 hover:text-accent transition-colors"
                       title="Clear range"
                     >
@@ -442,7 +460,7 @@ export function CommentInput({
                     <button
                       onClick={() => setRangeStart(playheadTime)}
                       className="ml-0.5 text-accent/60 hover:text-accent transition-colors"
-                      title="Set range start"
+                      title="Set range start (I)"
                     >
                       <Plus className="h-3 w-3" />
                     </button>
@@ -565,7 +583,7 @@ export function CommentInput({
                   )}
                   onClick={() => {
                     setTimecodeAttached((p) => !p);
-                    setRangeStart(null);
+                    clearRange();
                   }}
                   title={
                     timecodeAttached ? "Detach timecode" : "Attach timecode"

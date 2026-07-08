@@ -248,8 +248,10 @@ function CommentMarker({
               </div>
               <span className="text-xs font-medium text-white truncate">{authorName}</span>
               {comment.timecode_start !== null && (
-                <span className="ml-auto text-[10px] font-dot font-bold text-accent bg-accent-muted px-1.5 py-0.5 rounded">
+                <span className="ml-auto text-[10px] font-dot font-bold text-accent bg-accent-muted px-1.5 py-0.5 rounded whitespace-nowrap">
                   {formatTimecode(comment.timecode_start)}
+                  {comment.timecode_end != null &&
+                    ` – ${formatTimecode(comment.timecode_end)}`}
                 </span>
               )}
             </div>
@@ -285,6 +287,9 @@ export function ProgressBar({
   const [hoverX, setHoverX] = useState(0)
   const [hoveredCommentId, setHoveredCommentId] = useState<string | null>(null)
   const focusedCommentId = useReviewStore((s) => s.focusedCommentId)
+  const setFocusedCommentId = useReviewStore((s) => s.setFocusedCommentId)
+  const rangeStart = useReviewStore((s) => s.rangeStart)
+  const rangeEnd = useReviewStore((s) => s.rangeEnd)
 
   const { previewImage, seekPreview, clearPreview } = useFramePreview(streamUrl)
 
@@ -363,9 +368,9 @@ export function ProgressBar({
     }
   }, [isDragging, getTimeFromEvent, onSeek, clearPreview])
 
-  // Separate timecoded comments
+  // Every timecoded comment gets an avatar marker; range comments also get a span
   const pointMarkers = comments.filter(
-    (c) => c.timecode_start !== null && c.timecode_end === null && !c.resolved,
+    (c) => c.timecode_start !== null && !c.resolved,
   )
   const rangeMarkers = comments.filter(
     (c) => c.timecode_start !== null && c.timecode_end !== null && !c.resolved,
@@ -390,23 +395,6 @@ export function ProgressBar({
           style={{ width: `${bufferedPercent}%` }}
         />
 
-        {/* Time-range comment spans */}
-        {rangeMarkers.map((c) => {
-          if (c.timecode_start === null || c.timecode_end === null) return null
-          const left = timeToPercent(c.timecode_start)
-          const right = timeToPercent(c.timecode_end)
-          return (
-            <div
-              key={c.id}
-              className="absolute inset-y-0 bg-text-primary/30 rounded-full pointer-events-none"
-              style={{
-                left: `${left}%`,
-                width: `${right - left}%`,
-              }}
-            />
-          )
-        })}
-
         {/* Playback progress */}
         <div
           className="absolute inset-y-0 left-0 rounded-full"
@@ -415,6 +403,52 @@ export function ProgressBar({
             background: 'var(--accent)',
           }}
         />
+
+        {/* Time-range comment spans — above the fill so they stay visible in the played region */}
+        {rangeMarkers.map((c) => {
+          if (c.timecode_start === null || c.timecode_end === null) return null
+          const left = timeToPercent(c.timecode_start)
+          const right = timeToPercent(c.timecode_end)
+          const isActive = hoveredCommentId === c.id || focusedCommentId === c.id
+          return (
+            <div
+              key={c.id}
+              className={cn(
+                'absolute -inset-y-[1px] rounded-full border cursor-pointer transition-colors',
+                isActive
+                  ? 'border-white/90 bg-white/40'
+                  : 'border-white/60 bg-white/20 hover:bg-white/40',
+              )}
+              style={{
+                left: `${left}%`,
+                width: `${right - left}%`,
+              }}
+              onMouseEnter={() => setHoveredCommentId(c.id)}
+              onMouseLeave={() => setHoveredCommentId(null)}
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation()
+                onSeek(c.timecode_start!)
+                setFocusedCommentId(c.id)
+              }}
+            />
+          )
+        })}
+
+        {/* Live range preview while marking in/out */}
+        {(rangeStart !== null || rangeEnd !== null) &&
+          (() => {
+            const a = rangeStart ?? currentTime
+            const b = rangeEnd ?? currentTime
+            const left = timeToPercent(Math.min(a, b))
+            const width = Math.max(timeToPercent(Math.abs(b - a)), 0.4)
+            return (
+              <div
+                className="absolute -inset-y-[1px] rounded-full border border-dashed border-white/80 bg-white/15 pointer-events-none"
+                style={{ left: `${left}%`, width: `${width}%` }}
+              />
+            )
+          })()}
 
         {/* Playhead thumb */}
         <div

@@ -277,6 +277,12 @@ export function VideoPlayer({
         case "KeyL":
           seek(currentTime + 10);
           break;
+        case "KeyI":
+          useReviewStore.getState().setRangeStart(currentTime);
+          break;
+        case "KeyO":
+          useReviewStore.getState().setRangeEnd(currentTime);
+          break;
       }
     };
 
