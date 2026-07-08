@@ -13,6 +13,7 @@ import {
   Repeat,
   RotateCcw,
   RotateCw,
+  Download,
 } from "lucide-react";
 import { cn, formatTime, formatTimecode, formatFrames } from "@/lib/utils";
 import { api } from "@/lib/api";
@@ -37,6 +38,8 @@ interface VideoPlayerProps {
   /** Pre-fetched stream URL (for share mode — skips authenticated API call) */
   initialStreamUrl?: string | null;
   poster?: string | null;
+  /** When set, a download button appears in the transport bar. Gate by permission at the call site. */
+  onDownload?: () => void;
 }
 
 // ─── Video frame constraint ──────────────────────────────────────────────────
@@ -134,6 +137,7 @@ export function VideoPlayer({
   className,
   initialStreamUrl,
   poster,
+  onDownload,
 }: VideoPlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [streamUrl, setStreamUrl] = useState<string | null>(null);
@@ -647,6 +651,17 @@ export function VideoPlayer({
                 </div>
               )}
             </div>
+          )}
+
+          {/* Download (only when caller grants permission) */}
+          {onDownload && (
+            <button
+              onClick={onDownload}
+              className="flex h-7 w-7 items-center justify-center rounded text-text-tertiary hover:text-text-primary transition-colors"
+              aria-label="Download"
+            >
+              <Download className="h-4 w-4" />
+            </button>
           )}
 
           {/* Fullscreen */}

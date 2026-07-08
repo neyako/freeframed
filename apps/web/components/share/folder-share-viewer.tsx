@@ -918,6 +918,7 @@ function ShareReviewInner({
               className="flex-1"
               initialStreamUrl={streamInfo.url}
               poster={streamInfo.poster}
+              onDownload={allowDownload ? () => handleDownload(token, asset.id, shareSession) : undefined}
               overlay={
                 <>
                   {AnnotationOverlay && <AnnotationOverlay key={focusedCommentId ?? 'none'} />}
