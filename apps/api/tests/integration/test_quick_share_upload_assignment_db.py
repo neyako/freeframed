@@ -77,6 +77,35 @@ def test_quick_share_upload_assigns_designated_reviewer(db, make_project, make_u
     assert notification is not None
 
 
+def test_quick_share_upload_falls_back_to_owner(db, make_project, make_user) -> None:
+    # Given: quick-share with an owner but no designated reviewer
+    project, owner = make_project()
+    project.is_quick_share = True
+    owner.is_superadmin = True  # satisfy setup guard
+    uploader = make_user("uploader@example.com", "Uploader")
+    _add_member(db, project.id, uploader.id, ProjectRole.editor)
+    db.commit()
+
+    # When: an editor uploads
+    response = _initiate_upload(db, uploader, project.id)
+
+    # Then: asset is assigned to the owner
+    assert response.status_code == 200, response.text
+    asset_id = uuid.UUID(response.json()["asset_id"])
+    asset = db.query(Asset).filter(Asset.id == asset_id, Asset.deleted_at.is_(None)).one()
+    assert asset.assignee_id == owner.id
+    notification = (
+        db.query(Notification)
+        .filter(
+            Notification.user_id == owner.id,
+            Notification.type == NotificationType.assignment,
+            Notification.asset_id == asset.id,
+        )
+        .one_or_none()
+    )
+    assert notification is not None
+
+
 def test_non_quick_share_upload_leaves_asset_unassigned(db, make_project, make_user) -> None:
     # Given
     project, _owner = make_project()

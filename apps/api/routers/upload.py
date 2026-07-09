@@ -27,20 +27,30 @@ router = APIRouter(prefix="/upload", tags=["upload"])
 
 
 def find_quick_share_reviewer_id(db: Session, project: Project) -> Optional[uuid.UUID]:
-    """Return the user_id of the designated reviewer for a quick-share project, or None."""
+    """Return the user_id to assign quick-share uploads to.
+
+    A member with the ``reviewer`` role wins if one is designated; otherwise
+    fall back to the project owner (single-box NAS: owner = the reviewer).
+    """
     if not project.is_quick_share:
         return None
-    member = (
-        db.query(ProjectMember)
-        .filter(
-            ProjectMember.project_id == project.id,
-            ProjectMember.role == ProjectRole.reviewer,
-            ProjectMember.deleted_at.is_(None),
-        )
+    base = db.query(ProjectMember).filter(
+        ProjectMember.project_id == project.id,
+        ProjectMember.deleted_at.is_(None),
+    )
+    reviewer = (
+        base.filter(ProjectMember.role == ProjectRole.reviewer)
         .order_by(ProjectMember.invited_at.asc())
         .first()
     )
-    return member.user_id if member else None
+    if reviewer is not None:
+        return reviewer.user_id
+    owner = (
+        base.filter(ProjectMember.role == ProjectRole.owner)
+        .order_by(ProjectMember.invited_at.asc())
+        .first()
+    )
+    return owner.user_id if owner else None
 
 
 def _get_upload_media_file(db: Session, version_id: uuid.UUID) -> MediaFile:
