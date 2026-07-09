@@ -45,12 +45,7 @@ def find_quick_share_reviewer_id(db: Session, project: Project) -> Optional[uuid
     )
     if reviewer is not None:
         return reviewer.user_id
-    owner = (
-        base.filter(ProjectMember.role == ProjectRole.owner)
-        .order_by(ProjectMember.invited_at.asc())
-        .first()
-    )
-    return owner.user_id if owner else None
+    return project.created_by
 
 
 def _get_upload_media_file(db: Session, version_id: uuid.UUID) -> MediaFile:
