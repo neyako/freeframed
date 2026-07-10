@@ -136,7 +136,7 @@ Always review auto-generated migrations before committing.
 - Follow Next.js App Router conventions
 - Use Tailwind CSS for styling
 - Use Zustand for client state, SWR for server state
-- Run linting: `pnpm lint`
+- Run linting: `docker compose -f docker-compose.dev.yml exec web pnpm lint`
 
 ---
 
