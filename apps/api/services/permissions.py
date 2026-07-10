@@ -106,6 +106,8 @@ def _get_direct_permission(db: Session, asset: Asset, user_id: uuid.UUID) -> Sha
 
 
 def get_asset_access(db: Session, asset: Asset, user: User) -> AssetAccess:
+    if asset.deleted_at is not None:
+        return AssetAccess(False, False, False, False, None)
     project = get_project(db, asset.project_id)
     if project is None:
         return AssetAccess(False, False, False, False, None)
@@ -134,13 +136,12 @@ def get_asset_access(db: Session, asset: Asset, user: User) -> AssetAccess:
             pass
         case unreachable:
             assert_never(unreachable)
-    is_creator = asset.created_by == user.id
     is_project_member = member is not None
-    can_read = is_creator or is_project_member or direct_permission is not None or project.is_public
+    can_read = is_project_member or direct_permission is not None or project.is_public
     return AssetAccess(
         can_read=can_read,
-        can_comment=is_creator or member_can_comment or direct_can_comment,
-        can_approve=is_creator or member_can_approve or direct_can_approve,
+        can_comment=member_can_comment or direct_can_comment,
+        can_approve=member_can_approve or direct_can_approve,
         is_project_member=is_project_member,
         direct_permission=direct_permission,
     )
@@ -156,7 +157,6 @@ def require_asset_access(db: Session, asset: Asset, user: User) -> None:
 
 
 def get_asset_share_permission(db: Session, asset: Asset, user: User) -> SharePermission:
-    """Get the effective share permission for a user on an asset (highest wins)."""
     return get_asset_access(db, asset, user).direct_permission or SharePermission.view
 
 
