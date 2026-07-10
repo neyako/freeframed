@@ -1,6 +1,23 @@
-import { describe, it, expect } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { getUploadDisplayProgress, type UploadFile } from '../upload-store'
+import type { AssetResponse, AssetVersionStatus } from '@/types'
+import {
+  getUploadDisplayProgress,
+  type UploadFile,
+  type UploadStatus,
+  useUploadStore,
+} from '../upload-store'
+
+const mocks = vi.hoisted(() => ({
+  apiGet: vi.fn<(path: string) => Promise<unknown>>(),
+}))
+
+vi.mock('@/lib/api', () => ({
+  api: {
+    get: mocks.apiGet,
+    post: vi.fn(),
+  },
+}))
 
 const overall = (p: number, n: number, fraction: number) =>
   Math.round(((p - 1 + fraction) / n) * 95)
@@ -21,6 +38,49 @@ const baseUpload: UploadFile = {
 function upload(overrides: Partial<UploadFile>): UploadFile {
   return { ...baseUpload, ...overrides }
 }
+
+function asset(processingStatus: AssetVersionStatus): AssetResponse {
+  return {
+    id: 'asset-1',
+    project_id: 'project-1',
+    name: 'hero.mov',
+    description: null,
+    asset_type: 'video',
+    status: 'in_review',
+    rating: null,
+    assignee_id: null,
+    folder_id: null,
+    due_date: null,
+    keywords: [],
+    created_by: 'user-1',
+    created_at: '2026-07-11T00:00:00Z',
+    updated_at: '2026-07-11T00:00:00Z',
+    deleted_at: null,
+    thumbnail_url: null,
+    latest_version: {
+      id: 'version-1',
+      asset_id: 'asset-1',
+      version_number: 1,
+      processing_status: processingStatus,
+      created_by: 'user-1',
+      created_at: '2026-07-11T00:00:00Z',
+      deleted_at: null,
+      files: [],
+    },
+  }
+}
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  useUploadStore.setState({
+    files: [],
+    panelOpen: false,
+    historyLoaded: false,
+    historyHasMore: true,
+    historyLoading: false,
+    historySkip: 0,
+  })
+})
 
 describe('multipart upload progress', () => {
   it('is 0 at the very start', () => {
@@ -49,5 +109,41 @@ describe('multipart upload progress', () => {
       progress: 100,
       processingProgress: 37,
     }))).toBe(37)
+  })
+
+  it.each([
+    ['queued', 'processing'],
+    ['uploading', 'uploading'],
+    ['processing', 'processing'],
+    ['ready', 'complete'],
+    ['failed', 'failed'],
+  ] satisfies readonly (readonly [AssetVersionStatus, UploadStatus])[])(
+    'maps backend %s history rows to %s',
+    async (processingStatus, expectedStatus) => {
+      mocks.apiGet.mockResolvedValue([asset(processingStatus)])
+
+      await useUploadStore.getState().fetchHistory()
+
+      expect(useUploadStore.getState().files[0]?.status).toBe(expectedStatus)
+    },
+  )
+
+  it('keeps polling rows active when the backend reports queued', async () => {
+    useUploadStore.setState({
+      files: [upload({
+        status: 'processing',
+        progress: 100,
+        processingProgress: 37,
+        assetId: 'asset-1',
+      })],
+    })
+    mocks.apiGet.mockResolvedValue(asset('queued'))
+
+    await useUploadStore.getState().refreshProcessingItems()
+
+    expect(useUploadStore.getState().files[0]).toMatchObject({
+      status: 'processing',
+      processingProgress: 37,
+    })
   })
 })

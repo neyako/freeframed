@@ -16,6 +16,11 @@ const versionStatusConfig: Record<
     className: 'text-status-info',
     icon: <Loader2 className="h-2.5 w-2.5 animate-spin" />,
   },
+  queued: {
+    label: 'Queued',
+    className: 'text-status-warning',
+    icon: <Loader2 className="h-2.5 w-2.5 animate-spin" />,
+  },
   processing: {
     label: 'Processing',
     className: 'text-status-warning',
@@ -71,6 +76,7 @@ export function VersionSwitcher({ versions, className }: VersionSwitcherProps) {
                 const statusCfg = versionStatusConfig[version.processing_status]
                 const isDisabled =
                   version.processing_status === 'uploading' ||
+                  version.processing_status === 'queued' ||
                   version.processing_status === 'processing'
                 return (
                   <DropdownMenu.Item

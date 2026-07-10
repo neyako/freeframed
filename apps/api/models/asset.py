@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from enum import Enum as PyEnum
 from typing import Optional
-from sqlalchemy import String, Enum, DateTime, ForeignKey, Integer, BigInteger, Float, func, UniqueConstraint, Index
+from sqlalchemy import String, Enum, DateTime, ForeignKey, Integer, BigInteger, Float, Text, func, UniqueConstraint, Index
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 try:
@@ -25,6 +25,7 @@ class AssetStatus(str, PyEnum):
 
 class ProcessingStatus(str, PyEnum):
     uploading = "uploading"
+    queued = "queued"
     processing = "processing"
     ready = "ready"
     failed = "failed"
@@ -58,6 +59,9 @@ class AssetVersion(Base):
     asset_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("assets.id"), nullable=False, index=True)
     version_number: Mapped[int] = mapped_column(Integer, nullable=False)
     processing_status: Mapped[ProcessingStatus] = mapped_column(Enum(ProcessingStatus), default=ProcessingStatus.uploading)
+    processing_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    processing_finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    processing_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -77,6 +81,11 @@ class MediaFile(Base):
     file_size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
     s3_key_raw: Mapped[str] = mapped_column(String(1000), nullable=False)
     upload_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    upload_completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    upload_aborted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    completion_fingerprint: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    raw_object_etag: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    raw_object_size: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
     s3_key_processed: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
     s3_key_thumbnail: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
     width: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
