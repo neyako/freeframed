@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from enum import Enum as PyEnum
 from typing import Optional
-from sqlalchemy import String, Boolean, Enum, DateTime, ForeignKey, func, UniqueConstraint
+from sqlalchemy import String, Boolean, Enum, DateTime, ForeignKey, func, Index, text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 try:
@@ -22,6 +22,14 @@ class ProjectRole(str, PyEnum):
 
 class Project(Base):
     __tablename__ = "projects"
+    __table_args__ = (
+        Index(
+            "uq_projects_active_quick_share_creator",
+            "created_by",
+            unique=True,
+            postgresql_where=text("is_quick_share IS TRUE AND deleted_at IS NULL"),
+        ),
+    )
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(String(2000), nullable=True)
