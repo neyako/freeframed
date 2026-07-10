@@ -1,6 +1,11 @@
-from fastapi import HTTPException, status
-from sqlalchemy.orm import Session
+from dataclasses import dataclass
+from typing import assert_never
 import uuid
+
+from fastapi import HTTPException, status
+from sqlalchemy import case, or_, select
+from sqlalchemy.orm import Session, aliased
+
 from ..models.user import User
 from ..models.project import Project, ProjectMember, ProjectRole
 from ..models.asset import Asset
@@ -11,21 +16,22 @@ from ..services.redis_service import verify_share_session
 
 # ── Project-level ──────────────────────────────────────────────────────────────
 
-def _project_exists(db: Session, project_id: uuid.UUID) -> bool:
-    return db.query(Project.id).filter(
-        Project.id == project_id,
-        Project.deleted_at.is_(None),
-    ).first() is not None
+
+def get_project(db: Session, project_id: uuid.UUID) -> Project | None:
+    return db.query(Project).filter(Project.id == project_id, Project.deleted_at.is_(None)).first()
+
+
+def _find_project_member(db: Session, project_id: uuid.UUID, user_id: uuid.UUID) -> ProjectMember | None:
+    return db.query(ProjectMember).filter(
+        ProjectMember.project_id == project_id, ProjectMember.user_id == user_id,
+        ProjectMember.deleted_at.is_(None),
+    ).first()
 
 
 def get_project_member(db: Session, project_id: uuid.UUID, user_id: uuid.UUID) -> ProjectMember | None:
-    if not _project_exists(db, project_id):
+    if get_project(db, project_id) is None:
         return None
-    return db.query(ProjectMember).filter(
-        ProjectMember.project_id == project_id,
-        ProjectMember.user_id == user_id,
-        ProjectMember.deleted_at.is_(None),
-    ).first()
+    return _find_project_member(db, project_id, user_id)
 
 
 def require_project_role(
@@ -57,69 +63,114 @@ def require_project_role(
 
 # ── Asset-level ────────────────────────────────────────────────────────────────
 
+
+@dataclass(frozen=True, slots=True)
+class AssetAccess:
+    can_read: bool
+    can_comment: bool
+    can_approve: bool
+    is_project_member: bool
+    direct_permission: SharePermission | None
+
+
 def is_public_project(db: Session, project_id: uuid.UUID) -> bool:
-    """Check if a project is public."""
-    project = db.query(Project).filter(
-        Project.id == project_id,
-        Project.deleted_at.is_(None),
-    ).first()
+    project = get_project(db, project_id)
     return project is not None and project.is_public
 
 
-def can_access_asset(db: Session, asset: Asset, user: User) -> bool:
-    """Check if user can access the asset via any path."""
-    if not _project_exists(db, asset.project_id):
-        return False
-
-    # 1. Asset creator
-    if asset.created_by == user.id:
-        return True
-
-    # 2. Project member
-    if get_project_member(db, asset.project_id, user.id):
-        return True
-
-    # 3. Direct AssetShare with user
-    direct = db.query(AssetShare).filter(
-        AssetShare.asset_id == asset.id,
-        AssetShare.shared_with_user_id == user.id,
-        AssetShare.deleted_at.is_(None),
+def _get_direct_permission(db: Session, asset: Asset, user_id: uuid.UUID) -> SharePermission | None:
+    shared_scope = AssetShare.asset_id == asset.id
+    if asset.folder_id is not None:
+        ancestors = select(Folder.id, Folder.parent_id).where(
+            Folder.id == asset.folder_id,
+            Folder.project_id == asset.project_id,
+            Folder.deleted_at.is_(None),
+        ).cte("asset_folder_ancestors", recursive=True)
+        parent = aliased(Folder)
+        ancestors = ancestors.union(
+            select(parent.id, parent.parent_id)
+            .join(ancestors, parent.id == ancestors.c.parent_id)
+            .where(parent.project_id == asset.project_id, parent.deleted_at.is_(None))
+        )
+        shared_scope = or_(shared_scope, AssetShare.folder_id.in_(select(ancestors.c.id)))
+    share = db.query(AssetShare).filter(
+        shared_scope, AssetShare.shared_with_user_id == user_id, AssetShare.deleted_at.is_(None),
+    ).order_by(
+        case(
+            (AssetShare.permission == SharePermission.approve, 3),
+            (AssetShare.permission == SharePermission.comment, 2),
+            else_=1,
+        ).desc()
     ).first()
-    if direct:
-        return True
+    return share.permission if share is not None else None
 
-    # 4. Public project — any authenticated user can view
-    if is_public_project(db, asset.project_id):
-        return True
 
-    return False
+def get_asset_access(db: Session, asset: Asset, user: User) -> AssetAccess:
+    project = get_project(db, asset.project_id)
+    if project is None:
+        return AssetAccess(False, False, False, False, None)
+    member = _find_project_member(db, asset.project_id, user.id)
+    direct_permission = _get_direct_permission(db, asset, user.id)
+    member_can_comment = False
+    member_can_approve = False
+    if member is not None:
+        match member.role:
+            case ProjectRole.owner | ProjectRole.editor | ProjectRole.reviewer:
+                member_can_comment = True
+                member_can_approve = True
+            case ProjectRole.viewer:
+                pass
+            case unreachable:
+                assert_never(unreachable)
+    direct_can_comment = False
+    direct_can_approve = False
+    match direct_permission:
+        case SharePermission.approve:
+            direct_can_comment = True
+            direct_can_approve = True
+        case SharePermission.comment:
+            direct_can_comment = True
+        case SharePermission.view | None:
+            pass
+        case unreachable:
+            assert_never(unreachable)
+    is_creator = asset.created_by == user.id
+    is_project_member = member is not None
+    can_read = is_creator or is_project_member or direct_permission is not None or project.is_public
+    return AssetAccess(
+        can_read=can_read,
+        can_comment=is_creator or member_can_comment or direct_can_comment,
+        can_approve=is_creator or member_can_approve or direct_can_approve,
+        is_project_member=is_project_member,
+        direct_permission=direct_permission,
+    )
+
+
+def can_access_asset(db: Session, asset: Asset, user: User) -> bool:
+    return get_asset_access(db, asset, user).can_read
 
 
 def require_asset_access(db: Session, asset: Asset, user: User) -> None:
-    if not can_access_asset(db, asset, user):
+    if not get_asset_access(db, asset, user).can_read:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
 
 def get_asset_share_permission(db: Session, asset: Asset, user: User) -> SharePermission:
     """Get the effective share permission for a user on an asset (highest wins)."""
-    PERM_RANK = {
-        SharePermission.approve: 3,
-        SharePermission.comment: 2,
-        SharePermission.view: 1,
-    }
+    return get_asset_access(db, asset, user).direct_permission or SharePermission.view
 
-    best = SharePermission.view
 
-    # Direct share
-    direct = db.query(AssetShare).filter(
-        AssetShare.asset_id == asset.id,
-        AssetShare.shared_with_user_id == user.id,
-        AssetShare.deleted_at.is_(None),
-    ).first()
-    if direct and PERM_RANK[direct.permission] > PERM_RANK[best]:
-        best = direct.permission
-
-    return best
+def get_share_link_project_id(db: Session, link: ShareLink) -> uuid.UUID:
+    if link.project_id is None and link.asset_id is None and link.folder_id is None:
+        raise HTTPException(status_code=400, detail="Invalid share link")
+    project_id = link.project_id
+    if link.asset_id is not None:
+        project_id = db.query(Asset.project_id).filter(Asset.id == link.asset_id, Asset.deleted_at.is_(None)).scalar()
+    elif link.folder_id is not None:
+        project_id = db.query(Folder.project_id).filter(Folder.id == link.folder_id, Folder.deleted_at.is_(None)).scalar()
+    if project_id is None or get_project(db, project_id) is None:
+        raise HTTPException(status_code=404, detail="Share target not found")
+    return project_id
 
 
 def _is_descendant_of(db: Session, folder_id: uuid.UUID, ancestor_id: uuid.UUID) -> bool:
@@ -138,7 +189,7 @@ def _is_descendant_of(db: Session, folder_id: uuid.UUID, ancestor_id: uuid.UUID)
 
 
 def validate_asset_in_share(db: Session, link: ShareLink, asset: Asset) -> None:
-    if not _project_exists(db, asset.project_id):
+    if get_project(db, asset.project_id) is None:
         raise HTTPException(status_code=404, detail="Project not found")
 
     if link.folder_id:
@@ -162,7 +213,7 @@ def validate_asset_in_share(db: Session, link: ShareLink, asset: Asset) -> None:
     elif link.project_id:
         if asset.project_id != link.project_id:
             raise HTTPException(status_code=403, detail="Asset is not within the shared project")
-        if not _project_exists(db, link.project_id):
+        if get_project(db, link.project_id) is None:
             raise HTTPException(status_code=404, detail="Project not found")
         multi_items = db.query(ShareLinkItem).filter(ShareLinkItem.share_link_id == link.id).all()
         if multi_items:
@@ -199,21 +250,21 @@ def validate_share_link(db: Session, token: str) -> ShareLink:
     if link.expires_at and link.expires_at < datetime.now(timezone.utc):
         raise HTTPException(status_code=status.HTTP_410_GONE, detail="Share link has expired")
     if link.project_id:
-        if not _project_exists(db, link.project_id):
+        if get_project(db, link.project_id) is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Share link not found")
     if link.folder_id:
         folder = db.query(Folder).filter(
             Folder.id == link.folder_id,
             Folder.deleted_at.is_(None),
         ).first()
-        if not folder or not _project_exists(db, folder.project_id):
+        if not folder or get_project(db, folder.project_id) is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Share link not found")
     if link.asset_id:
         asset = db.query(Asset).filter(
             Asset.id == link.asset_id,
             Asset.deleted_at.is_(None),
         ).first()
-        if not asset or not _project_exists(db, asset.project_id):
+        if not asset or get_project(db, asset.project_id) is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Share link not found")
     return link
 
