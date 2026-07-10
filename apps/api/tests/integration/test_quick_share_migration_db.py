@@ -20,12 +20,12 @@ os.environ["DATABASE_URL"] = DATABASE_URL
 sys.path.insert(0, str(API_ROOT))
 register_uuid()
 
-U_A, U_B, U_C, U_D, U_E = (UUID(int=value) for value in range(1, 6))
-P_LEGACY, P_C, P_B_DELETED = (UUID(int=value) for value in range(101, 104))
+U_A, U_B, U_C, U_D, U_E, U_F = (UUID(int=value) for value in range(1, 7))
+P_LEGACY, P_C, P_B_DELETED, P_FOREIGN = (UUID(int=value) for value in range(101, 105))
 F_A, F_A_CHILD, F_B, F_C = (UUID(int=value) for value in range(201, 205))
-A_A, A_B, A_C = (UUID(int=value) for value in range(301, 304))
-L_ASSET, L_FOLDER, L_ROOT, L_MIXED, L_EMPTY, L_SOFT = (
-    UUID(int=value) for value in range(401, 407)
+A_A, A_B, A_C, A_FOREIGN = (UUID(int=value) for value in range(301, 305))
+L_ASSET, L_FOLDER, L_ROOT, L_MIXED, L_EMPTY, L_SOFT, L_CROSS_ROOT, L_CROSS_MIXED = (
+    UUID(int=value) for value in range(401, 409)
 )
 
 
@@ -91,6 +91,37 @@ def _seed() -> None:
       ('00000000-0000-0000-0000-000000000702',%(p_legacy)s,NULL,%(u_c)s,'shared','{}'),
       ('00000000-0000-0000-0000-000000000703',%(p_legacy)s,NULL,%(u_d)s,'shared','{}'),
       ('00000000-0000-0000-0000-000000000704',%(p_legacy)s,%(a_a)s,%(u_b)s,'created','{}');
+    """
+    with psycopg2.connect(DATABASE_URL) as connection, connection.cursor() as cursor:
+        cursor.execute(sql, values)
+
+
+def _seed_review_malformed_states() -> None:
+    values = {
+        "u_a": U_A, "u_b": U_B, "u_f": U_F,
+        "p_legacy": P_LEGACY, "p_foreign": P_FOREIGN,
+        "a_a": A_A, "a_b": A_B, "a_foreign": A_FOREIGN, "f_b": F_B,
+        "l_cross_root": L_CROSS_ROOT, "l_cross_mixed": L_CROSS_MIXED,
+    }
+    sql = """
+    INSERT INTO users (id,email,name,status,email_verified,is_superadmin)
+    VALUES (%(u_f)s,'state-f@invalid.test','F','active',true,false);
+    INSERT INTO projects (id,name,project_type,created_by,is_quick_share)
+    VALUES (%(p_foreign)s,'Foreign Project','personal',%(u_a)s,false);
+    INSERT INTO assets (id,project_id,name,asset_type,status,created_by)
+    VALUES (%(a_foreign)s,%(p_foreign)s,'Foreign asset','video','draft',%(u_a)s);
+    INSERT INTO share_links
+      (id,project_id,token,created_by,permission,allow_download)
+    VALUES
+      (%(l_cross_root)s,%(p_foreign)s,'cross-root-one-owner',%(u_f)s,'view',false),
+      (%(l_cross_mixed)s,%(p_foreign)s,'cross-root-mixed',%(u_a)s,'view',false);
+    INSERT INTO share_link_items (id,share_link_id,asset_id,folder_id) VALUES
+      ('00000000-0000-0000-0000-000000000605',%(l_cross_root)s,%(a_b)s,NULL),
+      ('00000000-0000-0000-0000-000000000606',%(l_cross_root)s,NULL,%(f_b)s),
+      ('00000000-0000-0000-0000-000000000607',%(l_cross_mixed)s,%(a_a)s,NULL),
+      ('00000000-0000-0000-0000-000000000608',%(l_cross_mixed)s,%(a_foreign)s,NULL);
+    INSERT INTO activity_logs (id,project_id,asset_id,user_id,action,payload)
+    VALUES ('00000000-0000-0000-0000-000000000705',%(p_legacy)s,%(a_foreign)s,%(u_b)s,'created','{}');
     """
     with psycopg2.connect(DATABASE_URL) as connection, connection.cursor() as cursor:
         cursor.execute(sql, values)
@@ -168,6 +199,52 @@ def test_migration_routes_links_and_activity_without_broadening_access() -> None
         assert (deleted_at is not None, project_id) == (True, targets[U_C])
         cursor.execute("SELECT id,project_id FROM activity_logs ORDER BY id")
         assert [row[1] for row in cursor] == [targets[U_B], targets[U_C], targets[U_D], targets[U_A]]
+
+
+def test_migration_preserves_activity_when_asset_is_foreign_and_unmoved() -> None:
+    # Given
+    _reset()
+    _seed()
+    _seed_review_malformed_states()
+
+    # When
+    command.upgrade(_alembic(), "ee55ff66aa77")
+
+    # Then
+    with psycopg2.connect(DATABASE_URL) as connection, connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT project_id FROM activity_logs "
+            "WHERE id='00000000-0000-0000-0000-000000000705'"
+        )
+        assert cursor.fetchone()[0] == P_LEGACY
+
+
+def test_migration_discovers_root_links_through_legacy_items() -> None:
+    # Given
+    _reset()
+    _seed()
+    _seed_review_malformed_states()
+
+    # When
+    command.upgrade(_alembic(), "ee55ff66aa77")
+
+    # Then
+    with psycopg2.connect(DATABASE_URL) as connection, connection.cursor() as cursor:
+        targets = _targets(cursor)
+        assert U_F in targets
+        cursor.execute(
+            "SELECT role,deleted_at FROM project_members WHERE project_id=%s AND user_id=%s",
+            (targets[U_F], U_F),
+        )
+        assert cursor.fetchone() == ("owner", None)
+        cursor.execute("SELECT project_id FROM share_links WHERE id=%s", (L_CROSS_ROOT,))
+        assert cursor.fetchone()[0] == targets[U_B]
+        cursor.execute(
+            "SELECT is_enabled,deleted_at FROM share_links WHERE id=%s",
+            (L_CROSS_MIXED,),
+        )
+        enabled, deleted_at = cursor.fetchone()
+        assert enabled is False and deleted_at is not None
 
 
 def test_migration_rolls_back_before_clean_rerun_when_index_creation_fails() -> None:

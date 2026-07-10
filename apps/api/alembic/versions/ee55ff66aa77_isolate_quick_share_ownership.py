@@ -33,6 +33,12 @@ def upgrade() -> None:
           SELECT p.id,l.created_by FROM ff_qs_legacy_projects p JOIN folders f ON f.project_id=p.id
             JOIN share_links l ON l.folder_id=f.id
           UNION ALL
+          SELECT p.id,l.created_by FROM ff_qs_legacy_projects p JOIN assets a ON a.project_id=p.id
+            JOIN share_link_items item ON item.asset_id=a.id JOIN share_links l ON l.id=item.share_link_id
+          UNION ALL
+          SELECT p.id,l.created_by FROM ff_qs_legacy_projects p JOIN folders f ON f.project_id=p.id
+            JOIN share_link_items item ON item.folder_id=f.id JOIN share_links l ON l.id=item.share_link_id
+          UNION ALL
           SELECT p.id,m.user_id FROM ff_qs_legacy_projects p JOIN project_members m ON m.project_id=p.id
         ) represented_users
     """)).all()
@@ -108,7 +114,14 @@ def upgrade() -> None:
         UPDATE assets a SET project_id=moved.target_project_id
         FROM ff_qs_moved_assets moved WHERE a.id=moved.id;
         CREATE TEMP TABLE ff_qs_root_links ON COMMIT DROP AS
-        SELECT l.id FROM share_links l JOIN ff_qs_legacy_projects p ON p.id=l.project_id;
+        SELECT DISTINCT link.id FROM share_links link
+        LEFT JOIN share_link_items item ON item.share_link_id=link.id
+        LEFT JOIN ff_qs_moved_assets asset ON asset.id=item.asset_id
+        LEFT JOIN ff_qs_moved_folders folder ON folder.id=item.folder_id
+        WHERE link.asset_id IS NULL AND link.folder_id IS NULL AND (
+          EXISTS (SELECT 1 FROM ff_qs_legacy_projects legacy WHERE legacy.id=link.project_id)
+          OR asset.id IS NOT NULL OR folder.id IS NOT NULL
+        );
         CREATE TEMP TABLE ff_qs_valid_root_links ON COMMIT DROP AS
         SELECT root.id,MIN(COALESCE(asset.target_project_id,folder.target_project_id)::text)::uuid AS target_project_id
         FROM ff_qs_root_links root JOIN share_link_items item ON item.share_link_id=root.id
@@ -125,9 +138,7 @@ def upgrade() -> None:
         FROM ff_qs_moved_assets moved WHERE activity.asset_id=moved.id;
         UPDATE activity_logs activity SET project_id=mapping.target_project_id
         FROM ff_qs_map mapping WHERE activity.project_id=mapping.legacy_project_id
-          AND activity.user_id=mapping.user_id AND NOT EXISTS (
-            SELECT 1 FROM ff_qs_moved_assets moved WHERE moved.id=activity.asset_id
-          );
+          AND activity.user_id=mapping.user_id AND activity.asset_id IS NULL;
         UPDATE project_members member SET deleted_at=COALESCE(member.deleted_at,CURRENT_TIMESTAMP)
         FROM ff_qs_legacy_projects legacy,ff_qs_targets target
         WHERE member.project_id=legacy.id AND member.user_id=target.user_id
