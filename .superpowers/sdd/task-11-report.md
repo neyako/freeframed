@@ -2,7 +2,7 @@
 
 ## Status
 
-PASS. Todo 11 is implemented and verified. Product scope stayed limited to `apps/api/routers/folders.py` and `apps/api/services/permissions.py`.
+PASS under the session-approved exact-inventory partition proof. Todo 11 is implemented and verified. The literal monolithic API command did not pass and is structurally incompatible with migration tests that require isolated database states; this is disclosed rather than relabeled. Product scope stayed limited to `apps/api/routers/folders.py` and `apps/api/services/permissions.py`.
 
 ## Clean start
 
@@ -92,19 +92,19 @@ The SQLAlchemy hook observed the project `FOR UPDATE` before vulnerable traversa
 
 ## Complete API inventory proof
 
-Discovered inventory: 44 `test_*.py` files = 21 unit files + 23 integration files. Final ordered partitions execute every file once with zero missing, duplicate, failed, or skipped files:
+Discovered inventory after review fixes: 47 `test_*.py` files = 21 unit files + 26 integration files. Final ordered partitions execute every file once with zero missing, duplicate, failed, or skipped files:
 
 | Partition | Files | Result |
 | --- | ---: | ---: |
-| Auth unit file on clean Redis DB 15 | 1 | 21 passed |
+| Auth unit file on clean Redis DB 12 | 1 | 21 passed |
 | Rate-limit unit file | 1 | 12 passed |
-| Remaining unit files | 19 | 134 passed |
-| Regular integration files on fresh task11 DB | 21 | 255 passed |
+| Remaining unit files | 19 | 136 passed |
+| Regular integration files on fresh task11 DB | 24 | 270 passed |
 | Quick-share migration file on isolated DB | 1 | 7 passed |
 | Durable-processing migration file on exact isolated task3 DB/port | 1 | 23 passed |
-| Total | 44 | 452 passed |
+| Total | 47 | 469 passed |
 
-The monolithic command was also attempted. It first stopped at the deliberate Task 3 exact-database guard. Running all remaining integration tests in one shared schema allowed migration suites to downgrade that schema and produced missing-column failures. Ordered fresh-DB partitions above are the authoritative complete-suite proof. An inherited Redis DB 0 counter caused isolated auth 429s; rerunning that file against clean Redis DB 15 passed all 21, confirming external state rather than product behavior.
+The literal monolithic command was attempted and did not pass. It first stopped at the deliberate Task 3 exact-database guard. Running all remaining integration tests in one shared schema allowed migration suites to downgrade that schema and produced missing-column failures. The session-approved replacement is the ordered isolated partition proof above. Machine-readable commands, explicit file lists, counts, arithmetic, zero missing/duplicate/skipped lists, and sorted-path hashes are in `.omo/evidence/078/task-11/inventory.json`. The receipt file list exactly matches discovery with SHA-256 `6ecf6479ad22694ce32db307e7583ccbc1790b77413330f22d01d54a036f7aa4`.
 
 Compile and diff checks:
 
@@ -149,8 +149,13 @@ Scanned evidence/report for bearer/JWT/auth headers, cookies, emails, names, pas
 - `apps/api/routers/folders.py`
 - `apps/api/services/permissions.py`
 - `apps/api/tests/test_folder_hierarchy.py`
+- `apps/api/tests/integration/_folder_hierarchy_support.py`
 - `apps/api/tests/integration/test_folder_hierarchy_db.py`
+- `apps/api/tests/integration/test_folder_hierarchy_matrix_db.py`
+- `apps/api/tests/integration/test_folder_hierarchy_corruption_db.py`
+- `apps/api/tests/integration/test_folder_hierarchy_concurrency_db.py`
 - `.omo/evidence/078/task-11/folders.json`
+- `.omo/evidence/078/task-11/inventory.json`
 - `.omo/evidence/078/task-11/worktree-status.txt`
 - `.superpowers/sdd/task-11-report.md`
 
@@ -158,10 +163,71 @@ Scanned evidence/report for bearer/JWT/auth headers, cookies, emails, names, pas
 
 - Direction confusion, self/no-op, partial batch, exact depth boundary, nested selection calculation, corrupt active/deleted traversal, soft-delete/cross-project rejection, concurrency/cross-path serialization, deadlock bounds, query budget, deque traversal, SQL truth checks, dirty-worktree scope, and secret-evidence constraints are covered.
 - No migration, model, schema, frontend, `share.py`, comments router, pagination, or unrelated file changed.
-- New test files remain below 250 pure LOC (`98` and `248`).
+- Every changed/new Python test or helper remains below 250 pure LOC: `108`, `62`, `169`, `126`, `85`, and `143`.
 - No `Any`, `cast`, type-ignore, broad exception, `list.pop(0)`, naive datetime, partial commit, or caller-ordered folder lock was added.
 
 ## Concerns
 
 - The repo's migration tests intentionally require isolated database states, so the literal one-process full-suite command is not a valid green gate. Complete ordered inventory proof is green as documented.
 - Live app startup required disabling lifespan because MinIO was intentionally unavailable; all requested folder HTTP routes and PostgreSQL state were exercised through the real ASGI server.
+
+## Independent review fixes
+
+Review base: `998a8ec98f1a0e9db3ffe50761b59286d29bbbe0`; worktree clean before review-fix tests.
+
+### Review RED
+
+Tests-only paths were created/split before product edits. Unit RED:
+
+```text
+PYTHONPYCACHEPREFIX=[TEMP] rtk uv run --with-requirements apps/api/requirements.txt --python 3.11 --no-project python -m pytest apps/api/tests/test_folder_hierarchy.py -v
+```
+
+Result: `2 failed, 12 passed`. Self-cycle and two-node cycle both returned success when the requested ancestor was observed before the repeat.
+
+Real-PostgreSQL RED:
+
+```text
+TEST_DATABASE_URL=[REDACTED_LOCAL_DSN] PYTHONPYCACHEPREFIX=[TEMP] rtk uv run --with-requirements apps/api/requirements.txt --python 3.11 --no-project python -m pytest apps/api/tests/integration/test_folder_hierarchy_db.py apps/api/tests/integration/test_folder_hierarchy_matrix_db.py apps/api/tests/integration/test_folder_hierarchy_corruption_db.py apps/api/tests/integration/test_folder_hierarchy_concurrency_db.py -v
+```
+
+Result: `5 failed, 30 passed`.
+
+- Permission service self-cycle returned success instead of 409.
+- Permission service two-node cycle returned success instead of 409.
+- Real permission route returned success instead of 409 for a two-node corrupt ancestry containing the requested ancestor.
+- Waiting parent PATCH returned 200 after the delete winner committed instead of refetching the now-deleted source and returning 404.
+- Waiting second restore returned 200 after the first restore committed instead of refetching the now-active source and returning 404.
+
+### Review implementation
+
+- `_is_descendant_of` now records whether the ancestor was observed, continues until an acyclic terminus, raises exact 409 on any repeat, and returns the recorded result only after termination.
+- Parent PATCH and delete refetch the source with `deleted_at IS NULL` immediately after acquiring the active-project mutex.
+- Restore refetches the source with `deleted_at IS NOT NULL` immediately after acquiring the mutex.
+- Integration coverage was split into a non-collected support module plus cohesive base, matrix, corruption, and concurrency modules; no test functions are imported.
+- Added PostgreSQL proof for bulk-to-root, depth 10, nested roots, deleted target, deleted/cross-project assets, corrupt bulk/delete/permission, both mixed-invalid SQL orders, asserted project-lock observation, and final acyclic/max-depth truth for both opposite-move variants.
+
+### Review GREEN
+
+Exact affected command, run twice:
+
+```text
+TEST_DATABASE_URL=[REDACTED_LOCAL_DSN] PYTHONPYCACHEPREFIX=[TEMP] rtk uv run --with-requirements apps/api/requirements.txt --python 3.11 --no-project python -m pytest apps/api/tests/test_folder_hierarchy.py apps/api/tests/integration/test_folder_hierarchy_db.py apps/api/tests/integration/test_folder_hierarchy_matrix_db.py apps/api/tests/integration/test_folder_hierarchy_corruption_db.py apps/api/tests/integration/test_folder_hierarchy_concurrency_db.py apps/api/tests/integration/test_permission_matrix_db.py apps/api/tests/integration/test_share_links_db.py -v
+```
+
+Results: `63 passed in 2.01s`; `63 passed in 2.05s`.
+
+Complete accepted inventory proof: `469 passed`, `0 failed`, `0 skipped`, 47 unique files, no missing or duplicate file. See `inventory.json` for exact partition commands and file arrays.
+
+### Review live HTTP/SQL QA
+
+- Public permission route on a two-node corrupt hierarchy: exact 409/detail; both parent rows unchanged.
+- Project row locked first; HTTP PATCH loaded source and waited; SQL delete winner committed; waiter returned 404; final row stayed under its original parent and was deleted.
+- Project row locked first; HTTP restore loaded deleted source and waited; SQL restore winner committed; waiter returned 404; final row stayed under its original parent and was active.
+- Lock-wait detection used PostgreSQL ungranted-lock state, not timing sleeps as proof.
+
+### Review cleanup and checks
+
+- Uvicorn 18011, PostgreSQL 55441, and isolated PostgreSQL 55433 all refuse connections after shutdown.
+- Removed review seed/driver/runtime files, both pgdata directories/logs, pycache, and pytest cache.
+- Changed Python compile passed; `git diff --check` passed; no `pop(0)`, `Any`, `cast`, type-ignore, or broad exception was introduced.

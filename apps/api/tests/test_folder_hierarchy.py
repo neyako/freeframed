@@ -76,7 +76,7 @@ def test_characterization_permission_grandchild_accepts_and_sibling_rejects() ->
     # Given
     root, child, grandchild, sibling = (uuid.uuid4() for _ in range(4))
     descendant_db = ScriptedSession(
-        first_results=[ParentRow(child), ParentRow(root)],
+        first_results=[ParentRow(child), ParentRow(root), ParentRow(None)],
     )
     sibling_db = ScriptedSession(first_results=[ParentRow(None)])
 
@@ -132,6 +132,23 @@ def test_permission_cycle_raises_conflict_before_repeated_query(shape: str) -> N
     # When
     with pytest.raises(HTTPException) as caught:
         permissions._is_descendant_of(db, root, unrelated)
+
+    # Then
+    assert caught.value.status_code == 409
+    assert caught.value.detail == "Folder hierarchy contains a cycle"
+
+
+@pytest.mark.parametrize("shape", ["self", "two_node"])
+def test_permission_cycle_raises_even_when_requested_ancestor_is_observed(shape: str) -> None:
+    # Given
+    root, child = uuid.uuid4(), uuid.uuid4()
+    ancestor = root if shape == "self" else child
+    parents = [ParentRow(root)] if shape == "self" else [ParentRow(child), ParentRow(root)]
+    db = ScriptedSession(first_results=parents)
+
+    # When
+    with pytest.raises(HTTPException) as caught:
+        permissions._is_descendant_of(db, root, ancestor)
 
     # Then
     assert caught.value.status_code == 409

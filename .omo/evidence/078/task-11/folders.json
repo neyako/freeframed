@@ -9,7 +9,10 @@
     {"scenario": "corrupt_patch", "status": 409, "detail": "Folder hierarchy contains a cycle", "unchanged_rows": true, "elapsed_ms": 5, "result": "PASS"},
     {"scenario": "corrupt_bulk", "status": 409, "detail": "Folder hierarchy contains a cycle", "unchanged_rows": true, "elapsed_ms": 8, "result": "PASS"},
     {"scenario": "corrupt_delete", "status": 409, "detail": "Folder hierarchy contains a cycle", "unchanged_rows": true, "elapsed_ms": 3, "result": "PASS"},
-    {"scenario": "concurrent_opposite", "concurrency_statuses": [200, 400], "acyclic": true, "maximum_depth": 2, "result": "PASS"}
+    {"scenario": "concurrent_opposite", "concurrency_statuses": [200, 400], "acyclic": true, "maximum_depth": 2, "result": "PASS"},
+    {"scenario": "corrupt_permission_route", "status": 409, "detail": "Folder hierarchy contains a cycle", "unchanged_rows": true, "elapsed_ms": 30, "result": "PASS"},
+    {"scenario": "delete_wins_patch_waiter", "status": 404, "unchanged_parent": true, "deleted": true, "elapsed_ms": 18, "result": "PASS"},
+    {"scenario": "restore_wins_restore_waiter", "status": 404, "unchanged_parent": true, "active": true, "elapsed_ms": 5, "result": "PASS"}
   ],
   "result": "PASS"
 }

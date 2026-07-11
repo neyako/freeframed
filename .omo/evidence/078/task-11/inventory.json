@@ -1,0 +1,125 @@
+{
+  "status": "PASS_APPROVED_PARTITION_PROOF",
+  "literal_monolithic_command": {
+    "status": "NOT_PASSED",
+    "reason": "Structurally incompatible migration tests require isolated database names, ports, and schema lifecycles."
+  },
+  "inventory": {
+    "pattern": "apps/api/tests/**/test_*.py",
+    "file_count": 47,
+    "unit_file_count": 21,
+    "integration_file_count": 26,
+    "sorted_path_sha256": "6ecf6479ad22694ce32db307e7583ccbc1790b77413330f22d01d54a036f7aa4",
+    "sorted_integration_path_sha256": "17c2057aff2d8a93a634638cfe7b3b979ed983de2fd58d9c8eae3c8e494b7e71",
+    "missing_files": [],
+    "duplicate_files": [],
+    "skipped_tests": 0
+  },
+  "partitions": [
+    {
+      "name": "auth_unit_clean_redis",
+      "command": "REDIS_URL=[REDACTED_LOCAL_REDIS_DB] PYTHONPYCACHEPREFIX=[TEMP] rtk uv run --with-requirements apps/api/requirements.txt --python 3.11 --no-project python -m pytest apps/api/tests/test_auth.py -q --tb=short",
+      "files": ["apps/api/tests/test_auth.py"],
+      "file_count": 1,
+      "passed": 21,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "rate_limit_unit",
+      "command": "PYTHONPYCACHEPREFIX=[TEMP] rtk uv run --with-requirements apps/api/requirements.txt --python 3.11 --no-project python -m pytest apps/api/tests/test_rate_limit.py -q --tb=short",
+      "files": ["apps/api/tests/test_rate_limit.py"],
+      "file_count": 1,
+      "passed": 12,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "remaining_unit",
+      "command": "PYTHONPYCACHEPREFIX=[TEMP] rtk uv run --with-requirements apps/api/requirements.txt --python 3.11 --no-project python -m pytest apps/api/tests/ -q --tb=short --ignore=apps/api/tests/integration --ignore=apps/api/tests/test_auth.py --ignore=apps/api/tests/test_rate_limit.py",
+      "files": [
+        "apps/api/tests/test_approvals.py",
+        "apps/api/tests/test_assets_stream_url.py",
+        "apps/api/tests/test_comment_batching.py",
+        "apps/api/tests/test_folder_hierarchy.py",
+        "apps/api/tests/test_hls_proxy.py",
+        "apps/api/tests/test_integration_ingest.py",
+        "apps/api/tests/test_model_column_types.py",
+        "apps/api/tests/test_projects.py",
+        "apps/api/tests/test_reviewer_share.py",
+        "apps/api/tests/test_s3_presign.py",
+        "apps/api/tests/test_setup.py",
+        "apps/api/tests/test_share_comments.py",
+        "apps/api/tests/test_share_session.py",
+        "apps/api/tests/test_share_versions.py",
+        "apps/api/tests/test_share_video_stream.py",
+        "apps/api/tests/test_smoke.py",
+        "apps/api/tests/test_transcoder_hwaccel.py",
+        "apps/api/tests/test_user_dtos.py",
+        "apps/api/tests/test_workspace.py"
+      ],
+      "file_count": 19,
+      "passed": 136,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "regular_integration_fresh_db",
+      "command": "TEST_DATABASE_URL=[REDACTED_LOCAL_DSN] REDIS_URL=[REDACTED_LOCAL_REDIS_DB] PYTHONPYCACHEPREFIX=[TEMP] rtk uv run --with-requirements apps/api/requirements.txt --python 3.11 --no-project python -m pytest apps/api/tests/integration/ -q --tb=short --ignore=apps/api/tests/integration/test_durable_processing_schema_db.py --ignore=apps/api/tests/integration/test_quick_share_migration_db.py",
+      "files": [
+        "apps/api/tests/integration/test_comment_integrity_db.py",
+        "apps/api/tests/integration/test_comment_permissions_db.py",
+        "apps/api/tests/integration/test_comments_batching_db.py",
+        "apps/api/tests/integration/test_folder_hierarchy_concurrency_db.py",
+        "apps/api/tests/integration/test_folder_hierarchy_corruption_db.py",
+        "apps/api/tests/integration/test_folder_hierarchy_db.py",
+        "apps/api/tests/integration/test_folder_hierarchy_matrix_db.py",
+        "apps/api/tests/integration/test_permission_matrix_db.py",
+        "apps/api/tests/integration/test_permissions_db.py",
+        "apps/api/tests/integration/test_project_owners_db.py",
+        "apps/api/tests/integration/test_projects_quick_share_db.py",
+        "apps/api/tests/integration/test_quick_share_upload_assignment_db.py",
+        "apps/api/tests/integration/test_refresh_rotation_db.py",
+        "apps/api/tests/integration/test_share_comment_privacy_db.py",
+        "apps/api/tests/integration/test_share_links_db.py",
+        "apps/api/tests/integration/test_share_security_direct_grants_db.py",
+        "apps/api/tests/integration/test_share_security_internal_approvals_db.py",
+        "apps/api/tests/integration/test_share_security_management_db.py",
+        "apps/api/tests/integration/test_share_security_project_shares_db.py",
+        "apps/api/tests/integration/test_share_security_scoped_approvals_db.py",
+        "apps/api/tests/integration/test_share_security_scoped_failures_db.py",
+        "apps/api/tests/integration/test_share_security_transactions_db.py",
+        "apps/api/tests/integration/test_share_security_visibility_db.py",
+        "apps/api/tests/integration/test_versions_db.py"
+      ],
+      "file_count": 24,
+      "passed": 270,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "quick_share_migration_isolated_db",
+      "command": "TEST_DATABASE_URL=[REDACTED_ISOLATED_DSN] PYTHONPYCACHEPREFIX=[TEMP] rtk uv run --with-requirements apps/api/requirements.txt --python 3.11 --no-project python -m pytest apps/api/tests/integration/test_quick_share_migration_db.py -q --tb=short",
+      "files": ["apps/api/tests/integration/test_quick_share_migration_db.py"],
+      "file_count": 1,
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "durable_processing_migration_exact_isolated_db",
+      "command": "TEST_DATABASE_URL=[REDACTED_EXACT_TASK3_DSN] PYTHONPYCACHEPREFIX=[TEMP] rtk uv run --with-requirements apps/api/requirements.txt --python 3.11 --no-project python -m pytest apps/api/tests/integration/test_durable_processing_schema_db.py -q --tb=short",
+      "files": ["apps/api/tests/integration/test_durable_processing_schema_db.py"],
+      "file_count": 1,
+      "passed": 23,
+      "failed": 0,
+      "skipped": 0
+    }
+  ],
+  "arithmetic": {
+    "partition_file_count_sum": 47,
+    "partition_passed_sum": 469,
+    "partition_failed_sum": 0,
+    "partition_skipped_sum": 0
+  }
+}

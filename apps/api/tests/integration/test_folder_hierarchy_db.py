@@ -1,62 +1,18 @@
-from dataclasses import dataclass
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
-from threading import Barrier, local
 import uuid
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import event, inspect
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy import inspect
+from sqlalchemy.orm import Session
 
-from apps.api.models.asset import Asset, AssetType
+from apps.api.models.asset import Asset
 from apps.api.models.folder import Folder
-from apps.api.models.project import Project, ProjectMember, ProjectRole
-from apps.api.models.user import User
+from apps.api.models.project import ProjectMember, ProjectRole
 from apps.api.routers import folders
 from apps.api.schemas.folder import BulkMoveRequest, FolderUpdate
-
-
-@dataclass(frozen=True, slots=True)
-class Graph:
-    project: Project
-    owner: User
-    root: Folder
-    parent: Folder
-    child: Folder
-    sibling: Folder
-    asset: Asset
-
-
-def _folder(db: Session, project: Project, name: str, parent: Folder | None = None) -> Folder:
-    folder = Folder(
-        project_id=project.id,
-        parent_id=parent.id if parent else None,
-        name=f"{name}-{uuid.uuid4().hex}",
-        created_by=project.created_by,
-    )
-    db.add(folder)
-    db.flush()
-    return folder
-
-
-def _graph(db: Session, make_project) -> Graph:
-    project, owner = make_project()
-    db.add(ProjectMember(project_id=project.id, user_id=owner.id, role=ProjectRole.owner))
-    root = _folder(db, project, "root")
-    parent = _folder(db, project, "parent", root)
-    child = _folder(db, project, "child", parent)
-    sibling = _folder(db, project, "sibling", root)
-    asset = Asset(
-        project_id=project.id,
-        name="clip.mov",
-        asset_type=AssetType.video,
-        created_by=owner.id,
-        folder_id=parent.id,
-    )
-    db.add(asset)
-    db.flush()
-    return Graph(project, owner, root, parent, child, sibling, asset)
+from apps.api.tests.integration._folder_hierarchy_support import folder as _folder
+from apps.api.tests.integration._folder_hierarchy_support import graph as _graph
 
 
 def test_characterization_patch_rejects_self_and_descendant_without_state_change(db, make_project) -> None:
@@ -257,57 +213,6 @@ def test_mixed_invalid_batch_leaves_orm_histories_unchanged(db, make_project, in
     # Then
     assert not inspect(graph.asset).attrs.folder_id.history.has_changes()
     assert not inspect(graph.child).attrs.parent_id.history.has_changes()
-
-
-@pytest.mark.parametrize("cross_path", [False, True])
-def test_opposite_hierarchy_moves_serialize(cross_path: bool, db, make_project, monkeypatch) -> None:
-    # Given
-    graph = _graph(db, make_project)
-    db.commit()
-    barrier = Barrier(2)
-    thread_state = local()
-    original = folders._get_descendant_ids
-
-    def note_lock(conn, cursor, statement, parameters, context, executemany) -> None:
-        if "FOR UPDATE" in statement.upper() and "FROM projects" in statement:
-            thread_state.project_locked = True
-
-    def align_unlocked(session: Session, folder_id: uuid.UUID) -> list[uuid.UUID]:
-        result = original(session, folder_id)
-        if not getattr(thread_state, "project_locked", False):
-            barrier.wait(timeout=10)
-        return result
-
-    event.listen(db.get_bind(), "before_cursor_execute", note_lock)
-    monkeypatch.setattr(folders, "_get_descendant_ids", align_unlocked)
-    factory = sessionmaker(bind=db.get_bind())
-
-    def move(source: uuid.UUID, target: uuid.UUID, use_patch: bool) -> int:
-        thread_state.project_locked = False
-        with factory() as session:
-            try:
-                if use_patch:
-                    folders.update_folder(source, FolderUpdate(parent_id=target), session, graph.owner)
-                else:
-                    folders.bulk_move(
-                        graph.project.id,
-                        BulkMoveRequest(folder_ids=[source], target_folder_id=target),
-                        session,
-                        graph.owner,
-                    )
-            except HTTPException as error:
-                return error.status_code
-        return 200
-
-    # When
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        first = executor.submit(move, graph.parent.id, graph.sibling.id, cross_path)
-        second = executor.submit(move, graph.sibling.id, graph.parent.id, False)
-        statuses = sorted([first.result(timeout=20), second.result(timeout=20)])
-    event.remove(db.get_bind(), "before_cursor_execute", note_lock)
-
-    # Then
-    assert statuses == [200, 400]
 
 
 def test_restore_deleted_cycle_returns_conflict_without_mutation(db, make_project) -> None:

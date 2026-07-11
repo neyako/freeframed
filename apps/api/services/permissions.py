@@ -176,6 +176,7 @@ def get_share_link_project_id(db: Session, link: ShareLink) -> uuid.UUID:
 def _is_descendant_of(db: Session, folder_id: uuid.UUID, ancestor_id: uuid.UUID) -> bool:
     current_id = folder_id
     visited: set[uuid.UUID] = set()
+    ancestor_observed = False
     while current_id:
         if current_id in visited:
             raise HTTPException(
@@ -183,14 +184,14 @@ def _is_descendant_of(db: Session, folder_id: uuid.UUID, ancestor_id: uuid.UUID)
                 detail="Folder hierarchy contains a cycle",
             )
         if current_id == ancestor_id:
-            return True
+            ancestor_observed = True
         visited.add(current_id)
         folder = db.query(Folder.parent_id).filter(
             Folder.id == current_id,
             Folder.deleted_at.is_(None),
         ).first()
         current_id = folder.parent_id if folder else None
-    return False
+    return ancestor_observed
 
 
 def validate_asset_in_share(db: Session, link: ShareLink, asset: Asset) -> None:

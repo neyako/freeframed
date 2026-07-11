@@ -42,6 +42,16 @@ def _get_folder(db: Session, folder_id: uuid.UUID) -> Folder:
     return folder
 
 
+def _get_deleted_folder(db: Session, folder_id: uuid.UUID) -> Folder:
+    folder = (
+        db.query(Folder)
+        .filter(Folder.id == folder_id, Folder.deleted_at.isnot(None))
+        .first()
+    )
+    if not folder:
+        raise HTTPException(status_code=404, detail="Deleted folder not found")
+    return folder
+
 
 def _get_descendant_ids(db: Session, folder_id: uuid.UUID) -> list[uuid.UUID]:
     """Get all descendant folder IDs (BFS)."""
@@ -311,6 +321,7 @@ def update_folder(
     # Handle parent_id move (only if explicitly set)
     if "parent_id" in body.model_fields_set:
         _lock_active_project(db, folder.project_id)
+        folder = _get_folder(db, folder_id)
         new_parent_id = body.parent_id
         descendants = _get_descendant_ids(db, folder_id)
         max_subtree = _max_subtree_depth(db, folder_id)
@@ -348,6 +359,7 @@ def delete_folder(
     folder = _get_folder(db, folder_id)
     require_project_role(db, folder.project_id, current_user, ProjectRole.editor)
     _lock_active_project(db, folder.project_id)
+    folder = _get_folder(db, folder_id)
 
     now = datetime.now(timezone.utc)
 
@@ -551,12 +563,11 @@ def restore_folder(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    folder = db.query(Folder).filter(Folder.id == folder_id, Folder.deleted_at.isnot(None)).first()
-    if not folder:
-        raise HTTPException(status_code=404, detail="Deleted folder not found")
+    folder = _get_deleted_folder(db, folder_id)
 
     require_project_role(db, folder.project_id, current_user, ProjectRole.editor)
     _lock_active_project(db, folder.project_id)
+    folder = _get_deleted_folder(db, folder_id)
 
     descendant_ids = _get_descendant_ids_including_deleted(db, folder_id)
 
