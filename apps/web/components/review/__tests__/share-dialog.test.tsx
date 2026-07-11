@@ -28,6 +28,10 @@ vi.mock("@/lib/api", () => ({
 const mockedApi = vi.mocked(api);
 const writeText = vi.fn<(text: string) => Promise<void>>();
 
+it("does not model a decrypted share passphrase", () => {
+  expect(createdShareLink()).not.toHaveProperty("password_value");
+});
+
 describe("ShareDialog", () => {
   beforeEach(() => {
     vi.clearAllMocks();

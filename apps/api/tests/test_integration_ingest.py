@@ -99,29 +99,11 @@ def _patch_integration_side_effects(
     def trigger_processing(asset_id: uuid.UUID, version_id: uuid.UUID) -> None:
         calls.triggered_assets.append((asset_id, version_id))
 
-    def create_reviewer_share(
-        db,
-        asset,
-        created_by: uuid.UUID,
-        permission: SharePermission = SharePermission.comment,
-        allow_download: bool = False,
-        expires_at=None,
-        password=None,
-        title=None,
-    ):
-        calls.share_created_by = created_by
-        calls.share_permission = permission
-        calls.share_allow_download = allow_download
-        return real_create_reviewer_share(
-            db,
-            asset=asset,
-            created_by=created_by,
-            permission=permission,
-            allow_download=allow_download,
-            expires_at=expires_at,
-            password=password,
-            title=title,
-        )
+    def create_reviewer_share(db, asset, spec):
+        calls.share_created_by = spec.created_by
+        calls.share_permission = spec.permission
+        calls.share_allow_download = spec.allow_download
+        return real_create_reviewer_share(db, asset, spec)
 
     monkeypatch.setattr(module, "upload_fileobj", upload_fileobj)
     monkeypatch.setattr(module, "_trigger_processing", trigger_processing)

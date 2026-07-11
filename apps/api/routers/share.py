@@ -1,5 +1,6 @@
 import secrets
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 import bcrypt
@@ -15,8 +16,9 @@ from ..middleware.rate_limit import rate_limit
 from ..models.user import User
 from ..models.asset import Asset
 from ..models.folder import Folder
-from ..models.share import AssetShare, ShareLink, ShareLinkItem, SharePermission, ShareLinkActivity, ShareActivityAction
-from ..models.activity import ActivityLog, ActivityAction
+from ..models.share import AssetShare, ShareLink, ShareLinkItem, SharePermission, ShareVisibility, ShareLinkActivity, ShareActivityAction
+from ..models.activity import ActivityLog, ActivityAction, Notification, NotificationType
+from ..models.approval import Approval, ApprovalStatus
 from ..models.branding import ProjectBranding
 from ..models.asset import AssetVersion, AssetType, MediaFile, ProcessingStatus
 from ..models.comment import Comment
@@ -36,23 +38,54 @@ from ..schemas.share import (
     ShareLinkUpdate,
     ShareLinkValidateResponse,
 )
+from ..schemas.approval import ApprovalCreate, ApprovalResponse
+from ..services.approval_service import get_active_version, upsert_approval
 from ..services.permissions import (
+    get_project_member,
     require_project_role,
     validate_asset_in_share,
     validate_share_link,
     validate_share_link_with_session,
 )
-from ..services.redis_service import create_share_session
+from ..services.redis_service import create_share_session, verify_share_session
 from ..services.s3_service import generate_presigned_get_url, build_download_filename
 from ..services.workspace_service import get_workspace_name
-from ..services.crypto_service import encrypt_password, decrypt_password
 from .hls_proxy import create_hls_token
-from ..models.project import Project, ProjectRole
-from ..tasks.email_tasks import send_share_email
+from ..models.project import Project, ProjectMember, ProjectRole
+from ..tasks.email_tasks import send_approval_email, send_share_email
 from ..tasks.celery_app import send_task_safe
 from ..config import settings
 
 router = APIRouter(tags=["sharing"])
+
+
+@dataclass(frozen=True, slots=True)
+class ReviewerShareSpec:
+    created_by: uuid.UUID
+    permission: SharePermission = SharePermission.comment
+    allow_download: bool = False
+    expires_at: datetime | None = None
+    password: str | None = None
+    title: str | None = None
+    visibility: ShareVisibility = ShareVisibility.public
+
+
+def _validate_resulting_share_state(
+    permission: SharePermission,
+    visibility: ShareVisibility,
+    allow_download: bool,
+    show_watermark: bool,
+) -> None:
+    if show_watermark and allow_download:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Watermarked shares cannot allow downloads",
+        )
+    if permission == SharePermission.approve and visibility != ShareVisibility.secure:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Approve permission requires secure visibility",
+        )
 
 
 def _escape_like(s: str) -> str:
@@ -74,6 +107,38 @@ def _get_folder(db: Session, folder_id: uuid.UUID) -> Folder:
     return folder
 
 
+def _lock_active_project(db: Session, project_id: uuid.UUID) -> Project:
+    project = (
+        db.query(Project)
+        .filter(Project.id == project_id, Project.deleted_at.is_(None))
+        .with_for_update()
+        .first()
+    )
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return project
+
+
+def _resolve_active_share_recipient(db: Session, body: DirectShareCreate) -> User:
+    filters = [User.deleted_at.is_(None)]
+    if body.user_id is not None:
+        filters.append(User.id == body.user_id)
+    elif body.email is not None:
+        filters.append(User.email == body.email)
+    else:
+        raise HTTPException(status_code=400, detail="user_id or email required")
+    recipient = db.query(User).filter(*filters).first()
+    if recipient is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return recipient
+
+
+def _apply_direct_share_permission(existing: AssetShare, requested: SharePermission) -> None:
+    if existing.deleted_at is not None:
+        existing.deleted_at = None
+    existing.permission = requested
+
+
 def _get_project_id_from_link(db: Session, link: ShareLink) -> uuid.UUID:
     if link.project_id:
         return link.project_id
@@ -86,6 +151,15 @@ def _get_project_id_from_link(db: Session, link: ShareLink) -> uuid.UUID:
             raise HTTPException(status_code=404, detail="Shared folder not found")
         return folder.project_id
     raise HTTPException(status_code=400, detail="Invalid share link")
+
+
+def _can_download_from_share(db: Session, link: ShareLink, user: User | None) -> bool:
+    if link.allow_download:
+        return True
+    if user is None:
+        return False
+    project_id = _get_project_id_from_link(db, link)
+    return get_project_member(db, project_id, user.id) is not None
 
 
 def _log_share_activity(
@@ -152,42 +226,40 @@ def _get_latest_media_file(db: Session, asset_id: uuid.UUID) -> Optional[MediaFi
 def create_reviewer_share(
     db: Session,
     asset: Asset,
-    created_by: uuid.UUID,
-    permission: SharePermission = SharePermission.comment,
-    allow_download: bool = False,
-    expires_at: Optional[datetime] = None,
-    password: Optional[str] = None,
-    title: Optional[str] = None,
+    spec: ReviewerShareSpec,
 ) -> ShareLink:
+    _validate_resulting_share_state(
+        spec.permission,
+        spec.visibility,
+        spec.allow_download,
+        False,
+    )
     token = secrets.token_urlsafe(32)
-    if password:
-        pwd_bytes = password[:72].encode("utf-8")
+    if spec.password:
+        pwd_bytes = spec.password[:72].encode("utf-8")
         password_hash = bcrypt.hashpw(pwd_bytes, bcrypt.gensalt()).decode("utf-8")
-        password_encrypted = encrypt_password(password)
     else:
         password_hash = None
-        password_encrypted = None
 
     link = ShareLink(
         asset_id=asset.id,
         folder_id=None,
         project_id=None,
         token=token,
-        created_by=created_by,
-        title=title if title else asset.name,
-        expires_at=expires_at,
+        created_by=spec.created_by,
+        title=spec.title if spec.title else asset.name,
+        expires_at=spec.expires_at,
         password_hash=password_hash,
-        password_encrypted=password_encrypted,
-        permission=permission,
-        visibility="public",
-        allow_download=allow_download,
+        password_encrypted=None,
+        permission=spec.permission,
+        visibility=spec.visibility,
+        allow_download=spec.allow_download,
         show_versions=False,
         show_watermark=False,
     )
     db.add(link)
-    db.add(ActivityLog(user_id=created_by, asset_id=asset.id, action=ActivityAction.shared))
-    db.commit()
-    db.refresh(link)
+    db.add(ActivityLog(user_id=spec.created_by, asset_id=asset.id, action=ActivityAction.shared))
+    db.flush()
     return link
 
 
@@ -208,10 +280,8 @@ def create_share_link(
         pwd_bytes = body.password[:72].encode('utf-8')
         salt = bcrypt.gensalt()
         password_hash = bcrypt.hashpw(pwd_bytes, salt).decode('utf-8')
-        password_encrypted = encrypt_password(body.password)
     else:
         password_hash = None
-        password_encrypted = None
 
     link = ShareLink(
         asset_id=asset_id,
@@ -221,8 +291,9 @@ def create_share_link(
         description=body.description,
         expires_at=body.expires_at,
         password_hash=password_hash,
-        password_encrypted=password_encrypted,
+        password_encrypted=None,
         permission=body.permission,
+        visibility=body.visibility,
         allow_download=body.allow_download,
         show_versions=body.show_versions,
         show_watermark=body.show_watermark,
@@ -232,7 +303,7 @@ def create_share_link(
     db.add(ActivityLog(user_id=current_user.id, asset_id=asset_id, action=ActivityAction.shared))
     db.commit()
     db.refresh(link)
-    return link
+    return _share_link_response(link)
 
 
 @router.post(
@@ -250,14 +321,23 @@ def create_reviewer_share_endpoint(
     require_project_role(db, asset.project_id, current_user, ProjectRole.editor)
     link = create_reviewer_share(
         db,
-        asset=asset,
-        created_by=current_user.id,
-        permission=body.permission,
-        allow_download=body.allow_download,
-        expires_at=body.expires_at,
-        password=body.password,
-        title=body.title,
+        asset,
+        ReviewerShareSpec(
+            created_by=current_user.id,
+            permission=body.permission,
+            allow_download=body.allow_download,
+            expires_at=body.expires_at,
+            password=body.password,
+            title=body.title,
+            visibility=(
+                ShareVisibility.secure
+                if body.permission == SharePermission.approve
+                else ShareVisibility.public
+            ),
+        ),
     )
+    db.commit()
+    db.refresh(link)
     return ReviewerShareResponse(
         token=link.token,
         asset_id=asset.id,
@@ -276,10 +356,11 @@ def list_share_links(
 ):
     asset = _get_asset(db, asset_id)
     require_project_role(db, asset.project_id, current_user, ProjectRole.editor)
-    return db.query(ShareLink).filter(
+    links = db.query(ShareLink).filter(
         ShareLink.asset_id == asset_id,
         ShareLink.deleted_at.is_(None),
     ).all()
+    return [_share_link_response(link) for link in links]
 
 
 @router.get("/share/{token}", response_model=ShareLinkValidateResponse, dependencies=[Depends(rate_limit("share_validate", 30, 60))])
@@ -391,7 +472,7 @@ def validate_share_link_endpoint(
             }
 
     # Resolve creator name
-    creator = db.query(User).filter(User.id == link.created_by).first()
+    creator = db.query(User).filter(User.id == link.created_by, User.deleted_at.is_(None)).first()
     created_by_name = creator.name if creator else None
 
     return ShareLinkValidateResponse(
@@ -404,8 +485,7 @@ def validate_share_link_endpoint(
         description=link.description,
         permission=link.permission,
         visibility=link.visibility,
-        # Effective for this viewer: team members can always download
-        allow_download=link.allow_download or current_user is not None,
+        allow_download=_can_download_from_share(db, link, current_user),
         show_versions=link.show_versions,
         show_watermark=link.show_watermark,
         appearance=link.appearance,
@@ -420,14 +500,8 @@ def validate_share_link_endpoint(
 
 
 def _share_link_response(link: ShareLink) -> ShareLinkResponse:
-    """Build ShareLinkResponse from ORM model, computing has_password and decrypting password."""
     response = ShareLinkResponse.model_validate(link)
     response.has_password = link.password_hash is not None and link.password_hash != ''
-    if link.password_encrypted:
-        try:
-            response.password_value = decrypt_password(link.password_encrypted)
-        except Exception:
-            response.password_value = None
     return response
 
 
@@ -447,7 +521,7 @@ def get_share_link_details(
     if not link:
         raise HTTPException(status_code=404, detail="Share link not found")
     project_id = _get_project_id_from_link(db, link)
-    require_project_role(db, project_id, current_user, ProjectRole.viewer)
+    require_project_role(db, project_id, current_user, ProjectRole.editor)
     return _share_link_response(link)
 
 
@@ -468,14 +542,24 @@ def update_share_link(
 
     updates = body.model_dump(exclude_unset=True)
 
-    # Handle password separately — hash + encrypt for reversible admin display
+    resulting_permission = updates.get("permission", link.permission)
+    resulting_visibility = updates.get("visibility", link.visibility)
+    resulting_allow_download = updates.get("allow_download", link.allow_download)
+    resulting_show_watermark = updates.get("show_watermark", link.show_watermark)
+    _validate_resulting_share_state(
+        SharePermission(resulting_permission),
+        ShareVisibility(resulting_visibility),
+        resulting_allow_download,
+        resulting_show_watermark,
+    )
+
     if "password" in updates:
         raw_password = updates.pop("password")
         if raw_password:
             pwd_bytes = raw_password[:72].encode('utf-8')
             salt = bcrypt.gensalt()
             link.password_hash = bcrypt.hashpw(pwd_bytes, salt).decode('utf-8')
-            link.password_encrypted = encrypt_password(raw_password)
+            link.password_encrypted = None
         else:
             link.password_hash = None
             link.password_encrypted = None
@@ -524,10 +608,8 @@ def create_folder_share_link(
         pwd_bytes = body.password[:72].encode('utf-8')
         salt = bcrypt.gensalt()
         password_hash = bcrypt.hashpw(pwd_bytes, salt).decode('utf-8')
-        password_encrypted = encrypt_password(body.password)
     else:
         password_hash = None
-        password_encrypted = None
 
     link = ShareLink(
         folder_id=folder_id,
@@ -537,8 +619,9 @@ def create_folder_share_link(
         description=body.description,
         expires_at=body.expires_at,
         password_hash=password_hash,
-        password_encrypted=password_encrypted,
+        password_encrypted=None,
         permission=body.permission,
+        visibility=body.visibility,
         allow_download=body.allow_download,
         show_versions=body.show_versions,
         show_watermark=body.show_watermark,
@@ -547,7 +630,7 @@ def create_folder_share_link(
     db.add(link)
     db.commit()
     db.refresh(link)
-    return link
+    return _share_link_response(link)
 
 
 @router.post("/projects/{project_id}/share", response_model=ShareLinkResponse, status_code=status.HTTP_201_CREATED)
@@ -568,10 +651,8 @@ def create_project_share_link(
         pwd_bytes = body.password[:72].encode('utf-8')
         salt = bcrypt.gensalt()
         password_hash = bcrypt.hashpw(pwd_bytes, salt).decode('utf-8')
-        password_encrypted = encrypt_password(body.password)
     else:
         password_hash = None
-        password_encrypted = None
 
     link = ShareLink(
         project_id=project_id,
@@ -581,8 +662,9 @@ def create_project_share_link(
         description=body.description,
         expires_at=body.expires_at,
         password_hash=password_hash,
-        password_encrypted=password_encrypted,
+        password_encrypted=None,
         permission=body.permission,
+        visibility=body.visibility,
         allow_download=body.allow_download,
         show_versions=body.show_versions,
         show_watermark=body.show_watermark,
@@ -591,7 +673,7 @@ def create_project_share_link(
     db.add(link)
     db.commit()
     db.refresh(link)
-    return link
+    return _share_link_response(link)
 
 
 @router.post("/projects/{project_id}/share/user", response_model=DirectShareResponse, status_code=status.HTTP_201_CREATED)
@@ -601,50 +683,69 @@ def share_project_with_user(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Share entire project with a user by email or user_id. Sends notification email."""
-    user_id = body.user_id
-    if not user_id and body.email:
-        from ..services.auth_service import get_user_by_email
-        user = get_user_by_email(db, body.email)
-        if user:
-            user_id = user.id
-        else:
-            raise HTTPException(status_code=404, detail="User not found with that email")
-    if not user_id:
-        raise HTTPException(status_code=400, detail="user_id or email required")
+    project = _lock_active_project(db, project_id)
+    require_project_role(db, project_id, current_user, ProjectRole.owner)
+    shared_user = _resolve_active_share_recipient(db, body)
 
-    project = db.query(Project).filter(Project.id == project_id, Project.deleted_at.is_(None)).first()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-    require_project_role(db, project_id, current_user, ProjectRole.editor)
-
-    # For project shares, we store as an AssetShare with project_id context
-    # Use the first root folder or create a project-level share
-    # Send notification email
-    shared_user = db.query(User).filter(User.id == user_id).first()
-    if shared_user:
-        if body.share_token:
-            project_link = f"{settings.frontend_url}/share/{body.share_token}"
-        else:
-            project_link = f"{settings.frontend_url}/projects/{project_id}"
-        send_task_safe(send_share_email,
-            to_email=shared_user.email,
-            sharer_name=current_user.name or current_user.email,
-            asset_name=project.name,
-            asset_link=project_link,
-            permission=body.permission.value if body.permission else None,
-            workspace_name=get_workspace_name(db),
+    requested_role = {
+        SharePermission.view: ProjectRole.viewer,
+        SharePermission.comment: ProjectRole.reviewer,
+        SharePermission.approve: ProjectRole.reviewer,
+    }[body.permission]
+    role_rank = {
+        ProjectRole.viewer: 1,
+        ProjectRole.reviewer: 2,
+        ProjectRole.editor: 3,
+        ProjectRole.owner: 4,
+    }
+    membership = (
+        db.query(ProjectMember)
+        .filter(
+            ProjectMember.project_id == project_id,
+            ProjectMember.user_id == shared_user.id,
         )
+        .first()
+    )
+    if membership is None:
+        membership = ProjectMember(
+            project_id=project_id,
+            user_id=shared_user.id,
+            role=requested_role,
+            invited_by=current_user.id,
+        )
+        db.add(membership)
+    elif membership.deleted_at is not None:
+        membership.deleted_at = None
+        membership.role = requested_role
+        membership.invited_by = current_user.id
+        membership.invited_at = datetime.now(timezone.utc)
+    elif role_rank[requested_role] > role_rank[membership.role]:
+        membership.role = requested_role
+
+    project_link = (
+        f"{settings.frontend_url}/share/{body.share_token}"
+        if body.share_token
+        else f"{settings.frontend_url}/projects/{project_id}"
+    )
+    workspace_name = get_workspace_name(db)
+    db.commit()
+    send_task_safe(
+        send_share_email,
+        to_email=shared_user.email,
+        sharer_name=current_user.name or current_user.email,
+        asset_name=project.name,
+        asset_link=project_link,
+        permission=body.permission.value,
+        workspace_name=workspace_name,
+    )
 
     return DirectShareResponse(
-        id=uuid.uuid4(),
-        asset_id=None,
-        folder_id=None,
-        shared_with_user_id=user_id,
+        id=membership.id,
+        project_id=project_id,
+        shared_with_user_id=shared_user.id,
         shared_with_team_id=None,
-        permission=body.permission or "view",
-        shared_by=current_user.id,
-        created_at=datetime.now(timezone.utc),
+        permission=body.permission,
+        created_at=membership.invited_at,
     )
 
 
@@ -655,11 +756,12 @@ def list_folder_share_links(
     current_user: User = Depends(get_current_user),
 ):
     folder = _get_folder(db, folder_id)
-    require_project_role(db, folder.project_id, current_user, ProjectRole.viewer)
-    return db.query(ShareLink).filter(
+    require_project_role(db, folder.project_id, current_user, ProjectRole.editor)
+    links = db.query(ShareLink).filter(
         ShareLink.folder_id == folder_id,
         ShareLink.deleted_at.is_(None),
     ).all()
+    return [_share_link_response(link) for link in links]
 
 
 # ── Folder direct user/team sharing ──────────────────────────────────────────
@@ -671,63 +773,47 @@ def share_folder_with_user(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # Resolve user_id from email if not provided
-    user_id = body.user_id
-    if not user_id and body.email:
-        from ..services.auth_service import get_user_by_email
-        user = get_user_by_email(db, body.email)
-        if user:
-            user_id = user.id
-        else:
-            raise HTTPException(status_code=404, detail="User not found with that email")
-    if not user_id:
-        raise HTTPException(status_code=400, detail="user_id or email required")
-
     folder = _get_folder(db, folder_id)
     require_project_role(db, folder.project_id, current_user, ProjectRole.editor)
+    shared_user = _resolve_active_share_recipient(db, body)
+    _lock_active_project(db, folder.project_id)
 
-    # Upsert: reactivate if soft-deleted
     existing = db.query(AssetShare).filter(
         AssetShare.folder_id == folder_id,
-        AssetShare.shared_with_user_id == user_id,
-    ).first()
+        AssetShare.shared_with_user_id == shared_user.id,
+    ).order_by(AssetShare.deleted_at.asc().nullsfirst()).first()
     if existing:
-        if existing.deleted_at is None:
-            existing.permission = body.permission
-        else:
-            existing.deleted_at = None
-            existing.permission = body.permission
+        _apply_direct_share_permission(existing, body.permission)
         db.commit()
         db.refresh(existing)
         return existing
 
-    share = AssetShare(
+    folder_link = (
+        f"{settings.frontend_url}/share/{body.share_token}"
+        if body.share_token
+        else f"{settings.frontend_url}/projects/{folder.project_id}?folder={folder_id}"
+    )
+    workspace_name = get_workspace_name(db)
+    direct_share = AssetShare(
         folder_id=folder_id,
-        shared_with_user_id=user_id,
+        shared_with_user_id=shared_user.id,
         permission=body.permission,
         shared_by=current_user.id,
     )
-    db.add(share)
+    db.add(direct_share)
     db.commit()
-    db.refresh(share)
+    db.refresh(direct_share)
 
-    # Send share email
-    shared_user = db.query(User).filter(User.id == user_id).first()
-    if shared_user:
-        if body.share_token:
-            folder_link = f"{settings.frontend_url}/share/{body.share_token}"
-        else:
-            folder_link = f"{settings.frontend_url}/projects/{folder.project_id}?folder={folder_id}"
-        send_task_safe(send_share_email,
-            to_email=shared_user.email,
-            sharer_name=current_user.name or current_user.email,
-            asset_name=folder.name,
-            asset_link=folder_link,
-            permission=body.permission.value if body.permission else None,
-            workspace_name=get_workspace_name(db),
-        )
+    send_task_safe(send_share_email,
+        to_email=shared_user.email,
+        sharer_name=current_user.name or current_user.email,
+        asset_name=folder.name,
+        asset_link=folder_link,
+        permission=body.permission.value,
+        workspace_name=workspace_name,
+    )
 
-    return share
+    return direct_share
 
 
 @router.post("/folders/{folder_id}/share/team", response_model=DirectShareResponse, status_code=status.HTTP_201_CREATED)
@@ -737,35 +823,9 @@ def share_folder_with_team(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if not body.team_id:
-        raise HTTPException(status_code=400, detail="team_id required")
     folder = _get_folder(db, folder_id)
     require_project_role(db, folder.project_id, current_user, ProjectRole.editor)
-
-    existing = db.query(AssetShare).filter(
-        AssetShare.folder_id == folder_id,
-        AssetShare.shared_with_team_id == body.team_id,
-    ).first()
-    if existing:
-        if existing.deleted_at is None:
-            existing.permission = body.permission
-        else:
-            existing.deleted_at = None
-            existing.permission = body.permission
-        db.commit()
-        db.refresh(existing)
-        return existing
-
-    share = AssetShare(
-        folder_id=folder_id,
-        shared_with_team_id=body.team_id,
-        permission=body.permission,
-        shared_by=current_user.id,
-    )
-    db.add(share)
-    db.commit()
-    db.refresh(share)
-    return share
+    raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Team sharing is not supported")
 
 
 # ── Delete folder share ──────────────────────────────────────────────────────
@@ -778,7 +838,7 @@ def list_folder_direct_shares(
 ):
     """List direct user shares for a folder."""
     folder = _get_folder(db, folder_id)
-    require_project_role(db, folder.project_id, current_user, ProjectRole.viewer)
+    require_project_role(db, folder.project_id, current_user, ProjectRole.editor)
     shares = db.query(AssetShare).filter(
         AssetShare.folder_id == folder_id,
         AssetShare.deleted_at.is_(None),
@@ -795,7 +855,7 @@ def list_asset_direct_shares(
 ):
     """List direct user shares for an asset."""
     asset = _get_asset(db, asset_id)
-    require_project_role(db, asset.project_id, current_user, ProjectRole.viewer)
+    require_project_role(db, asset.project_id, current_user, ProjectRole.editor)
     shares = db.query(AssetShare).filter(
         AssetShare.asset_id == asset_id,
         AssetShare.deleted_at.is_(None),
@@ -822,7 +882,15 @@ def delete_folder_share(
     if not share:
         raise HTTPException(status_code=404, detail="Share not found")
 
-    share.deleted_at = datetime.now(timezone.utc)
+    duplicates = db.query(AssetShare).filter(
+        AssetShare.folder_id == folder_id,
+        AssetShare.shared_with_user_id == share.shared_with_user_id,
+        AssetShare.shared_with_team_id == share.shared_with_team_id,
+        AssetShare.deleted_at.is_(None),
+    ).all()
+    deleted_at = datetime.now(timezone.utc)
+    for duplicate in duplicates:
+        duplicate.deleted_at = deleted_at
     db.commit()
 
 
@@ -835,65 +903,48 @@ def share_with_user(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # Resolve user_id from email if not provided
-    user_id = body.user_id
-    if not user_id and body.email:
-        from ..services.auth_service import get_user_by_email
-        user = get_user_by_email(db, body.email)
-        if user:
-            user_id = user.id
-        else:
-            raise HTTPException(status_code=404, detail="User not found with that email")
-    if not user_id:
-        raise HTTPException(status_code=400, detail="user_id or email required")
-
     asset = _get_asset(db, asset_id)
     require_project_role(db, asset.project_id, current_user, ProjectRole.editor)
+    shared_user = _resolve_active_share_recipient(db, body)
+    _lock_active_project(db, asset.project_id)
 
-    # Upsert: reactivate if soft-deleted
     existing = db.query(AssetShare).filter(
         AssetShare.asset_id == asset_id,
-        AssetShare.shared_with_user_id == user_id,
-    ).first()
+        AssetShare.shared_with_user_id == shared_user.id,
+    ).order_by(AssetShare.deleted_at.asc().nullsfirst()).first()
     if existing:
-        if existing.deleted_at is None:
-            existing.permission = body.permission
-        else:
-            existing.deleted_at = None
-            existing.permission = body.permission
+        _apply_direct_share_permission(existing, body.permission)
         db.commit()
         db.refresh(existing)
         return existing
 
-    share = AssetShare(
+    asset_link = (
+        f"{settings.frontend_url}/share/{body.share_token}"
+        if body.share_token
+        else f"{settings.frontend_url}/projects/{asset.project_id}/assets/{asset_id}"
+    )
+    workspace_name = get_workspace_name(db)
+    direct_share = AssetShare(
         asset_id=asset_id,
-        shared_with_user_id=user_id,
+        shared_with_user_id=shared_user.id,
         permission=body.permission,
         shared_by=current_user.id,
     )
-    db.add(share)
+    db.add(direct_share)
     db.add(ActivityLog(user_id=current_user.id, asset_id=asset_id, action=ActivityAction.shared))
     db.commit()
-    db.refresh(share)
+    db.refresh(direct_share)
 
-    # Send share email
-    shared_user = db.query(User).filter(User.id == user_id).first()
-    if shared_user:
-        # Use share link URL if token provided, otherwise internal URL
-        if body.share_token:
-            asset_link = f"{settings.frontend_url}/share/{body.share_token}"
-        else:
-            asset_link = f"{settings.frontend_url}/projects/{asset.project_id}/assets/{asset_id}"
-        send_task_safe(send_share_email,
-            to_email=shared_user.email,
-            sharer_name=current_user.name or current_user.email,
-            asset_name=asset.name,
-            asset_link=asset_link,
-            permission=body.permission.value if body.permission else None,
-            workspace_name=get_workspace_name(db),
-        )
+    send_task_safe(send_share_email,
+        to_email=shared_user.email,
+        sharer_name=current_user.name or current_user.email,
+        asset_name=asset.name,
+        asset_link=asset_link,
+        permission=body.permission.value,
+        workspace_name=workspace_name,
+    )
 
-    return share
+    return direct_share
 
 
 @router.post("/assets/{asset_id}/share/team", response_model=DirectShareResponse, status_code=status.HTTP_201_CREATED)
@@ -903,36 +954,9 @@ def share_with_team(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if not body.team_id:
-        raise HTTPException(status_code=400, detail="team_id required")
     asset = _get_asset(db, asset_id)
     require_project_role(db, asset.project_id, current_user, ProjectRole.editor)
-
-    existing = db.query(AssetShare).filter(
-        AssetShare.asset_id == asset_id,
-        AssetShare.shared_with_team_id == body.team_id,
-    ).first()
-    if existing:
-        if existing.deleted_at is None:
-            existing.permission = body.permission
-        else:
-            existing.deleted_at = None
-            existing.permission = body.permission
-        db.commit()
-        db.refresh(existing)
-        return existing
-
-    share = AssetShare(
-        asset_id=asset_id,
-        shared_with_team_id=body.team_id,
-        permission=body.permission,
-        shared_by=current_user.id,
-    )
-    db.add(share)
-    db.add(ActivityLog(user_id=current_user.id, asset_id=asset_id, action=ActivityAction.shared))
-    db.commit()
-    db.refresh(share)
-    return share
+    raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Team sharing is not supported")
 
 
 # ── Project-level share link listing ──────────────────────────────────────────
@@ -944,7 +968,7 @@ def list_project_share_links(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    require_project_role(db, project_id, current_user, ProjectRole.viewer)
+    require_project_role(db, project_id, current_user, ProjectRole.editor)
 
     # Subquery for view_count and last_viewed_at
     activity_stats = db.query(
@@ -1059,7 +1083,7 @@ def get_share_link_activity(
     if not link:
         raise HTTPException(status_code=404, detail="Share link not found")
     project_id = _get_project_id_from_link(db, link)
-    require_project_role(db, project_id, current_user, ProjectRole.viewer)
+    require_project_role(db, project_id, current_user, ProjectRole.editor)
 
     offset = (page - 1) * per_page
     activities = db.query(ShareLinkActivity).filter(
@@ -1177,14 +1201,9 @@ def create_multi_share_link(
 
     token = secrets.token_urlsafe(32)
     password_hash = None
-    password_encrypted = None
     if body.password:
         plain_bytes = body.password[:72].encode("utf-8")
         password_hash = bcrypt.hashpw(plain_bytes, bcrypt.gensalt()).decode("utf-8")
-        try:
-            password_encrypted = encrypt_password(body.password)
-        except Exception:
-            pass
 
     link = ShareLink(
         project_id=project_id,
@@ -1198,7 +1217,7 @@ def create_multi_share_link(
         show_versions=body.show_versions,
         show_watermark=body.show_watermark,
         password_hash=password_hash,
-        password_encrypted=password_encrypted,
+        password_encrypted=None,
         expires_at=body.expires_at,
         appearance=body.appearance.model_dump(),
         created_by=current_user.id,
@@ -1214,7 +1233,140 @@ def create_multi_share_link(
 
     db.commit()
     db.refresh(link)
-    return link
+    return _share_link_response(link)
+
+
+def _validate_secure_approval_link(
+    db: Session,
+    token: str,
+    share_session: str | None,
+    current_user: User | None,
+) -> tuple[ShareLink, User]:
+    link = validate_share_link(db, token)
+    if current_user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
+    if link.visibility != ShareVisibility.secure or link.permission != SharePermission.approve:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Approval link required")
+    if link.password_hash and (
+        share_session is None or not verify_share_session(token, share_session)
+    ):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Valid share session required")
+    return link, current_user
+
+
+@router.post(
+    "/share/{token}/assets/{asset_id}/approve",
+    response_model=ApprovalResponse,
+)
+def approve_shared_asset(
+    token: str,
+    asset_id: uuid.UUID,
+    body: ApprovalCreate,
+    share_session: str | None = Query(None, alias="share_session"),
+    db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_optional_user),
+):
+    link, actor = _validate_secure_approval_link(db, token, share_session, current_user)
+    asset = _get_asset(db, asset_id)
+    validate_asset_in_share(db, link, asset)
+    approval = upsert_approval(
+        db,
+        asset,
+        body.version_id,
+        actor,
+        ApprovalStatus.approved,
+        body.note,
+    )
+    db.add(ActivityLog(user_id=actor.id, asset_id=asset.id, action=ActivityAction.approved))
+    creator = None
+    if asset.created_by != actor.id:
+        db.add(Notification(user_id=asset.created_by, type=NotificationType.approval, asset_id=asset.id))
+        creator = db.query(User).filter(User.id == asset.created_by, User.deleted_at.is_(None)).first()
+    workspace_name = get_workspace_name(db)
+    db.commit()
+    if creator:
+        send_task_safe(
+            send_approval_email,
+            to_email=creator.email,
+            reviewer_name=actor.name,
+            asset_name=asset.name,
+            status="approved",
+            asset_link=f"{settings.frontend_url}/share/{token}",
+            note=body.note,
+            workspace_name=workspace_name,
+        )
+    return approval
+
+
+@router.post(
+    "/share/{token}/assets/{asset_id}/reject",
+    response_model=ApprovalResponse,
+)
+def reject_shared_asset(
+    token: str,
+    asset_id: uuid.UUID,
+    body: ApprovalCreate,
+    share_session: str | None = Query(None, alias="share_session"),
+    db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_optional_user),
+):
+    link, actor = _validate_secure_approval_link(db, token, share_session, current_user)
+    asset = _get_asset(db, asset_id)
+    validate_asset_in_share(db, link, asset)
+    approval = upsert_approval(
+        db,
+        asset,
+        body.version_id,
+        actor,
+        ApprovalStatus.rejected,
+        body.note,
+    )
+    db.add(ActivityLog(user_id=actor.id, asset_id=asset.id, action=ActivityAction.rejected))
+    creator = None
+    if asset.created_by != actor.id:
+        db.add(Notification(user_id=asset.created_by, type=NotificationType.approval, asset_id=asset.id))
+        creator = db.query(User).filter(User.id == asset.created_by, User.deleted_at.is_(None)).first()
+    workspace_name = get_workspace_name(db)
+    db.commit()
+    if creator:
+        send_task_safe(
+            send_approval_email,
+            to_email=creator.email,
+            reviewer_name=actor.name,
+            asset_name=asset.name,
+            status="rejected",
+            asset_link=f"{settings.frontend_url}/share/{token}",
+            note=body.note,
+            workspace_name=workspace_name,
+        )
+    return approval
+
+
+@router.get(
+    "/share/{token}/assets/{asset_id}/approvals",
+    response_model=list[ApprovalResponse],
+)
+def list_shared_approvals(
+    token: str,
+    asset_id: uuid.UUID,
+    version_id: uuid.UUID,
+    share_session: str | None = Query(None, alias="share_session"),
+    db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_optional_user),
+):
+    link, _actor = _validate_secure_approval_link(db, token, share_session, current_user)
+    asset = _get_asset(db, asset_id)
+    validate_asset_in_share(db, link, asset)
+    get_active_version(db, asset, version_id)
+    return (
+        db.query(Approval)
+        .filter(
+            Approval.asset_id == asset.id,
+            Approval.version_id == version_id,
+            Approval.deleted_at.is_(None),
+        )
+        .all()
+    )
 
 
 # ── Folder share public endpoints ─────────────────────────────────────────────
@@ -1399,7 +1551,13 @@ def get_folder_share_assets(
         ).scalar() or 0
 
         # Get creator name
-        creator = db.query(User).filter(User.id == asset.created_by).first() if asset.created_by else None
+        creator = (
+            db.query(User)
+            .filter(User.id == asset.created_by, User.deleted_at.is_(None))
+            .first()
+            if asset.created_by
+            else None
+        )
 
         asset_items.append(FolderShareAssetItem(
             id=asset.id,
@@ -1479,9 +1637,7 @@ def get_share_stream_url(
     """Public endpoint — optional auth. Returns presigned stream URL for an asset in a share link."""
     link = validate_share_link_with_session(db, token, share_session=share_session, current_user=current_user)
 
-    # Enforce allow_download when explicit download is requested.
-    # Logged-in team members can always download; the flag gates guests only.
-    if download and not link.allow_download and current_user is None:
+    if download and not _can_download_from_share(db, link, current_user):
         raise HTTPException(status_code=403, detail="Downloads are not allowed for this share link")
 
     asset = _get_asset(db, asset_id)

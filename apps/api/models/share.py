@@ -34,7 +34,12 @@ class ShareLink(Base):
     password_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     password_encrypted: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     permission: Mapped[SharePermission] = mapped_column(Enum(SharePermission), default=SharePermission.view)
-    visibility: Mapped[str] = mapped_column(String(20), nullable=False, server_default="public")
+    visibility: Mapped[ShareVisibility] = mapped_column(
+        String(20),
+        nullable=False,
+        default=ShareVisibility.public,
+        server_default="public",
+    )
     allow_download: Mapped[bool] = mapped_column(Boolean, default=False)
     show_versions: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
     show_watermark: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")

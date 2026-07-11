@@ -29,11 +29,11 @@ from ..models.asset import (
     ProcessingStatus,
 )
 from ..models.project import Project
-from ..models.share import SharePermission
+from ..models.share import SharePermission, ShareVisibility
 from ..schemas.integrations import ReviewIngestResponse
 from ..schemas.upload import ALLOWED_MIME_TYPES, MAX_FILE_SIZE_BYTES, mime_to_asset_type
 from ..services.s3_service import upload_fileobj
-from .share import create_reviewer_share
+from .share import ReviewerShareSpec, create_reviewer_share
 
 
 class IntegrationKeyRoute(APIRoute):
@@ -150,18 +150,25 @@ def review_ingest(
     db.add(media_file)
 
     version.processing_status = ProcessingStatus.processing
+    share = create_reviewer_share(
+        db,
+        asset,
+        ReviewerShareSpec(
+            created_by=created_by,
+            permission=permission,
+            allow_download=allow_download,
+            visibility=(
+                ShareVisibility.secure
+                if permission == SharePermission.approve
+                else ShareVisibility.public
+            ),
+        ),
+    )
     db.commit()
     db.refresh(asset)
     db.refresh(version)
-
+    db.refresh(share)
     background_tasks.add_task(_trigger_processing, asset.id, version.id)
-    share = create_reviewer_share(
-        db,
-        asset=asset,
-        created_by=created_by,
-        permission=permission,
-        allow_download=allow_download,
-    )
 
     return ReviewIngestResponse(
         asset_id=asset.id,

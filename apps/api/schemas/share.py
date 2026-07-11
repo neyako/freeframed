@@ -1,7 +1,7 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 import uuid
 from datetime import datetime
-from typing import Optional, Literal
+from typing import Literal, Optional, TypeAlias
 from ..models.share import SharePermission, ShareVisibility
 
 
@@ -17,9 +17,19 @@ class ShareLinkAppearance(BaseModel):
     show_card_info: bool = True
 
 
+_ShareLinkStateValue: TypeAlias = (
+    SharePermission
+    | ShareVisibility
+    | ShareLinkAppearance
+    | dict[str, str | bool | None]
+    | str
+    | bool
+)
+
+
 class ShareLinkCreate(BaseModel):
     permission: SharePermission = SharePermission.view
-    visibility: str = "public"
+    visibility: ShareVisibility = ShareVisibility.public
     expires_at: Optional[datetime] = None
     password: Optional[str] = None
     allow_download: bool = False
@@ -29,19 +39,35 @@ class ShareLinkCreate(BaseModel):
     show_watermark: bool = False
     appearance: ShareLinkAppearance = ShareLinkAppearance()
 
+    @model_validator(mode="after")
+    def validate_resulting_state(self) -> "ShareLinkCreate":
+        if self.show_watermark and self.allow_download:
+            raise ValueError("Watermarked shares cannot allow downloads")
+        if self.permission == SharePermission.approve and self.visibility != ShareVisibility.secure:
+            raise ValueError("Approve permission requires secure visibility")
+        return self
+
 
 class MultiShareCreate(BaseModel):
     asset_ids: list[uuid.UUID] = []
     folder_ids: list[uuid.UUID] = []
     title: Optional[str] = None
     permission: SharePermission = SharePermission.view
-    visibility: str = "public"
+    visibility: ShareVisibility = ShareVisibility.public
     expires_at: Optional[datetime] = None
     password: Optional[str] = None
     allow_download: bool = False
     show_versions: bool = True
     show_watermark: bool = False
     appearance: ShareLinkAppearance = ShareLinkAppearance()
+
+    @model_validator(mode="after")
+    def validate_resulting_state(self) -> "MultiShareCreate":
+        if self.show_watermark and self.allow_download:
+            raise ValueError("Watermarked shares cannot allow downloads")
+        if self.permission == SharePermission.approve and self.visibility != ShareVisibility.secure:
+            raise ValueError("Approve permission requires secure visibility")
+        return self
 
 
 class ReviewerShareCreate(BaseModel):
@@ -71,7 +97,7 @@ class ShareLinkResponse(BaseModel):
     description: Optional[str] = None
     is_enabled: bool
     permission: SharePermission
-    visibility: str = "public"
+    visibility: ShareVisibility = ShareVisibility.public
     allow_download: bool
     show_versions: bool
     show_watermark: bool
@@ -79,7 +105,6 @@ class ShareLinkResponse(BaseModel):
     expires_at: Optional[datetime] = None
     created_at: datetime
     has_password: bool = False
-    password_value: Optional[str] = None  # Decrypted password for admin display only
     model_config = {"from_attributes": True}
 
 
@@ -96,7 +121,7 @@ class ShareLinkValidateResponse(BaseModel):
     show_versions: bool = True
     show_watermark: bool = False
     appearance: Optional[dict] = None
-    visibility: str = "public"
+    visibility: ShareVisibility = ShareVisibility.public
     requires_password: bool
     requires_auth: bool = False  # True when visibility=secure and user not authenticated
     created_by_name: Optional[str] = None
@@ -111,7 +136,7 @@ class ShareLinkUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     permission: Optional[SharePermission] = None
-    visibility: Optional[str] = None
+    visibility: Optional[ShareVisibility] = None
     is_enabled: Optional[bool] = None
     show_versions: Optional[bool] = None
     show_watermark: Optional[bool] = None
@@ -119,6 +144,26 @@ class ShareLinkUpdate(BaseModel):
     password: Optional[str] = None
     expires_at: Optional[datetime] = None
     allow_download: Optional[bool] = None
+
+    @field_validator(
+        "permission",
+        "title",
+        "visibility",
+        "is_enabled",
+        "show_versions",
+        "show_watermark",
+        "appearance",
+        "allow_download",
+        mode="before",
+    )
+    @classmethod
+    def reject_explicit_null(
+        cls,
+        value: _ShareLinkStateValue | None,
+    ) -> _ShareLinkStateValue:
+        if value is None:
+            raise ValueError("Field cannot be null")
+        return value
 
 
 class ShareLinkListItem(BaseModel):
@@ -139,8 +184,6 @@ class ShareLinkActivityResponse(BaseModel):
     id: uuid.UUID
     share_link_id: uuid.UUID
     action: str
-    actor_email: str
-    actor_name: Optional[str] = None
     asset_id: Optional[uuid.UUID] = None
     asset_name: Optional[str] = None
     created_at: datetime
@@ -186,6 +229,7 @@ class DirectShareResponse(BaseModel):
     id: uuid.UUID
     asset_id: Optional[uuid.UUID] = None
     folder_id: Optional[uuid.UUID] = None
+    project_id: Optional[uuid.UUID] = None
     shared_with_user_id: Optional[uuid.UUID]
     shared_with_team_id: Optional[uuid.UUID]
     permission: SharePermission

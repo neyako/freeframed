@@ -37,6 +37,36 @@ def _added_share_link(mock_db: MagicMock):
     raise AssertionError("ShareLink was not added")
 
 
+def test_reviewer_share_builder_uses_frozen_spec_and_flush_only(mock_db):
+    from apps.api.routers import share
+
+    spec_type = getattr(share, "ReviewerShareSpec", None)
+    assert spec_type is not None
+    asset = _mock_asset(uuid.uuid4(), uuid.uuid4(), uuid.uuid4())
+    spec = spec_type(created_by=asset.created_by)
+
+    link = share.create_reviewer_share(mock_db, asset, spec)
+
+    assert link.asset_id == asset.id
+    mock_db.flush.assert_called_once()
+    mock_db.commit.assert_not_called()
+    mock_db.refresh.assert_not_called()
+
+
+def test_reviewer_share_builder_never_stores_reversible_passphrase(mock_db):
+    from apps.api.routers.share import ReviewerShareSpec, create_reviewer_share
+
+    asset = _mock_asset(uuid.uuid4(), uuid.uuid4(), uuid.uuid4())
+    link = create_reviewer_share(
+        mock_db,
+        asset,
+        ReviewerShareSpec(created_by=asset.created_by, password="synthetic-passphrase"),
+    )
+
+    assert link.password_hash is not None
+    assert link.password_encrypted is None
+
+
 def test_create_reviewer_share_defaults_to_safe_asset_scope(
     client,
     auth_headers,

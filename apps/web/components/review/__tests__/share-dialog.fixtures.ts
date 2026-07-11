@@ -19,7 +19,6 @@ export function createdShareLink() {
     created_at: "2026-06-29T00:00:00Z",
     deleted_at: null,
     has_password: false,
-    password_value: null,
   } as const;
 }
 

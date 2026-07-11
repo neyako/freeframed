@@ -260,6 +260,8 @@ export interface ShareLinkAppearance {
   show_card_info: boolean
 }
 
+export type ShareVisibility = "public" | "secure";
+
 export interface ShareLink {
   id: string;
   asset_id: string | null;
@@ -273,14 +275,13 @@ export interface ShareLink {
   permission: SharePermission;
   allow_download: boolean;
   is_enabled: boolean;
-  visibility: "public" | "secure";
+  visibility: ShareVisibility;
   show_versions: boolean;
   show_watermark: boolean;
   appearance: ShareLinkAppearance | null;
   created_at: string;
   deleted_at: string | null;
   has_password: boolean;
-  password_value: string | null;
 }
 
 export interface AssetShare {

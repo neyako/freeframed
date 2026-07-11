@@ -1,6 +1,6 @@
-import type { SharePermission, Team } from "@/types";
+import type { SharePermission, ShareVisibility, Team } from "@/types";
 
-export type ShareVisibility = "public" | "secure";
+export type { ShareVisibility } from "@/types";
 
 export type ShareTarget =
   | { readonly kind: "asset"; readonly id: string }
@@ -64,6 +64,7 @@ export interface DirectShare {
   readonly id: string;
   readonly asset_id?: string | null;
   readonly folder_id?: string | null;
+  readonly project_id?: string | null;
   readonly shared_with_user_id: string | null;
   readonly shared_with_team_id?: string | null;
   readonly permission: SharePermission;
