@@ -5,14 +5,14 @@ from datetime import datetime, timezone
 from typing import Optional, TypedDict
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 from ..config import settings
 from ..database import get_db
 from ..middleware.auth import get_current_user, get_optional_user
 from ..middleware.share_auth import get_share_link
-from ..models.asset import Asset
-from ..models.project import ProjectMember, ProjectRole
+from ..models.asset import Asset, AssetVersion, ProcessingStatus
+from ..models.project import ProjectRole
 from ..models.comment import Annotation, Comment, CommentAttachment, CommentReaction
 from ..models.activity import Mention, Notification, NotificationType, ActivityLog, ActivityAction
 from ..models.user import User, GuestUser
@@ -33,6 +33,8 @@ from ..schemas.comment import (
 )
 from ..services import s3_service
 from ..services.permissions import (
+    get_asset_access,
+    get_project_member,
     require_asset_access,
     validate_asset_in_share,
     validate_share_link_with_session,
@@ -53,11 +55,71 @@ def _get_asset(db: Session, asset_id: uuid.UUID) -> Asset:
     return asset
 
 
-def _get_comment(db: Session, comment_id: uuid.UUID) -> Comment:
-    comment = db.query(Comment).filter(Comment.id == comment_id, Comment.deleted_at.is_(None)).first()
-    if not comment:
+def _get_active_version(
+    db: Session,
+    asset_id: uuid.UUID,
+    version_id: uuid.UUID,
+) -> AssetVersion:
+    version = db.query(AssetVersion).filter(
+        AssetVersion.id == version_id,
+        AssetVersion.asset_id == asset_id,
+        AssetVersion.deleted_at.is_(None),
+    ).first()
+    if not version:
+        raise HTTPException(status_code=404, detail="Version not found")
+    return version
+
+
+def _get_comment_context(
+    db: Session,
+    comment_id: uuid.UUID,
+    expected_asset_id: uuid.UUID | None = None,
+) -> tuple[Comment, Asset]:
+    query = db.query(Comment, Asset).join(
+        Asset,
+        Asset.id == Comment.asset_id,
+    ).join(
+        AssetVersion,
+        AssetVersion.id == Comment.version_id,
+    ).filter(
+        Comment.id == comment_id,
+        Comment.deleted_at.is_(None),
+        Asset.deleted_at.is_(None),
+        AssetVersion.deleted_at.is_(None),
+        AssetVersion.asset_id == Comment.asset_id,
+    )
+    if expected_asset_id is not None:
+        query = query.filter(Comment.asset_id == expected_asset_id)
+    result = query.first()
+    if not result:
         raise HTTPException(status_code=404, detail="Comment not found")
-    return comment
+    return result
+
+
+def _require_can_comment(db: Session, asset: Asset, user: User) -> None:
+    if not get_asset_access(db, asset, user).can_comment:
+        raise HTTPException(status_code=403, detail="Comment permission required")
+
+
+def _resolve_reply_target(
+    db: Session,
+    asset: Asset,
+    parent_id: uuid.UUID,
+    body_parent_id: uuid.UUID | None,
+    body_version_id: uuid.UUID | None,
+    *,
+    public_only: bool = False,
+) -> Comment:
+    if body_parent_id is not None and body_parent_id != parent_id:
+        raise HTTPException(status_code=400, detail="parent_id must match path parent")
+    parent, _ = _get_comment_context(db, parent_id, asset.id)
+    if body_version_id is not None:
+        _get_active_version(db, asset.id, body_version_id)
+        if body_version_id != parent.version_id:
+            raise HTTPException(status_code=400, detail="version_id must match parent")
+    if public_only and parent.visibility != "public":
+        raise HTTPException(status_code=404, detail="Parent comment not found")
+    return parent
 
 
 def _build_attachment_response(attachment: CommentAttachment) -> AttachmentResponse:
@@ -102,7 +164,13 @@ def _build_comment_response(
     current_user_id: uuid.UUID | None = None,
     depth: int = 5,
 ) -> CommentResponse:
-    data = _fetch_comment_tree_data(db, [comment], depth=depth)
+    data = _fetch_comment_tree_data(
+        db,
+        [comment],
+        depth=depth,
+        asset_id=comment.asset_id,
+        version_id=comment.version_id,
+    )
     return _assemble_comment_response(comment, data, current_user_id=current_user_id)
 
 
@@ -110,18 +178,39 @@ def _fetch_comment_tree_data(
     db: Session,
     top_level: list[Comment],
     depth: int = 5,
+    *,
+    asset_id: uuid.UUID | None = None,
+    version_id: uuid.UUID | None = None,
+    public_only: bool = False,
 ) -> _CommentTreeData:
     all_comments = list(top_level)
     frontier = [comment.id for comment in top_level]
     comments_by_parent: dict[uuid.UUID, list[Comment]] = {}
+    parent = aliased(Comment)
 
     for _ in range(depth):
         if not frontier:
             break
-        replies = db.query(Comment).filter(
-            Comment.parent_id.in_(frontier),
+        query = db.query(Comment).join(
+            parent,
+            parent.id == Comment.parent_id,
+        ).join(
+            AssetVersion,
+            AssetVersion.id == Comment.version_id,
+        ).filter(
+            parent.id.in_(frontier),
             Comment.deleted_at.is_(None),
-        ).order_by(Comment.created_at).all()
+            AssetVersion.deleted_at.is_(None),
+            AssetVersion.asset_id == Comment.asset_id,
+            Comment.version_id == parent.version_id,
+        )
+        if asset_id is not None:
+            query = query.filter(Comment.asset_id == asset_id)
+        if version_id is not None:
+            query = query.filter(Comment.version_id == version_id)
+        if public_only:
+            query = query.filter(Comment.visibility == "public")
+        replies = query.order_by(Comment.created_at).all()
         if not replies:
             break
         for reply in replies:
@@ -181,7 +270,7 @@ def _assemble_comment_response(
     guest_author_info = None
     guest = data["guests"].get(comment.guest_author_id) if comment.guest_author_id else None
     if guest:
-        guest_author_info = GuestAuthorInfo(id=guest.id, name=guest.name, email=guest.email)
+        guest_author_info = GuestAuthorInfo(id=guest.id, name=guest.name)
 
     annotation = data["annotations"].get(comment.id)
     resp = CommentResponse.model_validate(comment)
@@ -276,18 +365,25 @@ def list_comments(
 ):
     asset = _get_asset(db, asset_id)
     require_asset_access(db, asset, current_user)
+    if version_id is not None:
+        _get_active_version(db, asset.id, version_id)
     # Top-level comments only (parent_id is None)
-    query = db.query(Comment).filter(
+    query = db.query(Comment).join(
+        AssetVersion,
+        AssetVersion.id == Comment.version_id,
+    ).filter(
         Comment.asset_id == asset_id,
         Comment.parent_id.is_(None),
         Comment.deleted_at.is_(None),
+        AssetVersion.deleted_at.is_(None),
+        AssetVersion.asset_id == Comment.asset_id,
     )
     if version_id:
         query = query.filter(Comment.version_id == version_id)
     if visibility and visibility in ("public", "internal"):
         query = query.filter(Comment.visibility == visibility)
     top_level = query.order_by(Comment.created_at).all()
-    data = _fetch_comment_tree_data(db, top_level)
+    data = _fetch_comment_tree_data(db, top_level, asset_id=asset.id, version_id=version_id)
     return [
         _assemble_comment_response(comment, data, current_user_id=current_user.id)
         for comment in top_level
@@ -302,7 +398,10 @@ def create_comment(
     current_user: User = Depends(get_current_user),
 ):
     asset = _get_asset(db, asset_id)
-    require_asset_access(db, asset, current_user)
+    _require_can_comment(db, asset, current_user)
+    _get_active_version(db, asset.id, body.version_id)
+    if body.parent_id is not None:
+        raise HTTPException(status_code=400, detail="Use the reply endpoint for replies")
 
     comment = Comment(
         asset_id=asset_id,
@@ -355,10 +454,14 @@ def reply_to_comment(
     current_user: User = Depends(get_current_user),
 ):
     asset = _get_asset(db, asset_id)
-    require_asset_access(db, asset, current_user)
-    parent = db.query(Comment).filter(Comment.id == comment_id, Comment.deleted_at.is_(None)).first()
-    if not parent:
-        raise HTTPException(status_code=404, detail="Parent comment not found")
+    _require_can_comment(db, asset, current_user)
+    parent = _resolve_reply_target(
+        db,
+        asset,
+        comment_id,
+        body.parent_id,
+        body.version_id,
+    )
 
     # Force body's version_id to match parent
     reply = Comment(
@@ -367,6 +470,7 @@ def reply_to_comment(
         parent_id=comment_id,
         author_id=current_user.id,
         body=body.body,
+        visibility=parent.visibility,
     )
     db.add(reply)
     db.flush()
@@ -393,20 +497,10 @@ def update_comment(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    comment = db.query(Comment).filter(Comment.id == comment_id, Comment.deleted_at.is_(None)).first()
-    if not comment:
-        raise HTTPException(status_code=404, detail="Comment not found")
-    # Allow comment owner or project owner to edit
+    comment, asset = _get_comment_context(db, comment_id)
+    _require_can_comment(db, asset, current_user)
     if comment.author_id != current_user.id:
-        asset = _get_asset(db, comment.asset_id)
-        member = db.query(ProjectMember).filter(
-            ProjectMember.project_id == asset.project_id,
-            ProjectMember.user_id == current_user.id,
-            ProjectMember.role == ProjectRole.owner,
-            ProjectMember.deleted_at.is_(None),
-        ).first()
-        if not member:
-            raise HTTPException(status_code=403, detail="Can only edit your own comments")
+        raise HTTPException(status_code=403, detail="Can only edit your own comments")
     comment.body = body.body
     comment.updated_at = datetime.now(timezone.utc)
     db.commit()
@@ -420,20 +514,10 @@ def delete_comment(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    comment = db.query(Comment).filter(Comment.id == comment_id, Comment.deleted_at.is_(None)).first()
-    if not comment:
-        raise HTTPException(status_code=404, detail="Comment not found")
-    # Allow comment owner or project owner to delete
+    comment, asset = _get_comment_context(db, comment_id)
+    _require_can_comment(db, asset, current_user)
     if comment.author_id != current_user.id:
-        asset = _get_asset(db, comment.asset_id)
-        member = db.query(ProjectMember).filter(
-            ProjectMember.project_id == asset.project_id,
-            ProjectMember.user_id == current_user.id,
-            ProjectMember.role == ProjectRole.owner,
-            ProjectMember.deleted_at.is_(None),
-        ).first()
-        if not member:
-            raise HTTPException(status_code=403, detail="Can only delete your own comments")
+        raise HTTPException(status_code=403, detail="Can only delete your own comments")
     comment.deleted_at = datetime.now(timezone.utc)
     db.commit()
 
@@ -444,11 +528,8 @@ def resolve_comment(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    comment = db.query(Comment).filter(Comment.id == comment_id, Comment.deleted_at.is_(None)).first()
-    if not comment:
-        raise HTTPException(status_code=404, detail="Comment not found")
-    asset = _get_asset(db, comment.asset_id)
-    require_asset_access(db, asset, current_user)
+    comment, asset = _get_comment_context(db, comment_id)
+    _require_can_comment(db, asset, current_user)
     comment.resolved = not comment.resolved
     db.commit()
     db.refresh(comment)
@@ -468,9 +549,8 @@ def create_attachment(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    comment = _get_comment(db, comment_id)
-    asset = _get_asset(db, comment.asset_id)
-    require_asset_access(db, asset, current_user)
+    comment, asset = _get_comment_context(db, comment_id)
+    _require_can_comment(db, asset, current_user)
 
     # Generate S3 key
     key = f"comment-attachments/{comment_id}/{uuid.uuid4()}/{body.file_name}"
@@ -516,8 +596,7 @@ def delete_attachment(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    comment = _get_comment(db, comment_id)
-    asset = _get_asset(db, comment.asset_id)
+    comment, asset = _get_comment_context(db, comment_id)
 
     attachment = db.query(CommentAttachment).filter(
         CommentAttachment.id == attachment_id,
@@ -526,9 +605,7 @@ def delete_attachment(
     if not attachment:
         raise HTTPException(status_code=404, detail="Attachment not found")
 
-    # Must be comment author OR project owner/editor
-    from ..models.project import ProjectRole
-    from ..services.permissions import get_project_member
+    _require_can_comment(db, asset, current_user)
     is_comment_author = comment.author_id == current_user.id
     if not is_comment_author:
         pm = get_project_member(db, asset.project_id, current_user.id)
@@ -554,9 +631,8 @@ def toggle_reaction(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    comment = _get_comment(db, comment_id)
-    asset = _get_asset(db, comment.asset_id)
-    require_asset_access(db, asset, current_user)
+    comment, asset = _get_comment_context(db, comment_id)
+    _require_can_comment(db, asset, current_user)
 
     existing = db.query(CommentReaction).filter(
         CommentReaction.comment_id == comment_id,
@@ -583,8 +659,7 @@ def list_reactions(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    comment = _get_comment(db, comment_id)
-    asset = _get_asset(db, comment.asset_id)
+    comment, asset = _get_comment_context(db, comment_id)
     require_asset_access(db, asset, current_user)
 
     reactions_raw = db.query(CommentReaction).filter(
@@ -605,13 +680,7 @@ def comment_deep_link(
     asset = _get_asset(db, asset_id)
     require_asset_access(db, asset, current_user)
     # Verify comment belongs to this asset
-    comment = db.query(Comment).filter(
-        Comment.id == comment_id,
-        Comment.asset_id == asset_id,
-        Comment.deleted_at.is_(None),
-    ).first()
-    if not comment:
-        raise HTTPException(status_code=404, detail="Comment not found")
+    _get_comment_context(db, comment_id, asset_id)
 
     url = f"{settings.frontend_url}/assets/{asset_id}?comment={comment_id}"
     return {"url": url}
@@ -623,6 +692,7 @@ def comment_deep_link(
 def list_share_comments(
     token: str,
     asset_id: Optional[uuid.UUID] = None,
+    version_id: Optional[uuid.UUID] = None,
     share_session: Optional[str] = Query(None, alias="share_session"),
     db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(get_optional_user),
@@ -642,15 +712,32 @@ def list_share_comments(
         return []
     asset = _get_asset(db, target_asset_id)
     validate_asset_in_share(db, link, asset)
+    if version_id is not None:
+        _get_active_version(db, asset.id, version_id)
 
     # Get top-level comments — reuse same format as authenticated endpoint
-    top_level = db.query(Comment).filter(
+    query = db.query(Comment).join(
+        AssetVersion,
+        AssetVersion.id == Comment.version_id,
+    ).filter(
         Comment.asset_id == asset.id,
         Comment.parent_id.is_(None),
         Comment.deleted_at.is_(None),
-    ).order_by(Comment.created_at).all()
+        Comment.visibility == "public",
+        AssetVersion.deleted_at.is_(None),
+        AssetVersion.asset_id == Comment.asset_id,
+    )
+    if version_id is not None:
+        query = query.filter(Comment.version_id == version_id)
+    top_level = query.order_by(Comment.created_at).all()
 
-    data = _fetch_comment_tree_data(db, top_level)
+    data = _fetch_comment_tree_data(
+        db,
+        top_level,
+        asset_id=asset.id,
+        version_id=version_id,
+        public_only=True,
+    )
     return [_assemble_comment_response(comment, data) for comment in top_level]
 
 
@@ -680,10 +767,22 @@ def guest_comment(
     asset = _get_asset(db, target_asset_id)
     validate_asset_in_share(db, link, asset)
 
-    # Resolve version_id: use provided or get latest ready version
-    version_id = body.version_id
-    if not version_id:
-        from ..models.asset import AssetVersion, ProcessingStatus
+    parent = None
+    if body.parent_id is not None:
+        parent = _resolve_reply_target(
+            db,
+            asset,
+            body.parent_id,
+            body.parent_id,
+            body.version_id,
+            public_only=True,
+        )
+        version_id = parent.version_id
+    else:
+        version_id = body.version_id
+    if version_id is not None:
+        _get_active_version(db, asset.id, version_id)
+    else:
         latest = db.query(AssetVersion).filter(
             AssetVersion.asset_id == asset.id,
             AssetVersion.deleted_at.is_(None),
@@ -713,12 +812,13 @@ def guest_comment(
     comment = Comment(
         asset_id=asset.id,
         version_id=version_id,
-        parent_id=body.parent_id,
+        parent_id=parent.id if parent else None,
         author_id=author_id,
         guest_author_id=guest_author_id,
         timecode_start=body.timecode_start,
         timecode_end=body.timecode_end,
         body=body.body,
+        visibility=parent.visibility if parent else "public",
     )
     db.add(comment)
     db.flush()

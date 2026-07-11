@@ -86,7 +86,6 @@ class AuthorInfo(BaseModel):
 class GuestAuthorInfo(BaseModel):
     id: uuid.UUID
     name: str
-    email: str
 
 # ── Comments ───────────────────────────────────────────────────────────────────
 

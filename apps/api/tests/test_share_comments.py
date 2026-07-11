@@ -79,6 +79,7 @@ def test_share_comments_returns_array_for_asset_share(
     mock_session_validate.return_value = link
     mock_get_asset.return_value = _mock_asset(asset_id)
     mock_validate_asset.return_value = None
+    mock_db.join.return_value = mock_db
     mock_db.order_by.return_value = mock_db
     mock_db.all.return_value = [comment]
     comment_data = {"comments_by_parent": {}}
@@ -89,7 +90,13 @@ def test_share_comments_returns_array_for_asset_share(
 
     assert response.status_code == 200
     assert response.json() == [expected]
-    mock_fetch_comment_tree_data.assert_called_once_with(mock_db, [comment])
+    mock_fetch_comment_tree_data.assert_called_once_with(
+        mock_db,
+        [comment],
+        asset_id=asset_id,
+        version_id=None,
+        public_only=True,
+    )
     mock_assemble_comment_response.assert_called_once_with(comment, comment_data)
 
 
@@ -118,6 +125,7 @@ def test_share_comments_returns_array_for_folder_or_project_share_asset(
     mock_session_validate.return_value = link
     mock_get_asset.return_value = _mock_asset(asset_id)
     mock_validate_asset.return_value = None
+    mock_db.join.return_value = mock_db
     mock_db.order_by.return_value = mock_db
     mock_db.all.return_value = [comment]
     comment_data = {"comments_by_parent": {}}
@@ -128,7 +136,13 @@ def test_share_comments_returns_array_for_folder_or_project_share_asset(
 
     assert response.status_code == 200
     assert response.json() == [expected]
-    mock_fetch_comment_tree_data.assert_called_once_with(mock_db, [comment])
+    mock_fetch_comment_tree_data.assert_called_once_with(
+        mock_db,
+        [comment],
+        asset_id=asset_id,
+        version_id=None,
+        public_only=True,
+    )
     mock_assemble_comment_response.assert_called_once_with(comment, comment_data)
 
 

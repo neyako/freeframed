@@ -400,10 +400,9 @@ interface GuestComment {
   id: string
   body: string
   guest_name: string
-  guest_email: string
   author_name?: string
   author?: { id: string; name: string; avatar_url?: string | null } | null
-  guest_author?: { id: string; name: string; email: string } | null
+  guest_author?: { id: string; name: string } | null
   created_at: string
   timecode_start?: number | null
   replies?: GuestComment[]

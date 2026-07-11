@@ -118,7 +118,13 @@ def test_comment_tree_batching_preserves_seeded_response_contract(
         "apps.api.routers.comments.s3_service.generate_presigned_get_url",
         return_value="https://example.test/root.png",
     ):
-        data = _fetch_comment_tree_data(db, top_level)
+        data = _fetch_comment_tree_data(
+            db,
+            top_level,
+            asset_id=asset.id,
+            version_id=version.id,
+            public_only=True,
+        )
         batched = [
             _assemble_comment_response(comment, data, current_user_id=reviewer.id)
             for comment in top_level
@@ -149,7 +155,7 @@ def test_comment_tree_batching_preserves_seeded_response_contract(
     assert batched[2].guest_author is not None
     assert batched[2].guest_author.id == guest.id
     assert batched[2].guest_author.name == "Guest"
-    assert batched[2].guest_author.email == "guest@example.com"
+    assert "email" not in batched[2].guest_author.model_dump()
     root_reactions = {reaction.emoji: reaction for reaction in batched[0].reactions}
     assert root_reactions["ok"].count == 2
     assert root_reactions["ok"].reacted is True

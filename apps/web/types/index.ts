@@ -187,7 +187,6 @@ export interface CommentAuthor {
 export interface GuestAuthor {
   id: string;
   name: string;
-  email?: string;
 }
 
 export interface Comment {

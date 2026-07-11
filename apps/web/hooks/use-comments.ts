@@ -18,7 +18,6 @@ export interface CommentWithReplies extends Comment {
   guest_author: {
     id: string
     name: string
-    email: string
   } | null
 }
 

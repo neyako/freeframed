@@ -106,7 +106,7 @@ def test_assemble_comment_response_preserves_nested_maps_and_reactions() -> None
     assert response.annotation.frame_number == 12
     assert [reply.body for reply in response.replies] == ["First", "Second"]
     assert response.replies[0].guest_author is not None
-    assert response.replies[0].guest_author.email == "guest@example.com"
+    assert "email" not in response.replies[0].guest_author.model_dump()
     assert response.replies[0].replies[0].body == "Nested"
     assert response.attachments[0].file_name == "root.png"
     assert response.reactions[0].count == 2
