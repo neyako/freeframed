@@ -8,6 +8,7 @@ from ._share_security_support import (
     ShareActivityAction,
     ShareLink,
     ShareLinkActivity,
+    ShareLinkUpdate,
     SharePermission,
     _add_asset,
     _add_folder,
@@ -24,6 +25,7 @@ from ._share_security_support import (
 
 def test_management_requires_editor_and_redacts_password_and_activity_pii(db, make_project, make_user) -> None:
     project, owner = make_project()
+    foreign_project, foreign_owner = make_project()
     editor = make_user()
     reviewer = make_user()
     viewer = make_user()
@@ -33,6 +35,7 @@ def test_management_requires_editor_and_redacts_password_and_activity_pii(db, ma
     _add_member(db, project.id, editor.id, ProjectRole.editor)
     _add_member(db, project.id, reviewer.id, ProjectRole.reviewer)
     _add_member(db, project.id, viewer.id, ProjectRole.viewer)
+    _add_member(db, foreign_project.id, foreign_owner.id, ProjectRole.owner)
     folder = _add_folder(db, project.id, owner.id)
     asset = _add_asset(db, project.id, owner.id)
     link = _add_link(db, asset, owner.id)
@@ -73,10 +76,21 @@ def test_management_requires_editor_and_redacts_password_and_activity_pii(db, ma
         _assert_forbidden(lambda blocked=blocked: share.list_asset_direct_shares(asset.id, db, blocked))
         _assert_forbidden(lambda blocked=blocked: share.list_folder_direct_shares(folder.id, db, blocked))
 
+    token_management_calls = (
+        lambda token, actor: share.get_share_link_details(token, db, actor),
+        lambda token, actor: share.update_share_link(token, ShareLinkUpdate(title="safe"), db, actor),
+        lambda token, actor: share.revoke_share_link(token, db, actor),
+        lambda token, actor: share.get_share_link_activity(token, 1, 50, db, actor),
+        lambda token, actor: share.add_asset_to_share_link(token, asset.id, db, actor),
+    )
+    for blocked in (reviewer, viewer, direct, unrelated, foreign_owner):
+        for token in (link.token, uuid.uuid4().hex):
+            for call in token_management_calls:
+                _assert_forbidden(lambda call=call, token=token, blocked=blocked: call(token, blocked))
+
     activity_schema = share.ShareLinkActivityResponse.model_validate(activity).model_dump()
     assert "actor_email" not in activity_schema
     assert "actor_name" not in activity_schema
-
 
 @pytest.mark.parametrize(
     ("role", "deleted", "expected"),
@@ -206,6 +220,4 @@ def test_disabled_download_stream_enforcement_uses_the_same_membership_rule(
         current_user=actor,
     )
     assert response["url"] == "redacted"
-
-
 

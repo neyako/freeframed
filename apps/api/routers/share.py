@@ -1,5 +1,6 @@
 import secrets
 import uuid
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -57,6 +58,7 @@ from ..tasks.celery_app import send_task_safe
 from ..config import settings
 
 router = APIRouter(tags=["sharing"])
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -151,6 +153,39 @@ def _get_project_id_from_link(db: Session, link: ShareLink) -> uuid.UUID:
             raise HTTPException(status_code=404, detail="Shared folder not found")
         return folder.project_id
     raise HTTPException(status_code=400, detail="Invalid share link")
+
+
+def _get_manageable_share_link(db: Session, token: str, user: User) -> ShareLink:
+    managed_project_ids = (
+        sqlalchemy.select(ProjectMember.project_id)
+        .join(Project, Project.id == ProjectMember.project_id)
+        .where(
+            ProjectMember.user_id == user.id,
+            ProjectMember.role.in_((ProjectRole.owner, ProjectRole.editor)),
+            ProjectMember.deleted_at.is_(None),
+            Project.deleted_at.is_(None),
+        )
+    )
+    managed_asset_ids = sqlalchemy.select(Asset.id).where(
+        Asset.project_id.in_(managed_project_ids),
+        Asset.deleted_at.is_(None),
+    )
+    managed_folder_ids = sqlalchemy.select(Folder.id).where(
+        Folder.project_id.in_(managed_project_ids),
+        Folder.deleted_at.is_(None),
+    )
+    link = db.query(ShareLink).filter(
+        ShareLink.token == token,
+        ShareLink.deleted_at.is_(None),
+        sqlalchemy.or_(
+            ShareLink.project_id.in_(managed_project_ids),
+            ShareLink.asset_id.in_(managed_asset_ids),
+            ShareLink.folder_id.in_(managed_folder_ids),
+        ),
+    ).first()
+    if link is None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Editor permission required")
+    return link
 
 
 def _can_download_from_share(db: Session, link: ShareLink, user: User | None) -> bool:
@@ -514,14 +549,7 @@ def get_share_link_details(
     current_user: User = Depends(get_current_user),
 ):
     """Authenticated endpoint returning full share link details for the settings panel."""
-    link = db.query(ShareLink).filter(
-        ShareLink.token == token,
-        ShareLink.deleted_at.is_(None),
-    ).first()
-    if not link:
-        raise HTTPException(status_code=404, detail="Share link not found")
-    project_id = _get_project_id_from_link(db, link)
-    require_project_role(db, project_id, current_user, ProjectRole.editor)
+    link = _get_manageable_share_link(db, token, current_user)
     return _share_link_response(link)
 
 
@@ -534,11 +562,7 @@ def update_share_link(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    link = db.query(ShareLink).filter(ShareLink.token == token, ShareLink.deleted_at.is_(None)).first()
-    if not link:
-        raise HTTPException(status_code=404, detail="Share link not found")
-    project_id = _get_project_id_from_link(db, link)
-    require_project_role(db, project_id, current_user, ProjectRole.editor)
+    link = _get_manageable_share_link(db, token, current_user)
 
     updates = body.model_dump(exclude_unset=True)
 
@@ -582,11 +606,7 @@ def revoke_share_link(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    link = db.query(ShareLink).filter(ShareLink.token == token, ShareLink.deleted_at.is_(None)).first()
-    if not link:
-        raise HTTPException(status_code=404, detail="Share link not found")
-    project_id = _get_project_id_from_link(db, link)
-    require_project_role(db, project_id, current_user, ProjectRole.editor)
+    link = _get_manageable_share_link(db, token, current_user)
     link.deleted_at = datetime.now(timezone.utc)
     db.commit()
 
@@ -1079,11 +1099,7 @@ def get_share_link_activity(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    link = db.query(ShareLink).filter(ShareLink.token == token, ShareLink.deleted_at.is_(None)).first()
-    if not link:
-        raise HTTPException(status_code=404, detail="Share link not found")
-    project_id = _get_project_id_from_link(db, link)
-    require_project_role(db, project_id, current_user, ProjectRole.editor)
+    link = _get_manageable_share_link(db, token, current_user)
 
     offset = (page - 1) * per_page
     activities = db.query(ShareLinkActivity).filter(
@@ -1102,12 +1118,7 @@ def add_asset_to_share_link(
     current_user: User = Depends(get_current_user),
 ):
     """Add an asset to an existing share link. Converts single-asset links to project-level."""
-    link = db.query(ShareLink).filter(
-        ShareLink.token == token,
-        ShareLink.deleted_at.is_(None),
-    ).first()
-    if not link:
-        raise HTTPException(status_code=404, detail="Share link not found")
+    link = _get_manageable_share_link(db, token, current_user)
 
     asset = db.query(Asset).filter(Asset.id == asset_id, Asset.deleted_at.is_(None)).first()
     if not asset:
@@ -1115,10 +1126,6 @@ def add_asset_to_share_link(
 
     # Determine the share link's project
     link_project_id = _get_project_id_from_link(db, link)
-
-    # Ensure caller has editor role
-    if link_project_id:
-        require_project_role(db, link_project_id, current_user, ProjectRole.editor)
 
     # Ensure the asset belongs to the same project
     if link_project_id and asset.project_id != link_project_id:
@@ -1283,18 +1290,21 @@ def approve_shared_asset(
         db.add(Notification(user_id=asset.created_by, type=NotificationType.approval, asset_id=asset.id))
         creator = db.query(User).filter(User.id == asset.created_by, User.deleted_at.is_(None)).first()
     workspace_name = get_workspace_name(db)
+    email_payload = None if creator is None else {
+        "to_email": creator.email,
+        "reviewer_name": actor.name,
+        "asset_name": asset.name,
+        "status": "approved",
+        "asset_link": f"{settings.frontend_url}/share/{token}",
+        "note": body.note,
+        "workspace_name": workspace_name,
+    }
     db.commit()
-    if creator:
-        send_task_safe(
-            send_approval_email,
-            to_email=creator.email,
-            reviewer_name=actor.name,
-            asset_name=asset.name,
-            status="approved",
-            asset_link=f"{settings.frontend_url}/share/{token}",
-            note=body.note,
-            workspace_name=workspace_name,
-        )
+    if email_payload is not None:
+        try:
+            send_task_safe(send_approval_email, **email_payload)
+        except RuntimeError:
+            logger.warning("Failed to start approval email dispatch")
     return approval
 
 
@@ -1327,18 +1337,21 @@ def reject_shared_asset(
         db.add(Notification(user_id=asset.created_by, type=NotificationType.approval, asset_id=asset.id))
         creator = db.query(User).filter(User.id == asset.created_by, User.deleted_at.is_(None)).first()
     workspace_name = get_workspace_name(db)
+    email_payload = None if creator is None else {
+        "to_email": creator.email,
+        "reviewer_name": actor.name,
+        "asset_name": asset.name,
+        "status": "rejected",
+        "asset_link": f"{settings.frontend_url}/share/{token}",
+        "note": body.note,
+        "workspace_name": workspace_name,
+    }
     db.commit()
-    if creator:
-        send_task_safe(
-            send_approval_email,
-            to_email=creator.email,
-            reviewer_name=actor.name,
-            asset_name=asset.name,
-            status="rejected",
-            asset_link=f"{settings.frontend_url}/share/{token}",
-            note=body.note,
-            workspace_name=workspace_name,
-        )
+    if email_payload is not None:
+        try:
+            send_task_safe(send_approval_email, **email_payload)
+        except RuntimeError:
+            logger.warning("Failed to start approval email dispatch")
     return approval
 
 

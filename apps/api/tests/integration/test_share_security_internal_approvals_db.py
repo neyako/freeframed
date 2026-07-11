@@ -14,24 +14,42 @@ from ._share_security_support import (
     SimpleNamespace,
     ThreadPoolExecutor,
     _add_asset,
+    _add_folder,
     _add_member,
     _add_version,
     _assert_forbidden,
     approvals,
+    datetime,
     event,
     pytest,
     sessionmaker,
+    timezone,
     uuid,
 )
 
 def test_internal_approval_uses_asset_capability_and_validates_version_scope(db, make_project, make_user, monkeypatch) -> None:
     project, owner = make_project()
     direct_approve = make_user()
+    inherited_approve = make_user()
     _add_member(db, project.id, owner.id, ProjectRole.owner)
     asset = _add_asset(db, project.id, owner.id)
     foreign = _add_asset(db, project.id, owner.id)
+    root = _add_folder(db, project.id, owner.id)
+    child = _add_folder(db, project.id, owner.id)
+    child.parent_id = root.id
+    sibling = _add_folder(db, project.id, owner.id)
+    inherited_asset = _add_asset(db, project.id, owner.id, child.id)
+    sibling_asset = _add_asset(db, project.id, owner.id, sibling.id)
     version = _add_version(db, asset)
     foreign_version = _add_version(db, foreign)
+    inherited_version = _add_version(db, inherited_asset)
+    sibling_version = _add_version(db, sibling_asset)
+    inherited_grant = AssetShare(
+        folder_id=root.id,
+        shared_with_user_id=inherited_approve.id,
+        permission=SharePermission.approve,
+        shared_by=owner.id,
+    )
     db.add(
         AssetShare(
             asset_id=asset.id,
@@ -40,6 +58,7 @@ def test_internal_approval_uses_asset_capability_and_validates_version_scope(db,
             shared_by=owner.id,
         )
     )
+    db.add(inherited_grant)
     db.commit()
     monkeypatch.setattr(approvals, "send_task_safe", lambda *args, **kwargs: None)
 
@@ -69,6 +88,23 @@ def test_internal_approval_uses_asset_capability_and_validates_version_scope(db,
         db.query(ActivityLog).count(),
         db.query(Notification).count(),
     ) == before
+    _assert_forbidden(lambda: approvals.approve_asset(
+        sibling_asset.id, ApprovalCreate(version_id=sibling_version.id), db, inherited_approve,
+    ))
+    approvals.approve_asset(
+        inherited_asset.id, ApprovalCreate(version_id=inherited_version.id), db, inherited_approve,
+    )
+    approvals.reject_asset(
+        inherited_asset.id,
+        ApprovalCreate(version_id=inherited_version.id),
+        db,
+        inherited_approve,
+    )
+    inherited_grant.deleted_at = datetime.now(timezone.utc)
+    db.commit()
+    _assert_forbidden(lambda: approvals.approve_asset(
+        inherited_asset.id, ApprovalCreate(version_id=inherited_version.id), db, inherited_approve,
+    ))
 
 
 @pytest.mark.parametrize("action", ["approve", "reject", "list"])
@@ -173,6 +209,7 @@ def test_concurrent_internal_approval_upserts_one_row(
     db.commit()
     monkeypatch.setattr(approvals, "send_task_safe", lambda *args, **kwargs: None)
     session_factory = sessionmaker(bind=migrated_engine)
+    route_start_gate = Barrier(2, timeout=1)
     vulnerable_read_gate = Barrier(2, timeout=1)
 
     def gate_vulnerable_read(_conn, _cursor, statement, _parameters, _context, _executemany) -> None:
@@ -188,6 +225,7 @@ def test_concurrent_internal_approval_upserts_one_row(
     def invoke(action: str) -> None:
         session = session_factory()
         try:
+            route_start_gate.wait()
             actor = SimpleNamespace(id=reviewer.id, name=reviewer.name, email=reviewer.email)
             body = ApprovalCreate(version_id=version.id)
             if action == "approve":
@@ -203,9 +241,8 @@ def test_concurrent_internal_approval_upserts_one_row(
     finally:
         event.remove(migrated_engine, "after_cursor_execute", gate_vulnerable_read)
 
+    if not vulnerable_read_gate.broken:
+        pytest.fail("concurrent approvals did not serialize before vulnerable read")
     db.expire_all()
     rows = db.query(Approval).filter_by(version_id=version.id, user_id=reviewer.id).all()
     assert len(rows) == 1
-
-
-

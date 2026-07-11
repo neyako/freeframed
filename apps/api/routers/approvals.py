@@ -1,4 +1,5 @@
 import uuid
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
@@ -18,6 +19,7 @@ from ..tasks.celery_app import send_task_safe
 from ..config import settings
 
 router = APIRouter(tags=["approvals"])
+logger = logging.getLogger(__name__)
 
 
 def _get_asset(db: Session, asset_id: uuid.UUID) -> Asset:
@@ -46,18 +48,21 @@ def approve_asset(
         db.add(Notification(user_id=asset.created_by, type=NotificationType.approval, asset_id=asset_id))
         creator = db.query(User).filter(User.id == asset.created_by, User.deleted_at.is_(None)).first()
     workspace_name = get_workspace_name(db)
+    email_payload = None if creator is None else {
+        "to_email": creator.email,
+        "reviewer_name": current_user.name,
+        "asset_name": asset.name,
+        "status": "approved",
+        "asset_link": f"{settings.frontend_url}/assets/{asset_id}",
+        "note": body.note,
+        "workspace_name": workspace_name,
+    }
     db.commit()
-    if creator:
-        send_task_safe(
-            send_approval_email,
-            to_email=creator.email,
-            reviewer_name=current_user.name,
-            asset_name=asset.name,
-            status="approved",
-            asset_link=f"{settings.frontend_url}/assets/{asset_id}",
-            note=body.note,
-            workspace_name=workspace_name,
-        )
+    if email_payload is not None:
+        try:
+            send_task_safe(send_approval_email, **email_payload)
+        except RuntimeError:
+            logger.warning("Failed to start approval email dispatch")
 
     return approval
 
@@ -81,18 +86,21 @@ def reject_asset(
         db.add(Notification(user_id=asset.created_by, type=NotificationType.approval, asset_id=asset_id))
         creator = db.query(User).filter(User.id == asset.created_by, User.deleted_at.is_(None)).first()
     workspace_name = get_workspace_name(db)
+    email_payload = None if creator is None else {
+        "to_email": creator.email,
+        "reviewer_name": current_user.name,
+        "asset_name": asset.name,
+        "status": "rejected",
+        "asset_link": f"{settings.frontend_url}/assets/{asset_id}",
+        "note": body.note,
+        "workspace_name": workspace_name,
+    }
     db.commit()
-    if creator:
-        send_task_safe(
-            send_approval_email,
-            to_email=creator.email,
-            reviewer_name=current_user.name,
-            asset_name=asset.name,
-            status="rejected",
-            asset_link=f"{settings.frontend_url}/assets/{asset_id}",
-            note=body.note,
-            workspace_name=workspace_name,
-        )
+    if email_payload is not None:
+        try:
+            send_task_safe(send_approval_email, **email_payload)
+        except RuntimeError:
+            logger.warning("Failed to start approval email dispatch")
 
     return approval
 

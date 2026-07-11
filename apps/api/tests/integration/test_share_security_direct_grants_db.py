@@ -35,6 +35,7 @@ def test_concurrent_direct_shares_create_one_active_grant(
     db.commit()
     monkeypatch.setattr(share, "send_task_safe", lambda *args, **kwargs: None)
     session_factory = sessionmaker(bind=migrated_engine)
+    route_start_gate = Barrier(2, timeout=1)
     vulnerable_read_gate = Barrier(2, timeout=1)
 
     def gate_vulnerable_read(_conn, _cursor, statement, _parameters, _context, _executemany) -> None:
@@ -50,6 +51,7 @@ def test_concurrent_direct_shares_create_one_active_grant(
     def invoke(permission: SharePermission) -> None:
         session = session_factory()
         try:
+            route_start_gate.wait()
             actor = SimpleNamespace(id=owner.id, name=owner.name, email=owner.email)
             body = DirectShareCreate(user_id=recipient.id, permission=permission)
             if target_kind == "asset":
@@ -65,6 +67,8 @@ def test_concurrent_direct_shares_create_one_active_grant(
     finally:
         event.remove(migrated_engine, "after_cursor_execute", gate_vulnerable_read)
 
+    if not vulnerable_read_gate.broken:
+        pytest.fail("concurrent direct grants did not serialize before vulnerable read")
     db.expire_all()
     query = db.query(AssetShare).filter(
         AssetShare.shared_with_user_id == recipient.id,
@@ -156,6 +160,4 @@ def test_folder_share_revocation_removes_semantic_duplicates(db, make_project, m
         AssetShare.deleted_at.is_(None),
     ).count()
     assert active == 0
-
-
 

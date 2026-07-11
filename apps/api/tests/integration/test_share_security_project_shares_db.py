@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from threading import Barrier, Event
+
+from sqlalchemy import text
+
 from ._share_security_support import (
     AssetShare,
     DirectShareCreate,
@@ -14,6 +18,7 @@ from ._share_security_support import (
     _add_member,
     _assert_forbidden,
     datetime,
+    event,
     pytest,
     sessionmaker,
     share,
@@ -183,6 +188,24 @@ def test_concurrent_project_direct_shares_create_one_membership_without_downgrad
     db.commit()
     monkeypatch.setattr(share, "send_task_safe", lambda *args, **kwargs: None)
     session_factory = sessionmaker(bind=migrated_engine)
+    lock_attempt_gate = Barrier(2, timeout=5)
+    winner_acquired = Event()
+    release_winner = Event()
+    original_lock = share._lock_active_project
+
+    def align_project_lock_attempts(_conn, _cursor, statement, _parameters, _context, _executemany) -> None:
+        if statement.lstrip().startswith("SELECT projects.") and "FOR UPDATE" in statement:
+            lock_attempt_gate.wait()
+
+    def hold_first_project_lock(session, project_id):
+        locked_project = original_lock(session, project_id)
+        winner_acquired.set()
+        if not release_winner.wait(timeout=5):
+            raise AssertionError("project lock winner was not released")
+        return locked_project
+
+    event.listen(migrated_engine, "before_cursor_execute", align_project_lock_attempts)
+    monkeypatch.setattr(share, "_lock_active_project", hold_first_project_lock)
 
     def invoke(permission: SharePermission) -> None:
         session = session_factory()
@@ -197,13 +220,30 @@ def test_concurrent_project_direct_shares_create_one_membership_without_downgrad
         finally:
             session.close()
 
-    with ThreadPoolExecutor(max_workers=2) as pool:
-        list(pool.map(invoke, (SharePermission.approve, SharePermission.view)))
+    try:
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            futures = [pool.submit(invoke, permission) for permission in (SharePermission.approve, SharePermission.view)]
+            if not winner_acquired.wait(timeout=5):
+                pytest.fail("no project lock winner acquired within timeout")
+            with migrated_engine.connect() as connection:
+                for _attempt in range(100):
+                    lock_waiters = connection.execute(text(
+                        "SELECT count(*) FROM pg_stat_activity "
+                        "WHERE datname = current_database() AND wait_event_type = 'Lock' "
+                        "AND query LIKE '%FROM projects%' AND query LIKE '%FOR UPDATE%'"
+                    )).scalar_one()
+                    if lock_waiters:
+                        break
+                if lock_waiters != 1:
+                    pytest.fail(f"expected one PostgreSQL project-row lock waiter, got {lock_waiters}")
+            release_winner.set()
+            for future in futures:
+                future.result(timeout=5)
+    finally:
+        release_winner.set()
+        event.remove(migrated_engine, "before_cursor_execute", align_project_lock_attempts)
 
     db.expire_all()
     memberships = db.query(ProjectMember).filter_by(project_id=project.id, user_id=recipient.id).all()
     assert len(memberships) == 1
     assert memberships[0].role == ProjectRole.reviewer
-
-
-
