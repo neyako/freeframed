@@ -8,7 +8,11 @@ import uuid
 from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
+import pytest
+from sqlalchemy.exc import IntegrityError
+
 from apps.api.models.project import Project, ProjectMember, ProjectType, ProjectRole
+from apps.api.routers.projects import get_or_create_quick_share_project
 
 
 def _mock_project(
@@ -77,111 +81,70 @@ def test_create_project(client, auth_headers, mock_db, test_user):
     assert resp.json()["name"] == "Test Project"
 
 
-def test_quick_share_returns_existing_project(client, auth_headers, mock_db, test_user):
+def test_quick_share_returns_existing_owned_project_unchanged(mock_db, test_user):
     org_id = uuid.uuid4()
-    proj = _mock_project(org_id, uuid.uuid4(), "Quick Shares")
+    proj = _mock_project(org_id, test_user.id, "Quick Shares")
     proj.is_quick_share = True
+
     mock_db.order_by.return_value = mock_db
-    mock_db.first.side_effect = [proj, None]
+    mock_db.first.return_value = proj
 
-    resp = client.post("/projects/quick-share", headers=auth_headers)
+    result = get_or_create_quick_share_project(db=mock_db, current_user=test_user)
 
-    assert resp.status_code == 200
-    assert resp.json()["name"] == "Quick Shares"
-    assert resp.json()["is_quick_share"] is True
-    added_member = next(
-        call.args[0]
-        for call in mock_db.add.call_args_list
-        if isinstance(call.args[0], ProjectMember)
-    )
-    assert added_member.project_id == proj.id
-    assert added_member.user_id == test_user.id
-    assert added_member.role == ProjectRole.editor
-    mock_db.commit.assert_called_once()
-
-
-def test_quick_share_existing_project_does_not_duplicate_member(
-    client, auth_headers, mock_db, test_user
-):
-    org_id = uuid.uuid4()
-    proj = _mock_project(org_id, uuid.uuid4(), "Quick Shares")
-    proj.is_quick_share = True
-    member = _mock_project_member(proj.id, test_user.id, ProjectRole.editor)
-    mock_db.order_by.return_value = mock_db
-    mock_db.first.side_effect = [proj, member]
-
-    resp = client.post("/projects/quick-share", headers=auth_headers)
-
-    assert resp.status_code == 200
-    assert resp.json()["name"] == "Quick Shares"
-    assert resp.json()["is_quick_share"] is True
-    assert mock_db.first.call_count == 2
-    added_members = [
-        call.args[0]
-        for call in mock_db.add.call_args_list
-        if isinstance(call.args[0], ProjectMember)
-    ]
-    assert added_members == []
+    assert result is proj
+    assert mock_db.first.call_count == 1
+    mock_db.add.assert_not_called()
     mock_db.commit.assert_not_called()
 
-
-def test_quick_share_reactivates_soft_deleted_member(
-    client, auth_headers, mock_db, test_user
-):
-    org_id = uuid.uuid4()
-    proj = _mock_project(org_id, uuid.uuid4(), "Quick Shares")
-    proj.is_quick_share = True
-    member = _mock_project_member(proj.id, test_user.id, ProjectRole.editor)
-    member.deleted_at = datetime.now(timezone.utc)
-    mock_db.order_by.return_value = mock_db
-    mock_db.first.side_effect = [proj, member]
-
-    resp = client.post("/projects/quick-share", headers=auth_headers)
-
-    assert resp.status_code == 200
-    added_members = [
-        call.args[0]
-        for call in mock_db.add.call_args_list
-        if isinstance(call.args[0], ProjectMember)
-    ]
-    assert added_members == []
-    assert member.deleted_at is None
-    assert member.role == ProjectRole.editor
-    mock_db.commit.assert_called_once()
-
-
-def test_quick_share_creates_project(client, auth_headers, mock_db, test_user):
+def test_quick_share_creates_owned_project_and_owner_membership(mock_db, test_user):
     mock_db.order_by.return_value = mock_db
     mock_db.first.return_value = None
 
-    def _refresh_side_effect(obj):
-        obj.id = uuid.uuid4()
-        obj.created_at = datetime.now(timezone.utc)
-        obj.deleted_at = None
-        obj.description = None
-        obj.project_type = ProjectType.personal
-        obj.is_public = False
-        obj.is_quick_share = True
-        obj.poster_url = None
-        obj.created_by = test_user.id
-        obj.name = "Quick Shares"
+    result = get_or_create_quick_share_project(db=mock_db, current_user=test_user)
 
-    mock_db.refresh.side_effect = _refresh_side_effect
-
-    resp = client.post("/projects/quick-share", headers=auth_headers)
-
-    assert resp.status_code == 200
-    assert resp.json()["name"] == "Quick Shares"
-    assert resp.json()["is_quick_share"] is True
     added_project = next(
         call.args[0] for call in mock_db.add.call_args_list if isinstance(call.args[0], Project)
     )
     added_member = next(
         call.args[0] for call in mock_db.add.call_args_list if isinstance(call.args[0], ProjectMember)
     )
+    assert result is added_project
     assert added_project.is_quick_share is True
+    assert added_project.created_by == test_user.id
+    assert added_member.project_id == added_project.id
     assert added_member.user_id == test_user.id
     assert added_member.role == ProjectRole.owner
+
+
+def test_quick_share_integrity_error_rolls_back_and_returns_owned_winner(
+    mock_db, test_user
+):
+    winner = _mock_project(uuid.uuid4(), test_user.id, "Quick Shares")
+    winner.is_quick_share = True
+    mock_db.order_by.return_value = mock_db
+    mock_db.first.side_effect = [None, winner]
+    mock_db.flush.side_effect = IntegrityError("insert", {}, RuntimeError("duplicate"))
+
+    result = get_or_create_quick_share_project(db=mock_db, current_user=test_user)
+
+    assert result is winner
+    mock_db.rollback.assert_called_once()
+    mock_db.commit.assert_not_called()
+
+
+def test_quick_share_unexpected_integrity_error_without_owned_winner_is_raised(
+    mock_db, test_user
+):
+    error = IntegrityError("insert", {}, RuntimeError("unexpected"))
+    mock_db.order_by.return_value = mock_db
+    mock_db.first.side_effect = [None, None]
+    mock_db.flush.side_effect = error
+
+    with pytest.raises(IntegrityError) as raised:
+        get_or_create_quick_share_project(db=mock_db, current_user=test_user)
+
+    assert raised.value is error
+    mock_db.rollback.assert_called_once()
 
 
 def test_list_projects(client, auth_headers, mock_db, test_user):

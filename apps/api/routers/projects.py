@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 import uuid
 from datetime import datetime, timezone
 from ..database import get_db
@@ -40,6 +41,41 @@ def _require_project_owner(db: Session, project_id: uuid.UUID, user: User) -> Pr
         raise HTTPException(status_code=403, detail="Project owner access required")
     return member
 
+def _find_owned_active_quick_share(db: Session, creator_id: uuid.UUID) -> Project | None:
+    return db.query(Project).filter(
+        Project.is_quick_share.is_(True),
+        Project.created_by == creator_id,
+        Project.deleted_at.is_(None),
+    ).first()
+
+def _get_active_project_for_update(db: Session, project_id: uuid.UUID) -> Project:
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.deleted_at.is_(None),
+    ).with_for_update().first()
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return project
+
+def _guard_active_owner(
+    db: Session,
+    project_id: uuid.UUID,
+    member: ProjectMember,
+    requested_role: ProjectRole | None,
+) -> None:
+    if member.role != ProjectRole.owner or requested_role == ProjectRole.owner:
+        return
+    owner_count = db.query(func.count(ProjectMember.id)).filter(
+        ProjectMember.project_id == project_id,
+        ProjectMember.role == ProjectRole.owner,
+        ProjectMember.deleted_at.is_(None),
+    ).scalar() or 0
+    if owner_count <= 1:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Project must have at least one active owner",
+        )
+
 @router.post("", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
 def create_project(body: ProjectCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     project = Project(
@@ -58,43 +94,29 @@ def create_project(body: ProjectCreate, db: Session = Depends(get_db), current_u
 
 @router.post("/quick-share", response_model=ProjectResponse, status_code=status.HTTP_200_OK)
 def get_or_create_quick_share_project(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    project = db.query(Project).filter(
-        Project.is_quick_share.is_(True),
-        Project.deleted_at.is_(None),
-    ).order_by(Project.created_at.asc()).first()
+    project = _find_owned_active_quick_share(db, current_user.id)
     if project is not None:
-        member = db.query(ProjectMember).filter(
-            ProjectMember.project_id == project.id,
-            ProjectMember.user_id == current_user.id,
-        ).first()
-        if member is None:
-            db.add(
-                ProjectMember(
-                    project_id=project.id,
-                    user_id=current_user.id,
-                    role=ProjectRole.editor,
-                )
-            )
-            db.commit()
-        elif member.deleted_at is not None:
-            # Reactivate soft-deleted membership (unique constraint forbids a second row)
-            member.deleted_at = None
-            member.role = ProjectRole.editor
-            db.commit()
         return project
 
-    project = Project(
-        name="Quick Shares",
-        description=None,
-        project_type=ProjectType.personal,
-        created_by=current_user.id,
-        is_quick_share=True,
-    )
-    db.add(project)
-    db.flush()
-    member = ProjectMember(project_id=project.id, user_id=current_user.id, role=ProjectRole.owner)
-    db.add(member)
-    db.commit()
+    try:
+        project = Project(
+            name="Quick Shares",
+            description=None,
+            project_type=ProjectType.personal,
+            created_by=current_user.id,
+            is_quick_share=True,
+        )
+        db.add(project)
+        db.flush()
+        member = ProjectMember(project_id=project.id, user_id=current_user.id, role=ProjectRole.owner)
+        db.add(member)
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        winner = _find_owned_active_quick_share(db, current_user.id)
+        if winner is None:
+            raise
+        return winner
     db.refresh(project)
     return project
 
@@ -323,11 +345,12 @@ def add_project_member(project_id: uuid.UUID, body: AddProjectMemberRequest, db:
 
 @router.patch("/{project_id}/members/{user_id}", response_model=ProjectMemberResponse)
 def update_project_member(project_id: uuid.UUID, user_id: uuid.UUID, body: UpdateProjectMemberRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    _get_project(db, project_id)
+    _get_active_project_for_update(db, project_id)
     _require_project_owner(db, project_id, current_user)
     member = db.query(ProjectMember).filter(ProjectMember.project_id == project_id, ProjectMember.user_id == user_id, ProjectMember.deleted_at.is_(None)).first()
     if not member:
         raise HTTPException(status_code=404, detail="Member not found")
+    _guard_active_owner(db, project_id, member, body.role)
     member.role = body.role
     db.commit()
     db.refresh(member)
@@ -335,11 +358,12 @@ def update_project_member(project_id: uuid.UUID, user_id: uuid.UUID, body: Updat
 
 @router.delete("/{project_id}/members/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 def remove_project_member(project_id: uuid.UUID, user_id: uuid.UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    _get_project(db, project_id)
+    _get_active_project_for_update(db, project_id)
     _require_project_owner(db, project_id, current_user)
     member = db.query(ProjectMember).filter(ProjectMember.project_id == project_id, ProjectMember.user_id == user_id, ProjectMember.deleted_at.is_(None)).first()
     if not member:
         raise HTTPException(status_code=404, detail="Member not found")
+    _guard_active_owner(db, project_id, member, None)
     member.deleted_at = datetime.now(timezone.utc)
     db.commit()
 
