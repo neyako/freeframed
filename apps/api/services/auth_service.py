@@ -78,14 +78,31 @@ def get_active_refresh_token(db: Session, token: str) -> RefreshToken | None:
 
 
 def rotate_refresh_token(db: Session, token: str) -> tuple[uuid.UUID, str] | None:
-    token_row = get_active_refresh_token(db, token)
-    if not token_row:
+    payload = decode_token(token)
+    if not payload or payload.get("type") != "refresh":
+        return None
+    try:
+        payload_user_id = uuid.UUID(payload["sub"])
+        uuid.UUID(payload["jti"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    token_row = db.query(RefreshToken).filter(
+        RefreshToken.token_hash == _hash_token(token),
+        RefreshToken.revoked_at.is_(None),
+    ).with_for_update().first()
+    now = datetime.now(timezone.utc)
+    if (
+        not token_row
+        or token_row.revoked_at is not None
+        or token_row.expires_at < now
+        or token_row.user_id != payload_user_id
+    ):
         return None
     new_token = issue_refresh_token(db, token_row.user_id)
     new_payload = decode_token(new_token)
     if not new_payload:
         return None
-    token_row.revoked_at = datetime.now(timezone.utc)
+    token_row.revoked_at = now
     token_row.replaced_by_id = uuid.UUID(new_payload["jti"])
     return token_row.user_id, new_token
 

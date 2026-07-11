@@ -4,7 +4,7 @@ import uuid
 import secrets
 from datetime import datetime, timezone, timedelta
 from ..database import get_db
-from ..schemas.auth import UserResponse, InviteRequest, UpdateProfileRequest
+from ..schemas.auth import AdminUserResponse, UserResponse, InviteRequest, UpdateProfileRequest
 from ..models.user import User, UserStatus
 from ..middleware.auth import get_current_user
 from ..services.auth_service import hash_password, get_user_by_email, revoke_user_refresh_tokens
@@ -52,7 +52,7 @@ def require_admin(current_user: User = Depends(get_current_user)) -> User:
         raise HTTPException(status_code=403, detail="Admin access required")
     return current_user
 
-@router.post("/invite", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/invite", response_model=AdminUserResponse, status_code=status.HTTP_201_CREATED)
 def invite_user(body: InviteRequest, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
     # Look up including soft-deleted rows: the unique email constraint still
     # holds them, so a deleted user must be resurrected, not re-inserted.

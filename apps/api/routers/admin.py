@@ -9,7 +9,7 @@ from ..database import get_db
 from ..middleware.auth import get_current_user
 from ..models.user import User, UserStatus
 from ..schemas.branding import WorkspaceResponse, WorkspaceUpdate
-from ..schemas.auth import UserResponse, UpdateUserRoleRequest
+from ..schemas.auth import AdminUserResponse, UserResponse, UpdateUserRoleRequest
 from ..services.auth_service import revoke_user_refresh_tokens
 from ..services.email_service import email_service
 from ..services.workspace_service import get_workspace_name, get_workspace_settings
@@ -19,7 +19,7 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 
 # ── Endpoints ──────────────────────────────────────────────────────────────────
 
-@router.get("/users", response_model=list[UserResponse])
+@router.get("/users", response_model=list[AdminUserResponse])
 def list_all_users(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),

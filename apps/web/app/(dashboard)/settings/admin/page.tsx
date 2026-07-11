@@ -12,7 +12,7 @@ import { Avatar } from "@/components/shared/avatar";
 import { EmptyState } from "@/components/shared/empty-state";
 import { useAuthStore } from "@/stores/auth-store";
 import { useRouter } from "next/navigation";
-import type { User, UserStatus } from "@/types";
+import type { AdminUser, UserStatus } from "@/types";
 
 function BulkInviteDialog() {
   const [open, setOpen] = React.useState(false);
@@ -167,9 +167,9 @@ export default function AdminPage() {
   const { user, isSuperAdmin } = useAuthStore();
   const router = useRouter();
 
-  const { data: usersResp, isLoading: loadingUsers } = useSWR<User[]>(
+  const { data: usersResp, isLoading: loadingUsers } = useSWR<AdminUser[]>(
     isSuperAdmin ? "/admin/users" : null,
-    () => api.get<User[]>("/admin/users"),
+    () => api.get<AdminUser[]>("/admin/users"),
   );
 
   React.useEffect(() => {
@@ -200,7 +200,7 @@ export default function AdminPage() {
     }
   };
 
-  const handleDelete = async (u: User) => {
+  const handleDelete = async (u: AdminUser) => {
     const prompt =
       u.status === "pending_invite"
         ? `Revoke the invite for ${u.email}? The invite link will stop working.`
@@ -218,7 +218,7 @@ export default function AdminPage() {
 
   const [copiedId, setCopiedId] = React.useState<string | null>(null);
 
-  const handleCopyInviteLink = (u: User) => {
+  const handleCopyInviteLink = (u: AdminUser) => {
     if (!u.invite_token) return;
     const link = `${window.location.origin}/invite/${u.invite_token}`;
     navigator.clipboard.writeText(link);
@@ -310,7 +310,7 @@ export default function AdminPage() {
                 </tr>
               </thead>
               <tbody>
-                {usersResp.map((u: User) => (
+                {usersResp.map((u: AdminUser) => (
                   <tr
                     key={u.id}
                     className="border-b border-border last:border-0 hover:bg-bg-tertiary transition-colors"

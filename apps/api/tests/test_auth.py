@@ -12,6 +12,9 @@ import uuid
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
+import pytest
+
+from apps.api.config import settings
 from apps.api.models.user import UserStatus
 
 
@@ -21,17 +24,25 @@ _FAKE_HASH = "$2b$12$fakehashforteststhatisnotrealatall00000000000000000000"
 def _mock_user(
     email: str = "test@example.com",
     password_hash: str = _FAKE_HASH,
+    *,
+    email_verified: bool = True,
+    status: UserStatus = UserStatus.active,
 ) -> MagicMock:
     u = MagicMock()
     u.id = uuid.uuid4()
     u.email = email
     u.name = "Test User"
     u.password_hash = password_hash
-    u.status = UserStatus.active
+    u.status = status
     u.avatar_url = None
     u.created_at = datetime.now(timezone.utc)
     u.deleted_at = None
+    u.email_verified = email_verified
+    u.is_superadmin = False
+    u.preferences = {}
     u.invited_by_id = None
+    u.invite_token = None
+    u.invite_token_expires_at = None
     return u
 
 
@@ -39,55 +50,67 @@ def _mock_user(
 _HASH_PATCH = "apps.api.routers.auth.hash_password"
 _VERIFY_PATCH = "apps.api.routers.auth.verify_password"
 _FORGOT_PASSWORD_DETAIL = "If that email is registered, a reset link has been sent."
+_INVITE_ONLY_DETAIL = "Registration is invite-only"
 
 
-def test_register_success(client, mock_db):
-    """POST /auth/register — happy path creates a user and returns 201."""
-    mock_db.first.return_value = None  # no duplicate email
+def _assert_auth_cookies(response) -> None:
+    cookies = response.headers.get_list("set-cookie")
+    assert len(cookies) == 2
+    for cookie_name in ("ff_access_token", "ff_refresh_token"):
+        cookie = next(value for value in cookies if value.startswith(f"{cookie_name}="))
+        assert "HttpOnly" in cookie
+        assert "SameSite=lax" in cookie
+        if settings.auth_cookie_secure:
+            assert "Secure" in cookie
+        else:
+            assert "Secure" not in cookie
 
-    def _refresh_side_effect(obj):
-        obj.id = uuid.uuid4()
-        obj.created_at = datetime.now(timezone.utc)
-        obj.deleted_at = None
-        obj.avatar_url = None
-        obj.status = UserStatus.active
-        obj.is_superadmin = False
-        obj.email_verified = False
-        obj.preferences = {}
-        obj.invite_token = None
 
-    mock_db.refresh.side_effect = _refresh_side_effect
+@pytest.mark.parametrize("email_exists", [False, True])
+def test_register_is_invite_only_without_touching_user_data(client, mock_db, email_exists):
+    existing = _mock_user("duplicate@example.com") if email_exists else None
 
-    with patch(_HASH_PATCH, return_value=_FAKE_HASH):
+    def populate_registration_fields(user) -> None:
+        user.id = uuid.uuid4()
+        user.avatar_url = None
+        user.email_verified = False
+        user.is_superadmin = False
+        user.preferences = {}
+
+    mock_db.refresh.side_effect = populate_registration_fields
+
+    with (
+        patch("apps.api.routers.auth.get_user_by_email", return_value=existing) as get_user,
+        patch(_HASH_PATCH, return_value=_FAKE_HASH) as hash_password,
+    ):
         resp = client.post(
             "/auth/register",
-            json={"email": "newuser@example.com", "name": "New User", "password": "securepassword"},
+            json={
+                "email": "synthetic@example.com",
+                "name": "Synthetic User",
+                "password": "fixed-test-password",
+            },
         )
 
-    assert resp.status_code == 201
-    assert resp.json()["email"] == "newuser@example.com"
-
-
-def test_register_duplicate_email(client, mock_db):
-    """POST /auth/register — returns 400 when email already exists."""
-    existing = _mock_user("dup@example.com")
-    mock_db.first.return_value = existing
-
-    with patch(_HASH_PATCH, return_value=_FAKE_HASH):
-        resp = client.post(
-            "/auth/register",
-            json={"email": "dup@example.com", "name": "A", "password": "pw123456"},
-        )
-
-    assert resp.status_code == 400
+    assert resp.status_code == 403
+    assert resp.json() == {"detail": _INVITE_ONLY_DETAIL}
+    get_user.assert_not_called()
+    hash_password.assert_not_called()
+    mock_db.add.assert_not_called()
+    mock_db.flush.assert_not_called()
+    mock_db.commit.assert_not_called()
+    mock_db.refresh.assert_not_called()
 
 
 def test_login_success(client, mock_db):
-    """POST /auth/login — happy path returns access_token."""
     user = _mock_user("login@example.com")
     mock_db.first.return_value = user
 
-    with patch(_VERIFY_PATCH, return_value=True):
+    with (
+        patch(_VERIFY_PATCH, return_value=True),
+        patch("apps.api.routers.auth.create_access_token", return_value="fixed-access-token"),
+        patch("apps.api.routers.auth.issue_refresh_token", return_value="fixed-refresh-token"),
+    ):
         resp = client.post(
             "/auth/login",
             json={"email": "login@example.com", "password": "pw123456"},
@@ -97,6 +120,50 @@ def test_login_success(client, mock_db):
     data = resp.json()
     assert "access_token" in data
     assert "refresh_token" in data
+    _assert_auth_cookies(resp)
+    mock_db.commit.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    ("user_status", "email_verified"),
+    [
+        (UserStatus.active, False),
+        (UserStatus.pending_verification, False),
+        (UserStatus.pending_invite, False),
+        (UserStatus.deactivated, True),
+    ],
+)
+def test_login_rejects_accounts_outside_active_verified_state(
+    client,
+    mock_db,
+    user_status,
+    email_verified,
+):
+    user = _mock_user(
+        status=user_status,
+        email_verified=email_verified,
+    )
+    mock_db.first.return_value = user
+
+    with (
+        patch(_VERIFY_PATCH, return_value=True),
+        patch(
+            "apps.api.routers.auth.issue_refresh_token",
+            return_value="fixed-refresh-token",
+        ) as issue_refresh,
+        patch("apps.api.routers.auth.set_auth_cookies") as set_cookies,
+    ):
+        resp = client.post(
+            "/auth/login",
+            json={"email": user.email, "password": "correct-password"},
+        )
+
+    assert resp.status_code == 401
+    assert resp.json() == {"detail": "Invalid credentials"}
+    assert resp.headers.get_list("set-cookie") == []
+    issue_refresh.assert_not_called()
+    set_cookies.assert_not_called()
+    mock_db.commit.assert_not_called()
 
 
 def test_login_wrong_password(client, mock_db):
@@ -222,6 +289,39 @@ def test_reset_password_happy_path_sets_password_and_logs_in(client, mock_db):
     mock_db.commit.assert_called_once()
 
 
+def test_accept_invite_activates_verified_user_and_logs_in(client, mock_db):
+    user = _mock_user(
+        "invited@example.com",
+        password_hash=None,
+        status=UserStatus.pending_invite,
+        email_verified=False,
+    )
+    user.invite_token = "fixed-invite-token"
+    user.invite_token_expires_at = datetime.now(timezone.utc).replace(year=2099)
+    mock_db.first.return_value = user
+
+    with (
+        patch(_HASH_PATCH, return_value="fixed-password-hash"),
+        patch("apps.api.routers.auth.revoke_user_refresh_tokens") as revoke_tokens,
+        patch("apps.api.routers.auth.issue_refresh_token", return_value="fixed-refresh-token"),
+        patch("apps.api.routers.auth.create_access_token", return_value="fixed-access-token"),
+    ):
+        resp = client.post(
+            "/auth/accept-invite",
+            json={"token": "fixed-invite-token", "password": "fixed-test-password"},
+        )
+
+    assert resp.status_code == 200
+    assert user.password_hash == "fixed-password-hash"
+    assert user.email_verified is True
+    assert user.status == UserStatus.active
+    assert user.invite_token is None
+    assert user.invite_token_expires_at is None
+    revoke_tokens.assert_called_once_with(mock_db, user.id)
+    mock_db.commit.assert_called_once()
+    _assert_auth_cookies(resp)
+
+
 def test_get_me(client, auth_headers, test_user):
     """GET /auth/me — returns current user profile."""
     resp = client.get("/auth/me", headers=auth_headers)
@@ -231,21 +331,18 @@ def test_get_me(client, auth_headers, test_user):
 
 def test_refresh_token(client, mock_db):
     """POST /auth/refresh — valid refresh token returns new access_token."""
-    from datetime import datetime, timedelta, timezone
-    from unittest.mock import MagicMock
-
-    from apps.api.services.auth_service import create_refresh_token
-
     user = _mock_user("ref@example.com")
-    refresh = create_refresh_token(str(user.id))
-    token_row = MagicMock()
-    token_row.user_id = user.id
-    token_row.expires_at = datetime.now(timezone.utc) + timedelta(days=7)
-    token_row.revoked_at = None
-    # order: stored refresh-token row lookup, then user lookup
-    mock_db.first.side_effect = [token_row, user]
+    mock_db.first.return_value = user
 
-    resp = client.post("/auth/refresh", json={"refresh_token": refresh})
+    with patch(
+        "apps.api.routers.auth.rotate_refresh_token",
+        return_value=(user.id, "fixed-refresh-token"),
+    ):
+        resp = client.post(
+            "/auth/refresh",
+            json={"refresh_token": "fixed-old-refresh-token"},
+        )
+
     assert resp.status_code == 200
     assert "access_token" in resp.json()
 

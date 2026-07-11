@@ -169,21 +169,12 @@ def reset_password(
     )
 
 
-@router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-def register(body: RegisterRequest, db: Session = Depends(get_db)):
-    if get_user_by_email(db, body.email):
-        raise HTTPException(status_code=400, detail="Email already registered")
-    user = User(
-        email=body.email,
-        name=body.name,
-        password_hash=hash_password(body.password),
-        status=UserStatus.active,
-        email_verified=False,
+@router.post("/register")
+def register(_: RegisterRequest):
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Registration is invite-only",
     )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    return user
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -194,7 +185,8 @@ def login(body: LoginRequest, response: Response, db: Session = Depends(get_db))
         not user
         or not user.password_hash
         or not verify_password(body.password, user.password_hash)
-        or user.status == UserStatus.deactivated
+        or user.status != UserStatus.active
+        or user.email_verified is not True
     ):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     access = create_access_token(str(user.id))

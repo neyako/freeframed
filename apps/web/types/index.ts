@@ -51,10 +51,13 @@ export interface User {
   status: UserStatus;
   is_superadmin: boolean;
   email_verified: boolean;
-  invite_token?: string | null;
   preferences: Record<string, unknown>;
   created_at: string;
   deleted_at: string | null;
+}
+
+export interface AdminUser extends User {
+  invite_token: string | null;
 }
 
 export interface Team {
