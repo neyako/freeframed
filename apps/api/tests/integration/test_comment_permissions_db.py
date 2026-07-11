@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from apps.api.models.comment import CommentAttachment
+from apps.api.models.comment import CommentAttachment, CommentReaction
 from apps.api.models.project import ProjectRole
 from apps.api.tests.integration._comment_security_support import (
     comment_security,
@@ -141,3 +141,60 @@ def test_attachment_delete_requires_capability_and_author_or_moderator(
 
     assert response.status_code == expected, response.text
     assert comment_security.s3_delete.call_count == (1 if expected == 204 else 0)
+
+
+@pytest.mark.parametrize(
+    ("actor_name", "expected"),
+    (
+        ("reviewer", 204),
+        ("direct_comment", 204),
+        ("viewer", 403),
+        ("direct_view", 403),
+    ),
+)
+def test_reaction_toggle_removes_only_with_current_capability(
+    comment_security,
+    actor_name: str,
+    expected: int,
+) -> None:
+    comment = target_for(comment_security, actor_name).own[actor_name]
+    reaction = CommentReaction(
+        comment_id=comment.id,
+        user_id=comment_security.actors[actor_name].id,
+        emoji="ok",
+    )
+    comment_security.db.add(reaction)
+    comment_security.db.commit()
+
+    response = dispatch_mutation(comment_security, actor_name, "react")
+
+    assert response.status_code == expected, response.text
+    remaining = comment_security.db.query(CommentReaction).filter(
+        CommentReaction.id == reaction.id,
+    ).first()
+    assert (remaining is None) is (expected == 204)
+
+
+@pytest.mark.parametrize(
+    ("actor_name", "expected"),
+    (
+        ("reviewer", 200),
+        ("direct_comment", 200),
+        ("viewer", 403),
+        ("direct_view", 403),
+    ),
+)
+def test_resolve_toggle_unresolves_only_with_current_capability(
+    comment_security,
+    actor_name: str,
+    expected: int,
+) -> None:
+    comment = target_for(comment_security, actor_name).own[actor_name]
+    comment.resolved = True
+    comment_security.db.commit()
+
+    response = dispatch_mutation(comment_security, actor_name, "resolve")
+
+    assert response.status_code == expected, response.text
+    comment_security.db.refresh(comment)
+    assert comment.resolved is (expected != 200)
