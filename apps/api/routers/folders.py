@@ -1,3 +1,4 @@
+from collections import deque
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
@@ -10,7 +11,7 @@ from ..database import get_db
 from ..middleware.auth import get_current_user
 from ..models.asset import Asset
 from ..models.folder import Folder
-from ..models.project import ProjectRole
+from ..models.project import Project, ProjectRole
 from ..models.user import User
 from ..schemas.folder import (
     AssetMoveRequest,
@@ -45,9 +46,16 @@ def _get_folder(db: Session, folder_id: uuid.UUID) -> Folder:
 def _get_descendant_ids(db: Session, folder_id: uuid.UUID) -> list[uuid.UUID]:
     """Get all descendant folder IDs (BFS)."""
     descendants: list[uuid.UUID] = []
-    queue = [folder_id]
+    queue = deque([folder_id])
+    visited: set[uuid.UUID] = set()
     while queue:
-        current = queue.pop(0)
+        current = queue.popleft()
+        if current in visited:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Folder hierarchy contains a cycle",
+            )
+        visited.add(current)
         children = (
             db.query(Folder.id)
             .filter(Folder.parent_id == current, Folder.deleted_at.is_(None))
@@ -63,9 +71,19 @@ def _get_depth(db: Session, folder_id: Optional[uuid.UUID]) -> int:
     """Count depth from root to folder_id."""
     depth = 0
     current_id = folder_id
+    visited: set[uuid.UUID] = set()
     while current_id:
+        if current_id in visited:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Folder hierarchy contains a cycle",
+            )
+        visited.add(current_id)
         depth += 1
-        folder = db.query(Folder).filter(Folder.id == current_id).first()
+        folder = db.query(Folder.parent_id).filter(
+            Folder.id == current_id,
+            Folder.deleted_at.is_(None),
+        ).first()
         if not folder:
             break
         current_id = folder.parent_id
@@ -98,34 +116,64 @@ def _folder_to_response(db: Session, folder: Folder) -> FolderResponse:
 def _get_descendant_ids_including_deleted(db: Session, folder_id: uuid.UUID) -> list[uuid.UUID]:
     """Get all descendant folder IDs including soft-deleted ones."""
     descendants: list[uuid.UUID] = []
-    queue = [folder_id]
+    queue = deque([folder_id])
+    visited: set[uuid.UUID] = set()
     while queue:
-        current = queue.pop(0)
+        current = queue.popleft()
+        if current in visited:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Folder hierarchy contains a cycle",
+            )
+        visited.add(current)
         children = db.query(Folder.id).filter(Folder.parent_id == current).all()
         for (child_id,) in children:
-            if child_id not in descendants:
-                descendants.append(child_id)
-                queue.append(child_id)
+            descendants.append(child_id)
+            queue.append(child_id)
     return descendants
 
 
-def _max_subtree_depth(db: Session, folder_id: uuid.UUID) -> int:
+def _max_subtree_depth(
+    db: Session,
+    folder_id: uuid.UUID,
+    excluded_ids: set[uuid.UUID] | None = None,
+) -> int:
     """Get the max depth of the subtree rooted at folder_id."""
     max_depth = 0
-    queue: list[tuple[uuid.UUID, int]] = [(folder_id, 0)]
+    queue = deque([(folder_id, 0)])
+    visited: set[uuid.UUID] = set()
+    excluded = excluded_ids or set()
     while queue:
-        current, depth = queue.pop(0)
+        current, depth = queue.popleft()
+        if current in visited:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Folder hierarchy contains a cycle",
+            )
+        visited.add(current)
         children = (
             db.query(Folder.id)
             .filter(Folder.parent_id == current, Folder.deleted_at.is_(None))
             .all()
         )
         for (child_id,) in children:
+            if child_id in excluded:
+                continue
             child_depth = depth + 1
             if child_depth > max_depth:
                 max_depth = child_depth
             queue.append((child_id, child_depth))
     return max_depth
+
+
+def _lock_active_project(db: Session, project_id: uuid.UUID) -> Project:
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.deleted_at.is_(None),
+    ).with_for_update().first()
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return project
 
 
 # ─── CRUD ─────────────────────────────────────────────────────────────────────
@@ -143,6 +191,7 @@ def create_folder(
     current_user: User = Depends(get_current_user),
 ):
     require_project_role(db, project_id, current_user, ProjectRole.editor)
+    _lock_active_project(db, project_id)
 
     # Validate parent exists and belongs to project
     if body.parent_id:
@@ -259,15 +308,15 @@ def update_folder(
     folder = _get_folder(db, folder_id)
     require_project_role(db, folder.project_id, current_user, ProjectRole.editor)
 
-    if body.name is not None:
-        folder.name = body.name
-
     # Handle parent_id move (only if explicitly set)
     if "parent_id" in body.model_fields_set:
+        _lock_active_project(db, folder.project_id)
         new_parent_id = body.parent_id
+        descendants = _get_descendant_ids(db, folder_id)
+        max_subtree = _max_subtree_depth(db, folder_id)
+        depth = 0
         if new_parent_id is not None:
             # Can't move into self or descendant
-            descendants = _get_descendant_ids(db, folder_id)
             if new_parent_id == folder_id or new_parent_id in descendants:
                 raise HTTPException(status_code=400, detail="Cannot move folder into itself or a subfolder")
             parent = _get_folder(db, new_parent_id)
@@ -275,13 +324,15 @@ def update_folder(
                 raise HTTPException(status_code=400, detail="Target folder not in same project")
             # Check depth
             depth = _get_depth(db, new_parent_id)
-            max_subtree = _max_subtree_depth(db, folder_id)
-            if depth + max_subtree + 1 > MAX_FOLDER_DEPTH:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Move would exceed maximum folder depth of {MAX_FOLDER_DEPTH}",
-                )
+        if depth + max_subtree + 1 > MAX_FOLDER_DEPTH:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Move would exceed maximum folder depth of {MAX_FOLDER_DEPTH}",
+            )
         folder.parent_id = new_parent_id
+
+    if body.name is not None:
+        folder.name = body.name
 
     db.commit()
     db.refresh(folder)
@@ -296,6 +347,7 @@ def delete_folder(
 ):
     folder = _get_folder(db, folder_id)
     require_project_role(db, folder.project_id, current_user, ProjectRole.editor)
+    _lock_active_project(db, folder.project_id)
 
     now = datetime.now(timezone.utc)
 
@@ -346,6 +398,7 @@ def bulk_move(
     current_user: User = Depends(get_current_user),
 ):
     require_project_role(db, project_id, current_user, ProjectRole.editor)
+    _lock_active_project(db, project_id)
 
     # Validate target folder
     if body.target_folder_id is not None:
@@ -353,7 +406,7 @@ def bulk_move(
         if target.project_id != project_id:
             raise HTTPException(status_code=400, detail="Target folder not in this project")
 
-    # Move assets
+    assets: list[Asset] = []
     if body.asset_ids:
         assets = (
             db.query(Asset)
@@ -366,17 +419,10 @@ def bulk_move(
         )
         if len(assets) != len(body.asset_ids):
             raise HTTPException(status_code=400, detail="Some assets not found in this project")
-        for a in assets:
-            a.folder_id = body.target_folder_id
 
-    # Move folders
+    moved_folders: list[Folder] = []
     if body.folder_ids:
-        descendants = set()
-        if body.target_folder_id:
-            descendants = set(_get_descendant_ids(db, body.target_folder_id))
-            descendants.add(body.target_folder_id)
-
-        folders = (
+        moved_folders = (
             db.query(Folder)
             .filter(
                 Folder.id.in_(body.folder_ids),
@@ -385,16 +431,33 @@ def bulk_move(
             )
             .all()
         )
-        if len(folders) != len(body.folder_ids):
+        if len(moved_folders) != len(body.folder_ids):
             raise HTTPException(status_code=400, detail="Some folders not found in this project")
 
-        for f in folders:
-            if f.id in descendants or f.id == body.target_folder_id:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Cannot move folder '{f.name}' into itself or a subfolder",
-                )
-            f.parent_id = body.target_folder_id
+    target_depth = _get_depth(db, body.target_folder_id) if body.target_folder_id else 0
+    selected_ids = {folder.id for folder in moved_folders}
+    for folder in moved_folders:
+        descendants = set(_get_descendant_ids(db, folder.id))
+        if body.target_folder_id == folder.id or body.target_folder_id in descendants:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot move folder '{folder.name}' into itself or a subfolder",
+            )
+        subtree_depth = _max_subtree_depth(
+            db,
+            folder.id,
+            selected_ids - {folder.id},
+        )
+        if target_depth + 1 + subtree_depth > MAX_FOLDER_DEPTH:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Move would exceed maximum folder depth of {MAX_FOLDER_DEPTH}",
+            )
+
+    for asset in assets:
+        asset.folder_id = body.target_folder_id
+    for folder in moved_folders:
+        folder.parent_id = body.target_folder_id
 
     db.commit()
     return {"ok": True, "moved_assets": len(body.asset_ids), "moved_folders": len(body.folder_ids)}
@@ -493,6 +556,9 @@ def restore_folder(
         raise HTTPException(status_code=404, detail="Deleted folder not found")
 
     require_project_role(db, folder.project_id, current_user, ProjectRole.editor)
+    _lock_active_project(db, folder.project_id)
+
+    descendant_ids = _get_descendant_ids_including_deleted(db, folder_id)
 
     # If parent folder is deleted, restore to root
     if folder.parent_id:
@@ -506,7 +572,6 @@ def restore_folder(
 
     # Restore folder and all its descendants + their assets
     folder.deleted_at = None
-    descendant_ids = _get_descendant_ids_including_deleted(db, folder_id)
     all_ids = [folder_id] + descendant_ids
 
     db.query(Folder).filter(Folder.id.in_(all_ids)).update(

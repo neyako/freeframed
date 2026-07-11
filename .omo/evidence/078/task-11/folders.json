@@ -1,0 +1,15 @@
+{
+  "scenarios": [
+    {"scenario": "parent_to_child", "status": 400, "unchanged_rows": true, "elapsed_ms": 40, "result": "PASS"},
+    {"scenario": "sibling_folder_assets", "status": 200, "moved_assets": 2, "moved_folders": 1, "elapsed_ms": 8, "result": "PASS"},
+    {"scenario": "child_to_ancestor", "status": 200, "moved_folders": 1, "elapsed_ms": 4, "result": "PASS"},
+    {"scenario": "existing_parent_noop", "status": 200, "moved_folders": 1, "elapsed_ms": 4, "result": "PASS"},
+    {"scenario": "depth_ten", "status": 200, "maximum_depth": 10, "elapsed_ms": 5, "result": "PASS"},
+    {"scenario": "depth_eleven", "status": 400, "unchanged_rows": true, "maximum_depth": 10, "elapsed_ms": 5, "result": "PASS"},
+    {"scenario": "corrupt_patch", "status": 409, "detail": "Folder hierarchy contains a cycle", "unchanged_rows": true, "elapsed_ms": 5, "result": "PASS"},
+    {"scenario": "corrupt_bulk", "status": 409, "detail": "Folder hierarchy contains a cycle", "unchanged_rows": true, "elapsed_ms": 8, "result": "PASS"},
+    {"scenario": "corrupt_delete", "status": 409, "detail": "Folder hierarchy contains a cycle", "unchanged_rows": true, "elapsed_ms": 3, "result": "PASS"},
+    {"scenario": "concurrent_opposite", "concurrency_statuses": [200, 400], "acyclic": true, "maximum_depth": 2, "result": "PASS"}
+  ],
+  "result": "PASS"
+}

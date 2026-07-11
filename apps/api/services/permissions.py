@@ -175,8 +175,13 @@ def get_share_link_project_id(db: Session, link: ShareLink) -> uuid.UUID:
 
 def _is_descendant_of(db: Session, folder_id: uuid.UUID, ancestor_id: uuid.UUID) -> bool:
     current_id = folder_id
-    visited = set()
-    while current_id and current_id not in visited:
+    visited: set[uuid.UUID] = set()
+    while current_id:
+        if current_id in visited:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Folder hierarchy contains a cycle",
+            )
         if current_id == ancestor_id:
             return True
         visited.add(current_id)

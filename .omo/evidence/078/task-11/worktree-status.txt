@@ -1,0 +1,11 @@
+Final pre-commit scope receipt
+
+A  .omo/evidence/078/task-11/folders.json
+A  .omo/evidence/078/task-11/worktree-status.txt
+A  .superpowers/sdd/task-11-report.md
+M  apps/api/routers/folders.py
+M  apps/api/services/permissions.py
+A  apps/api/tests/integration/test_folder_hierarchy_db.py
+A  apps/api/tests/test_folder_hierarchy.py
+
+Classification: every path is explicitly allowed by the Task 11 brief. No frontend, migration, model, schema, share router, comments router, pagination, or unrelated path is present.
