@@ -16,6 +16,11 @@ from apps.api.models.asset import Asset, AssetStatus, AssetType
 from apps.api.models.project import Project, ProjectMember, ProjectRole
 from apps.api.models.user import User
 from apps.api.routers.projects import get_or_create_quick_share_project
+from apps.api.tests.integration.project_test_helpers import (
+    _active_owner_ids,
+    _member,
+    _project_with_owner,
+)
 
 
 @contextmanager
@@ -37,19 +42,6 @@ def _use_user(user: User) -> None:
     app.dependency_overrides[get_current_user] = lambda: user
 
 
-def _member(project: Project, user: User, role: ProjectRole) -> ProjectMember:
-    return ProjectMember(project_id=project.id, user_id=user.id, role=role)
-
-
-def _project_with_owner(db, user: User) -> Project:
-    project = Project(name="Project", created_by=user.id)
-    db.add(project)
-    db.flush()
-    db.add(_member(project, user, ProjectRole.owner))
-    db.flush()
-    return project
-
-
 def _asset(project: Project, user: User, name: str) -> Asset:
     return Asset(
         project_id=project.id,
@@ -58,15 +50,6 @@ def _asset(project: Project, user: User, name: str) -> Asset:
         status=AssetStatus.draft,
         created_by=user.id,
     )
-
-
-def _active_owner_ids(db, project_id: uuid.UUID) -> set[uuid.UUID]:
-    rows = db.query(ProjectMember.user_id).filter(
-        ProjectMember.project_id == project_id,
-        ProjectMember.role == ProjectRole.owner,
-        ProjectMember.deleted_at.is_(None),
-    ).all()
-    return {row[0] for row in rows}
 
 
 def test_quick_share_is_scoped_to_creator_over_http(db, make_user) -> None:

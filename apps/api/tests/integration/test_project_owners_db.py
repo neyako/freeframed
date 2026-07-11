@@ -12,28 +12,11 @@ from apps.api.models.project import Project, ProjectMember, ProjectRole
 from apps.api.models.user import User
 from apps.api.routers.projects import remove_project_member, update_project_member
 from apps.api.schemas.project import UpdateProjectMemberRequest
-
-
-def _member(project: Project, user: User, role: ProjectRole) -> ProjectMember:
-    return ProjectMember(project_id=project.id, user_id=user.id, role=role)
-
-
-def _project_with_owner(db, user: User) -> Project:
-    project = Project(name="Project", created_by=user.id)
-    db.add(project)
-    db.flush()
-    db.add(_member(project, user, ProjectRole.owner))
-    db.flush()
-    return project
-
-
-def _active_owner_ids(db, project_id: uuid.UUID) -> set[uuid.UUID]:
-    rows = db.query(ProjectMember.user_id).filter(
-        ProjectMember.project_id == project_id,
-        ProjectMember.role == ProjectRole.owner,
-        ProjectMember.deleted_at.is_(None),
-    ).all()
-    return {row[0] for row in rows}
+from apps.api.tests.integration.project_test_helpers import (
+    _active_owner_ids,
+    _member,
+    _project_with_owner,
+)
 
 
 def test_singleton_owner_demotion_returns_409_and_preserves_owner(db, make_user) -> None:
