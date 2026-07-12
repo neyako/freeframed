@@ -17,7 +17,7 @@ upstream in mainline FreeFrame.
 - [Docker](https://docs.docker.com/get-docker/) and Docker Compose
 - [Git](https://git-scm.com/)
 - [Node.js 20+](https://nodejs.org/) and pnpm-10 (matches CI; optional, for running frontend outside Docker)
-- [Python 3.11+](https://python.org/) (optional, for running backend outside Docker)
+- [Python 3.12](https://python.org/) (optional, for running backend outside Docker)
 
 ### Getting Started
 
