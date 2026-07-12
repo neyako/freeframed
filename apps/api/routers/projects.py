@@ -374,6 +374,11 @@ def list_project_members(project_id: uuid.UUID, db: Session = Depends(get_db), c
 def add_project_member(project_id: uuid.UUID, body: AddProjectMemberRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     _get_project(db, project_id)
     _require_project_owner(db, project_id, current_user)
+    target_user = db.query(User).filter(
+        User.id == body.user_id, User.deleted_at.is_(None)
+    ).first()
+    if target_user is None:
+        raise HTTPException(status_code=404, detail="User not found")
     existing = db.query(ProjectMember).filter(ProjectMember.project_id == project_id, ProjectMember.user_id == body.user_id).first()
     if existing:
         if existing.deleted_at is None:
@@ -392,17 +397,15 @@ def add_project_member(project_id: uuid.UUID, body: AddProjectMemberRequest, db:
 
     # Send project added email (for both new and reactivated members)
     project = _get_project(db, project_id)
-    added_user = db.query(User).filter(User.id == body.user_id).first()
-    if added_user:
-        project_link = f"{settings.frontend_url}/projects/{project_id}"
-        send_task_safe(send_project_added_email,
-            to_email=added_user.email,
-            adder_name=current_user.name,
-            project_name=project.name,
-            project_link=project_link,
-            role=body.role.value if body.role else None,
-            workspace_name=get_workspace_name(db),
-        )
+    project_link = f"{settings.frontend_url}/projects/{project_id}"
+    send_task_safe(send_project_added_email,
+        to_email=target_user.email,
+        adder_name=current_user.name,
+        project_name=project.name,
+        project_link=project_link,
+        role=body.role.value if body.role else None,
+        workspace_name=get_workspace_name(db),
+    )
 
     return member
 

@@ -5,6 +5,8 @@ import secrets
 from datetime import datetime, timezone, timedelta
 from ..database import get_db
 from ..schemas.auth import AdminUserResponse, UserResponse, InviteRequest, UpdateProfileRequest
+from ..models.project import ProjectMember
+from ..models.share import AssetShare
 from ..models.user import User, UserStatus
 from ..middleware.auth import get_current_user
 from ..services.auth_service import hash_password, get_user_by_email, revoke_user_refresh_tokens
@@ -145,5 +147,14 @@ def delete_user(user_id: uuid.UUID, db: Session = Depends(get_db), _: User = Dep
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     revoke_user_refresh_tokens(db, user.id)
-    user.deleted_at = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc)
+    user.deleted_at = now
+    db.query(ProjectMember).filter(
+        ProjectMember.user_id == user.id,
+        ProjectMember.deleted_at.is_(None),
+    ).update({"deleted_at": now}, synchronize_session="fetch")
+    db.query(AssetShare).filter(
+        AssetShare.shared_with_user_id == user.id,
+        AssetShare.deleted_at.is_(None),
+    ).update({"deleted_at": now}, synchronize_session="fetch")
     db.commit()

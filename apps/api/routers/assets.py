@@ -387,6 +387,13 @@ def update_assignment(
         raise HTTPException(status_code=404, detail="Asset not found")
     require_project_role(db, asset.project_id, current_user, ProjectRole.editor)
 
+    if "assignee_id" in body.model_fields_set and body.assignee_id is not None:
+        assignee = db.query(User).filter(
+            User.id == body.assignee_id, User.deleted_at.is_(None)
+        ).first()
+        if assignee is None:
+            raise HTTPException(status_code=404, detail="User not found")
+
     if "assignee_id" in body.model_fields_set:
         asset.assignee_id = body.assignee_id
     if "due_date" in body.model_fields_set:

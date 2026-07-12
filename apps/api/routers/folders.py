@@ -461,6 +461,7 @@ def move_asset(
         raise HTTPException(status_code=404, detail="Asset not found")
 
     require_project_role(db, asset.project_id, current_user, ProjectRole.editor)
+    _lock_active_project(db, asset.project_id)
 
     if body.folder_id is not None:
         target = _get_folder(db, body.folder_id)
