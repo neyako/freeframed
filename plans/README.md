@@ -525,6 +525,92 @@ Follow-up branch `fix/round9-followups` stack (cherry-pick onto main after
   writing them first would risk rework. The 4-screen spec (`app-mobile.dc.html`)
   is captured in the design project and summarized in 068's "Why this matters".
 
+## Round 10 — re-audit: security, perf, deps, direction (added 2026-07-12, planned at `96b6644`)
+
+Full re-review (standard depth, 4 parallel subagent auditors + advisor vetting;
+every table row re-verified against the code by the advisor before planning).
+Context: rounds 1–9 all DONE and merged; the round-4 deferred findings mostly
+closed in the meantime (guest comment visibility fixed `a42310f`, S3 public-read
+policy gone, transcode SSE wired `c66dd74`). 17 confirmed findings; the
+maintainer selected 4 fix/feature bundles + the advisor-recommended big ticket.
+
+| Plan | Title | Findings | Priority | Effort | Depends on | Status |
+|------|-------|----------|----------|--------|------------|--------|
+| 080 | User-lifecycle authz cleanup — revoke ProjectMember/AssetShare on user delete; active-user checks in add_project_member/update_assignment; move_asset project lock | delete_user leaves grants live, re-invite resurrects same id with all access | P1 | S–M | — | TODO |
+| 081 | Dependency + release-gate hygiene — python-multipart 0.0.32, fabric lockfile ≥7.4.0, API image Python 3.12, release.yml Postgres service + TEST_DATABASE_URL + pass-count floor | 8 python-multipart advisories; fabric XSS; CI-3.12/ship-3.11 skew; release gate silently skips all integration tests | P1 | S | — | TODO |
+| 082 | Batch guest share listing + list_folders queries | public `/share/{token}/assets` ≈200–400 queries/page; list_folders common branch 2 queries/folder | P2 | M | 080 (order only — both edit folders.py) | TODO |
+| 083 | Next.js 15 migration spike — inventory breakage, produce migration plan | next 14.2.35 = last 14.x; 6 HIGH advisories fixed only in 15.x | P2 | M (spike) | — | TODO |
+| 084 | Storage reclamation — empty-trash endpoint + weekly purge task + `delete_prefix` S3 helper | soft-delete never frees MinIO disk; no purge path exists at all | P2 | M | 082 (order only — both edit folders.py) | TODO |
+
+### Recommended execution order (round 10)
+
+1. **081** — smallest, fixes the release gate everything else wants honest.
+2. **080** — P1 security fix.
+3. **082** — after 080 (folders.py order).
+4. **084** — after 082 (folders.py order). First hard-delete path — review carefully.
+5. **083** — spike, file-disjoint, any time (even parallel with 080–082).
+
+### Dependency notes (round 10)
+
+- 080 → 082 → 084 all touch `apps/api/routers/folders.py` (different
+  functions) — execute sequentially, never in parallel.
+- 082 and the deferred share.py split conflict by construction; the split
+  stays deferred until 082 lands.
+- 083 is a throwaway-branch spike; nothing merges from it.
+
+### Findings confirmed but NOT planned this round (plan on request)
+
+- **Web player/share bug batch** (all vetted, S each): `endHold` never clears
+  `holdSuppressClickRef` → tap swallowed after `pointercancel`
+  (`video-player.tsx:359-369`); `useVideoPlayer` doesn't reset
+  duration/time/quality on `src` change (`use-video-player.ts:128-134`);
+  guest comment fetch lacks the cancellation guard its sibling effects have
+  (`folder-share-viewer.tsx:417-430`); passphrase toggle persists nothing
+  until non-empty blur (`share-link-controls.tsx:87-98`).
+- **Logged-in users hardcoded as guests in share viewer**
+  (`folder-share-viewer.tsx:724` `const isLoggedIn = false`, dead) — needs a
+  maintainer decision on comment attribution before planning.
+- **Watermark drawtext escaping** (`watermark_tasks.py:88`) — only `'`/`:`
+  escaped; editor-set text can inject ffmpeg filters (not shell). Fix =
+  `textfile=`. S.
+- **Transcode resilience** — no duplicate-run guard, no stuck-`processing`
+  sweep (`transcode_tasks.py:36-60`); MEDIUM confidence on real-world
+  frequency. S–M.
+- **share.py god-module split** (1772 lines; seams: links/guest/approvals +
+  `services/share_service.py`) — viable now, deferred behind 082.
+- **Test gaps**: `upload-store.ts` (state machine untested — the only "test"
+  re-implements a formula), `use-video-player.ts` (zero tests),
+  `folder-share-viewer.tsx` (1537 lines, zero tests), `middleware.ts` (zero).
+- **Docs drift** (S): README/architecture.md still document removed
+  magic-code auth (`README.md:117`, `architecture.md:35,38`); root
+  `.env.example` (README's "full config reference") missing `SETUP_TOKEN`,
+  `CORS_ORIGINS`, `TRANSCODE_*`, `STORAGE_STATS_PATH` (the `apps/api` copy
+  has them). 084 adds `TRASH_RETENTION_DAYS` to both; the rest remains.
+- **No Python lint gate** — CI's Python "lint" is `py_compile` on one file;
+  ruff is used locally (`.ruff_cache/`) but never declared or run in CI.
+- **Branch cleanup** — ~46 merged `advisor/*`/`worktree-agent-*`/`preview/*`
+  branches deletable; `chore/dead-code-purge-pre-078` and
+  `worktree-agent-a04834c4dd735f38d` verified superseded by main (content
+  re-landed as `0abe79f`/`aaccf56`/`5071388`/`6221995` and the 041 CI fix) —
+  maintainer git commands, no plan needed.
+- **Direction, not selected**: first tagged release (v0.1.0 → GHCR; do after
+  081), backup/restore documentation for the all-in-one `/data` volume.
+
+### Findings considered and rejected (round 10)
+
+- *`/auth/login` missing per-route rate limit* — covered by the global
+  300-writes/min/IP middleware; generic hardening, not a gap introduced by
+  recent churn.
+- *Missing DB indexes* — checked; hot filter columns already indexed
+  (composite + partial indexes present). The N+1s (082) were the real cost.
+- *FastAPI/pydantic/SQLAlchemy/celery/redis/uvicorn version lag* — all
+  CVE-clean at their exact pins per OSV; routine drift, not worth a plan.
+- *`folder-share-viewer` missing `shareSession` effect dependency* —
+  investigated and disproven (React 18 batches the session+state transition;
+  the component always mounts with the session set).
+- *`lib/auth.ts` no-op token helpers* — intentional legacy shim from the
+  cookie migration, not a bug.
+
 ## Reconcile log — 2026-07-03 (run 3)
 
 Run against FreeFrame HEAD `27a37d3` (main) and projmgmt HEAD `1905a0b`. Since run 2 the maintainer
