@@ -156,10 +156,6 @@ def require_asset_access(db: Session, asset: Asset, user: User) -> None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
 
-def get_asset_share_permission(db: Session, asset: Asset, user: User) -> SharePermission:
-    return get_asset_access(db, asset, user).direct_permission or SharePermission.view
-
-
 def get_share_link_project_id(db: Session, link: ShareLink) -> uuid.UUID:
     if link.project_id is None and link.asset_id is None and link.folder_id is None:
         raise HTTPException(status_code=400, detail="Invalid share link")

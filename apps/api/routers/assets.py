@@ -13,7 +13,7 @@ from ..models.project import Project, ProjectMember, ProjectRole
 from ..models.activity import Mention, Notification, NotificationType
 from ..schemas.asset import AssetResponse, AssetVersionResponse, AssetUpdate, StreamUrlResponse, MediaFileResponse
 from ..schemas.notification import AssignmentUpdate
-from ..services.permissions import get_asset_access, require_project_role, require_asset_access, can_access_asset, is_public_project, get_project_member
+from ..services.permissions import get_asset_access, require_project_role, require_asset_access, is_public_project, get_project_member
 from ..services.folder_access import folder_is_in_scope, folder_scope_select, resolve_folder_access
 from ..services.s3_service import generate_presigned_get_url, build_download_filename
 from .hls_proxy import create_hls_token

@@ -9,7 +9,6 @@ try:
     from ..database import Base
 except ImportError:
     from database import Base
-from .share import SharePermission
 
 class FieldType(str, PyEnum):
     text = "text"
@@ -46,17 +45,6 @@ class Collection(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(String(2000), nullable=True)
     filter_rules: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
-    created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-
-class CollectionShare(Base):
-    __tablename__ = "collection_shares"
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    collection_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("collections.id"), nullable=False)
-    token: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
-    permission: Mapped[SharePermission] = mapped_column(Enum(SharePermission), default=SharePermission.view)
-    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
