@@ -9,7 +9,7 @@
 ## Testing
 
 - [ ] Backend tests pass (`python -m pytest apps/api/tests/ -v`)
-- [ ] Frontend builds (`pnpm --filter web build`)
+- [ ] Frontend builds (`pnpm -C apps/web build`)
 - [ ] Tested manually in browser
 
 ## Screenshots

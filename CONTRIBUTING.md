@@ -25,7 +25,7 @@ docker compose -f docker-compose.dev.yml up --build
 
 1. Fork and create a branch: `git checkout -b feat/my-feature`
 2. Make your changes and write tests
-3. Ensure CI passes: `python -m pytest apps/api/tests/ -v` and `pnpm --filter web build`
+3. Ensure CI passes: `python -m pytest apps/api/tests/ -v` and `pnpm -C apps/web build`
 4. Open a PR against `main`
 
 ## Reporting Issues

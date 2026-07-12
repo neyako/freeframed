@@ -44,7 +44,7 @@ Web (run in `apps/web/`):
 API:
 
 - `python -m pytest apps/api/tests/ -v` — needs
-  `pip install -r apps/api/requirements.txt` (Python 3.12 in CI). No venv on
+  `pip install -r apps/api/requirements-dev.txt` (Python 3.12 in CI). No venv on
   the maintainer's machine — CI is the gate; use
   `python3 -m py_compile <files>` for a local syntax check.
 - **The API test suite mocks the DB session** (`tests/conftest.py`,
