@@ -273,6 +273,40 @@ def _get_latest_media_file(db: Session, asset_id: uuid.UUID) -> Optional[MediaFi
     return db.query(MediaFile).filter(MediaFile.version_id == version.id).first()
 
 
+def _latest_media_files_bulk(
+    db: Session,
+    asset_ids: list[uuid.UUID],
+) -> dict[uuid.UUID, MediaFile]:
+    """Get each asset's latest ready version's first media file in bulk."""
+    if not asset_ids:
+        return {}
+    latest = (
+        db.query(AssetVersion)
+        .filter(
+            AssetVersion.asset_id.in_(asset_ids),
+            AssetVersion.deleted_at.is_(None),
+            AssetVersion.processing_status == ProcessingStatus.ready,
+        )
+        .order_by(AssetVersion.asset_id, AssetVersion.version_number.desc())
+        .all()
+    )
+    latest_by_asset: dict[uuid.UUID, AssetVersion] = {}
+    for version in latest:
+        latest_by_asset.setdefault(version.asset_id, version)
+    version_ids = [version.id for version in latest_by_asset.values()]
+    if not version_ids:
+        return {}
+    files = db.query(MediaFile).filter(MediaFile.version_id.in_(version_ids)).all()
+    files_by_version: dict[uuid.UUID, MediaFile] = {}
+    for media_file in files:
+        files_by_version.setdefault(media_file.version_id, media_file)
+    return {
+        asset_id: files_by_version[version.id]
+        for asset_id, version in latest_by_asset.items()
+        if version.id in files_by_version
+    }
+
+
 def create_reviewer_share(
     db: Session,
     asset: Asset,
@@ -1434,23 +1468,89 @@ def get_folder_share_assets(
                 Folder.id.in_(multi_folder_ids),
                 Folder.deleted_at.is_(None),
             ).order_by(Folder.name).all()
+            shared_folder_ids = [folder.id for folder in shared_folders]
+            shared_folder_asset_counts = dict(
+                db.query(Asset.folder_id, sa_func.count(Asset.id))
+                .filter(
+                    Asset.folder_id.in_(shared_folder_ids),
+                    Asset.deleted_at.is_(None),
+                )
+                .group_by(Asset.folder_id)
+                .all()
+            ) if shared_folder_ids else {}
+            shared_child_folder_counts = dict(
+                db.query(Folder.parent_id, sa_func.count(Folder.id))
+                .filter(
+                    Folder.parent_id.in_(shared_folder_ids),
+                    Folder.deleted_at.is_(None),
+                )
+                .group_by(Folder.parent_id)
+                .all()
+            ) if shared_folder_ids else {}
+            shared_preview_ids_by_folder: dict[
+                uuid.UUID,
+                list[uuid.UUID],
+            ] = {}
+            if shared_folder_ids:
+                ranked_shared_previews = (
+                    db.query(
+                        Asset.id.label("asset_id"),
+                        Asset.folder_id.label("folder_id"),
+                        sa_func.row_number().over(
+                            partition_by=Asset.folder_id,
+                            order_by=Asset.created_at.desc(),
+                        ).label("preview_rank"),
+                    )
+                    .filter(
+                        Asset.folder_id.in_(shared_folder_ids),
+                        Asset.deleted_at.is_(None),
+                    )
+                    .subquery()
+                )
+                shared_preview_rows = (
+                    db.query(
+                        ranked_shared_previews.c.asset_id,
+                        ranked_shared_previews.c.folder_id,
+                    )
+                    .filter(ranked_shared_previews.c.preview_rank <= 4)
+                    .order_by(
+                        ranked_shared_previews.c.folder_id,
+                        ranked_shared_previews.c.preview_rank,
+                    )
+                    .all()
+                )
+                for preview_asset_id, preview_folder_id in shared_preview_rows:
+                    shared_preview_ids_by_folder.setdefault(
+                        preview_folder_id,
+                        [],
+                    ).append(preview_asset_id)
+            shared_preview_ids = [
+                preview_asset_id
+                for folder_asset_ids in shared_preview_ids_by_folder.values()
+                for preview_asset_id in folder_asset_ids
+            ]
+            shared_preview_media = _latest_media_files_bulk(
+                db,
+                shared_preview_ids,
+            )
             for sf in shared_folders:
-                asset_count = db.query(sa_func.count(Asset.id)).filter(
-                    Asset.folder_id == sf.id, Asset.deleted_at.is_(None),
-                ).scalar() or 0
-                child_folder_count = db.query(sa_func.count(Folder.id)).filter(
-                    Folder.parent_id == sf.id, Folder.deleted_at.is_(None),
-                ).scalar() or 0
-                thumb_urls: list[str] = []
-                preview_assets = db.query(Asset).filter(
-                    Asset.folder_id == sf.id, Asset.deleted_at.is_(None),
-                ).order_by(Asset.created_at.desc()).limit(4).all()
-                for pa in preview_assets:
-                    mf = _get_latest_media_file(db, pa.id)
-                    if mf and mf.s3_key_thumbnail:
-                        thumb_urls.append(generate_presigned_get_url(mf.s3_key_thumbnail))
+                thumb_urls = [
+                    generate_presigned_get_url(media_file.s3_key_thumbnail)
+                    for preview_asset_id in shared_preview_ids_by_folder.get(
+                        sf.id,
+                        [],
+                    )
+                    if (media_file := shared_preview_media.get(preview_asset_id))
+                    and media_file.s3_key_thumbnail
+                ]
                 subfolder_items.append(FolderShareSubfolder(
-                    id=sf.id, name=sf.name, item_count=asset_count + child_folder_count, thumbnail_urls=thumb_urls,
+                    id=sf.id,
+                    name=sf.name,
+                    item_count=(
+                        shared_folder_asset_counts.get(sf.id, 0)
+                        + shared_child_folder_counts.get(sf.id, 0)
+                    ),
+                    thumbnail_urls=thumb_urls,
                 ))
 
         # Get shared assets
@@ -1461,16 +1561,25 @@ def get_folder_share_assets(
             shared_assets = db.query(Asset).filter(
                 Asset.id.in_(multi_asset_ids), Asset.deleted_at.is_(None),
             ).order_by(Asset.created_at.desc()).offset(offset).limit(per_page).all()
+            shared_asset_ids = [asset.id for asset in shared_assets]
+            shared_media_files = _latest_media_files_bulk(db, shared_asset_ids)
+            shared_comment_counts = dict(
+                db.query(Comment.asset_id, sa_func.count(Comment.id))
+                .filter(
+                    Comment.asset_id.in_(shared_asset_ids),
+                    Comment.deleted_at.is_(None),
+                )
+                .group_by(Comment.asset_id)
+                .all()
+            ) if shared_asset_ids else {}
             for a in shared_assets:
-                mf = _get_latest_media_file(db, a.id)
+                mf = shared_media_files.get(a.id)
                 thumbnail_url = generate_presigned_get_url(mf.s3_key_thumbnail) if mf and mf.s3_key_thumbnail else None
-                comment_count = db.query(sa_func.count(Comment.id)).filter(
-                    Comment.asset_id == a.id, Comment.deleted_at.is_(None),
-                ).scalar() or 0
                 asset_items.append(FolderShareAssetItem(
                     id=a.id, name=a.name, asset_type=a.asset_type.value if hasattr(a.asset_type, 'value') else str(a.asset_type),
                     thumbnail_url=thumbnail_url, created_at=a.created_at.isoformat() if a.created_at else "",
-                    file_size_bytes=mf.file_size_bytes if mf else 0, comment_count=comment_count,
+                    file_size_bytes=mf.file_size_bytes if mf else 0,
+                    comment_count=shared_comment_counts.get(a.id, 0),
                 ))
         else:
             total = 0
@@ -1519,35 +1628,81 @@ def get_folder_share_assets(
         Folder.deleted_at.is_(None),
     ).order_by(Folder.name).all()
 
+    sf_ids = [sf.id for sf in subfolders_query]
+    subfolder_asset_counts = dict(
+        db.query(Asset.folder_id, sa_func.count(Asset.id))
+        .filter(
+            Asset.folder_id.in_(sf_ids),
+            Asset.deleted_at.is_(None),
+        )
+        .group_by(Asset.folder_id)
+        .all()
+    ) if sf_ids else {}
+    child_folder_counts = dict(
+        db.query(Folder.parent_id, sa_func.count(Folder.id))
+        .filter(
+            Folder.parent_id.in_(sf_ids),
+            Folder.deleted_at.is_(None),
+        )
+        .group_by(Folder.parent_id)
+        .all()
+    ) if sf_ids else {}
+    preview_asset_ids_by_folder: dict[uuid.UUID, list[uuid.UUID]] = {}
+    if sf_ids:
+        ranked_preview_assets = (
+            db.query(
+                Asset.id.label("asset_id"),
+                Asset.folder_id.label("folder_id"),
+                sa_func.row_number().over(
+                    partition_by=Asset.folder_id,
+                    order_by=Asset.created_at.desc(),
+                ).label("preview_rank"),
+            )
+            .filter(
+                Asset.folder_id.in_(sf_ids),
+                Asset.deleted_at.is_(None),
+            )
+            .subquery()
+        )
+        preview_asset_rows = (
+            db.query(
+                ranked_preview_assets.c.asset_id,
+                ranked_preview_assets.c.folder_id,
+            )
+            .filter(ranked_preview_assets.c.preview_rank <= 4)
+            .order_by(
+                ranked_preview_assets.c.folder_id,
+                ranked_preview_assets.c.preview_rank,
+            )
+            .all()
+        )
+        for preview_asset_id, preview_folder_id in preview_asset_rows:
+            preview_asset_ids_by_folder.setdefault(preview_folder_id, []).append(
+                preview_asset_id
+            )
+    preview_asset_ids = [
+        preview_asset_id
+        for folder_asset_ids in preview_asset_ids_by_folder.values()
+        for preview_asset_id in folder_asset_ids
+    ]
+    preview_media_files = _latest_media_files_bulk(db, preview_asset_ids)
+
     subfolder_items = []
     for sf in subfolders_query:
-        # Count assets + direct child folders in this subfolder
-        asset_count = db.query(sa_func.count(Asset.id)).filter(
-            Asset.folder_id == sf.id,
-            Asset.deleted_at.is_(None),
-        ).scalar() or 0
-        child_folder_count = db.query(sa_func.count(Folder.id)).filter(
-            Folder.parent_id == sf.id,
-            Folder.deleted_at.is_(None),
-        ).scalar() or 0
-
-        # Fetch up to 4 thumbnail previews from assets inside this subfolder
-        thumb_urls: list[str] = []
-        preview_assets = db.query(Asset).filter(
-            Asset.folder_id == sf.id,
-            Asset.deleted_at.is_(None),
-        ).order_by(Asset.created_at.desc()).limit(4).all()
-        for pa in preview_assets:
-            mf = _get_latest_media_file(db, pa.id)
-            if mf and mf.s3_key_thumbnail:
-                thumb_urls.append(generate_presigned_get_url(mf.s3_key_thumbnail))
-            if len(thumb_urls) >= 4:
-                break
+        thumb_urls = [
+            generate_presigned_get_url(media_file.s3_key_thumbnail)
+            for preview_asset_id in preview_asset_ids_by_folder.get(sf.id, [])
+            if (media_file := preview_media_files.get(preview_asset_id))
+            and media_file.s3_key_thumbnail
+        ]
 
         subfolder_items.append(FolderShareSubfolder(
             id=sf.id,
             name=sf.name,
-            item_count=asset_count + child_folder_count,
+            item_count=(
+                subfolder_asset_counts.get(sf.id, 0)
+                + child_folder_counts.get(sf.id, 0)
+            ),
             thumbnail_urls=thumb_urls,
         ))
 
@@ -1571,31 +1726,39 @@ def get_folder_share_assets(
         Asset.deleted_at.is_(None),
     ).order_by(Asset.created_at.desc()).offset(offset).limit(per_page).all()
 
+    asset_ids = [asset.id for asset in assets]
+    asset_media_files = _latest_media_files_bulk(db, asset_ids)
+    comment_counts = dict(
+        db.query(Comment.asset_id, sa_func.count(Comment.id))
+        .filter(
+            Comment.asset_id.in_(asset_ids),
+            Comment.deleted_at.is_(None),
+        )
+        .group_by(Comment.asset_id)
+        .all()
+    ) if asset_ids else {}
+    creator_ids = {asset.created_by for asset in assets if asset.created_by}
+    creators = {
+        creator.id: creator
+        for creator in db.query(User).filter(
+            User.id.in_(creator_ids),
+            User.deleted_at.is_(None),
+        ).all()
+    } if creator_ids else {}
+
     asset_items = []
     for asset in assets:
         thumbnail_url = None
         file_size = None
         duration_seconds = None
-        media_file = _get_latest_media_file(db, asset.id)
+        media_file = asset_media_files.get(asset.id)
         if media_file:
             if media_file.s3_key_thumbnail:
                 thumbnail_url = generate_presigned_get_url(media_file.s3_key_thumbnail)
             file_size = media_file.file_size_bytes
             duration_seconds = media_file.duration_seconds
 
-        comment_count = db.query(sa_func.count(Comment.id)).filter(
-            Comment.asset_id == asset.id,
-            Comment.deleted_at.is_(None),
-        ).scalar() or 0
-
-        # Get creator name
-        creator = (
-            db.query(User)
-            .filter(User.id == asset.created_by, User.deleted_at.is_(None))
-            .first()
-            if asset.created_by
-            else None
-        )
+        creator = creators.get(asset.created_by)
 
         asset_items.append(FolderShareAssetItem(
             id=asset.id,
@@ -1604,7 +1767,7 @@ def get_folder_share_assets(
             thumbnail_url=thumbnail_url,
             file_size=file_size,
             duration_seconds=duration_seconds,
-            comment_count=comment_count,
+            comment_count=comment_counts.get(asset.id, 0),
             created_by_name=creator.name if creator else None,
             created_at=asset.created_at,
         ))

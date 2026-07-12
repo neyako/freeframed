@@ -123,6 +123,39 @@ def _compute_item_count(db: Session, folder_id: uuid.UUID) -> int:
     return subfolder_count + asset_count
 
 
+def _batch_item_counts(
+    db: Session,
+    folder_ids: list[uuid.UUID],
+) -> dict[uuid.UUID, int]:
+    if not folder_ids:
+        return {}
+    subfolder_counts = dict(
+        db.query(Folder.parent_id, func.count(Folder.id))
+        .filter(
+            Folder.parent_id.in_(folder_ids),
+            Folder.deleted_at.is_(None),
+        )
+        .group_by(Folder.parent_id)
+        .all()
+    )
+    asset_counts = dict(
+        db.query(Asset.folder_id, func.count(Asset.id))
+        .filter(
+            Asset.folder_id.in_(folder_ids),
+            Asset.deleted_at.is_(None),
+        )
+        .group_by(Asset.folder_id)
+        .all()
+    )
+    return {
+        folder_id: (
+            subfolder_counts.get(folder_id, 0)
+            + asset_counts.get(folder_id, 0)
+        )
+        for folder_id in folder_ids
+    }
+
+
 def _folder_to_response(db: Session, folder: Folder) -> FolderResponse:
     resp = FolderResponse.model_validate(folder)
     resp.item_count = _compute_item_count(db, folder.id)
@@ -320,7 +353,13 @@ def list_folders(
         query = query.filter(Folder.parent_id == _parse_folder_filter(parent_id))
 
     folders = query.order_by(Folder.created_at.desc()).all()
-    return [_folder_to_response(db, f) for f in folders]
+    counts = _batch_item_counts(db, [folder.id for folder in folders])
+    responses = []
+    for folder in folders:
+        response = FolderResponse.model_validate(folder)
+        response.item_count = counts.get(folder.id, 0)
+        responses.append(response)
+    return responses
 
 
 @router.get("/projects/{project_id}/folder-tree", response_model=list[FolderTreeNode])
