@@ -68,4 +68,23 @@ describe('ApprovalBar', () => {
     expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Reject' })).not.toBeInTheDocument()
   })
+
+  it('keeps the reviewer list but hides actions for the version uploader', () => {
+    mocks.data = [{ ...approved, id: 'approval-2', user_id: 'reviewer-2' }]
+
+    render(
+      <ApprovalBar
+        assetId="asset-1"
+        versionId="version-1"
+        currentUserId="user-1"
+        versionCreatedBy="user-1"
+      />,
+    )
+
+    expect(screen.getByText('Avatar')).toBeInTheDocument()
+    expect(screen.getByText('1 approved')).toBeInTheDocument()
+    expect(screen.getByText('Your upload')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Reject' })).not.toBeInTheDocument()
+  })
 })

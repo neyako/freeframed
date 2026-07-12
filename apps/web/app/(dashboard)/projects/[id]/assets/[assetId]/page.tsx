@@ -476,6 +476,7 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
           assetId={asset.id}
           versionId={currentVersion.id}
           currentUserId={user?.id}
+          versionCreatedBy={currentVersion.created_by}
         />
       )}
 

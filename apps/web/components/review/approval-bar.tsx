@@ -50,6 +50,7 @@ interface ApprovalBarProps {
   assetId: string
   versionId: string
   currentUserId?: string
+  versionCreatedBy?: string
   className?: string
 }
 
@@ -107,7 +108,7 @@ function RejectNoteDialog({ onConfirm, onCancel }: RejectNoteProps) {
 
 // ─── Approval bar ─────────────────────────────────────────────────────────────
 
-export function ApprovalBar({ assetId, versionId, currentUserId, className }: ApprovalBarProps) {
+export function ApprovalBar({ assetId, versionId, currentUserId, versionCreatedBy, className }: ApprovalBarProps) {
   const swrKey = assetId ? `/assets/${assetId}/approvals?version_id=${versionId}` : null
 
   const { data, error, isLoading, mutate } = useSWR<ApprovalListResponse>(
@@ -122,6 +123,7 @@ export function ApprovalBar({ assetId, versionId, currentUserId, className }: Ap
 
   const approvals = Array.isArray(data) ? data : data?.approvals ?? []
   const myApproval = approvals.find((a) => a.user_id === currentUserId)
+  const isUploader = Boolean(versionCreatedBy && versionCreatedBy === currentUserId)
 
   async function handleApprove() {
     setApproving(true)
@@ -242,7 +244,11 @@ export function ApprovalBar({ assetId, versionId, currentUserId, className }: Ap
         )}
 
         {/* Action buttons */}
-        {currentUserId && (
+        {currentUserId && isUploader && (
+          <span className="ml-auto shrink-0 text-xs text-text-tertiary">Your upload</span>
+        )}
+
+        {currentUserId && !isUploader && (
           <div className="flex items-center gap-2 shrink-0 ml-auto">
             {myApproval?.status === 'approved' && (
               <span className="inline-flex items-center gap-1 text-xs text-text-primary font-medium">

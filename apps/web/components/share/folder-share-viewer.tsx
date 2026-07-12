@@ -34,6 +34,9 @@ import type {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
+type UseReviewHook = typeof import('@/components/review/review-provider').useReview
+type UseReviewStoreHook = typeof import('@/stores/review-store').useReviewStore
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface FolderShareViewerProps {
@@ -569,12 +572,13 @@ interface AssetViewerProps {
   token: string
   shareSession?: string | null
   asset: FolderShareAssetItem
+  viewerName?: string | null
   permission: SharePermission
   allowDownload: boolean
   onBack: () => void
 }
 
-function AssetViewer({ token, shareSession, asset, permission, allowDownload, onBack }: AssetViewerProps) {
+function AssetViewer({ token, shareSession, asset, viewerName, permission, allowDownload, onBack }: AssetViewerProps) {
   // Use the same ReviewProvider as the project review page, but with shareToken
   // This gives us the same video player, image viewer, comment panel, etc.
   return (
@@ -584,6 +588,7 @@ function AssetViewer({ token, shareSession, asset, permission, allowDownload, on
         shareSession={shareSession}
         assetId={asset.id}
         assetName={asset.name}
+        viewerName={viewerName}
         permission={permission}
         allowDownload={allowDownload}
         onBack={onBack}
@@ -594,9 +599,9 @@ function AssetViewer({ token, shareSession, asset, permission, allowDownload, on
 
 /** Lazy-imported review components to avoid circular deps */
 export function ShareReviewScreen({
-  token, shareSession, assetId, assetName, permission, allowDownload, onBack,
+  token, shareSession, assetId, assetName, viewerName, permission, allowDownload, onBack,
 }: {
-  token: string; shareSession?: string | null; assetId: string; assetName: string; permission: SharePermission; allowDownload: boolean; onBack?: () => void
+  token: string; shareSession?: string | null; assetId: string; assetName: string; viewerName?: string | null; permission: SharePermission; allowDownload: boolean; onBack?: () => void
 }) {
   const [ReviewProvider, setProvider] = React.useState<any>(null)
   const [VideoPlayer, setVideoPlayer] = React.useState<any>(null)
@@ -604,6 +609,8 @@ export function ShareReviewScreen({
   const [AudioPlayer, setAudioPlayer] = React.useState<any>(null)
   const [CommentPanel, setCommentPanel] = React.useState<any>(null)
   const [CommentInput, setCommentInput] = React.useState<any>(null)
+  const [useReviewHook, setUseReviewHook] = React.useState<UseReviewHook | null>(null)
+  const [useReviewStoreHook, setUseReviewStoreHook] = React.useState<UseReviewStoreHook | null>(null)
   const [loaded, setLoaded] = React.useState(false)
 
   React.useEffect(() => {
@@ -615,18 +622,21 @@ export function ShareReviewScreen({
       import('@/components/review/audio-player'),
       import('@/components/review/comment-panel'),
       import('@/components/review/comment-input'),
-    ]).then(([provider, video, image, audio, comments, input]) => {
+      import('@/stores/review-store'),
+    ]).then(([provider, video, image, audio, comments, input, reviewStore]) => {
       setProvider(() => provider.ReviewProvider)
       setVideoPlayer(() => video.VideoPlayer)
       setImageViewer(() => image.ImageViewer)
       setAudioPlayer(() => audio.AudioPlayer)
       setCommentPanel(() => comments.CommentPanel)
       setCommentInput(() => input.CommentInput)
+      setUseReviewHook(() => provider.useReview)
+      setUseReviewStoreHook(() => reviewStore.useReviewStore)
       setLoaded(true)
     })
   }, [])
 
-  if (!loaded || !ReviewProvider) {
+  if (!loaded || !ReviewProvider || !useReviewHook || !useReviewStoreHook) {
     return <div className="flex items-center justify-center h-dvh bg-bg-primary"><Loader2 className="h-8 w-8 animate-spin text-text-tertiary" /></div>
   }
 
@@ -636,6 +646,7 @@ export function ShareReviewScreen({
         token={token}
         shareSession={shareSession}
         assetName={assetName}
+        viewerName={viewerName}
         permission={permission}
         allowDownload={allowDownload}
         onBack={onBack}
@@ -644,22 +655,20 @@ export function ShareReviewScreen({
         AudioPlayer={AudioPlayer}
         CommentPanel={CommentPanel}
         CommentInput={CommentInput}
+        useReviewHook={useReviewHook}
+        useReviewStoreHook={useReviewStoreHook}
       />
     </ReviewProvider>
   )
 }
 
 function ShareReviewInner({
-  token, shareSession, assetName, permission, allowDownload, onBack,
+  token, shareSession, assetName, viewerName, permission, allowDownload, onBack,
   VideoPlayer, ImageViewer, AudioPlayer, CommentPanel, CommentInput,
+  useReviewHook, useReviewStoreHook,
 }: any) {
-  // Import hooks from the review system
-  const { useReview } = require('@/components/review/review-provider')
-  const { useReviewStore } = require('@/stores/review-store')
-  const { useComments } = require('@/hooks/use-comments')
-
-  const { asset, versions, isLoading, comments, refetchComments, addComment } = useReview()
-  const { currentVersion, isDrawingMode, focusedCommentId } = useReviewStore()
+  const { asset, versions, isLoading, comments, refetchComments, addComment } = useReviewHook()
+  const { currentVersion, isDrawingMode, focusedCommentId } = useReviewStoreHook()
   const [sidebarOpen, setSidebarOpen] = React.useState(false)
   const [activeTab, setActiveTab] = React.useState<'comments' | 'fields'>('comments')
   const [AnnotationOverlay, setAnnotationOverlay] = React.useState<any>(null)
@@ -721,7 +730,7 @@ function ShareReviewInner({
       if (stored) setGuestIdentity(JSON.parse(stored))
     } catch {}
   }, [])
-  const isLoggedIn = false
+  const isLoggedIn = Boolean(viewerName)
 
   const submitComment = React.useCallback(async (body: string, timecodeStart?: number, timecodeEnd?: number, annotationData?: Record<string, unknown>) => {
     const payload: Record<string, unknown> = { body }
@@ -729,9 +738,22 @@ function ShareReviewInner({
     if (timecodeStart != null) payload.timecode_start = timecodeStart
     if (timecodeEnd != null) payload.timecode_end = timecodeEnd
     if (annotationData) payload.annotation = { drawing_data: annotationData }
-    await addComment(payload)
+    if (isLoggedIn) {
+      const shareSessionParam = shareSession
+        ? `?share_session=${encodeURIComponent(shareSession)}`
+        : ''
+      const response = await fetch(`${API_URL}/share/${token}/comment${shareSessionParam}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...payload, asset_id: assetId }),
+        credentials: 'include',
+      })
+      if (!response.ok) throw new Error('Failed to post comment')
+    } else {
+      await addComment(payload)
+    }
     refetchComments().catch(() => {})
-  }, [addComment, currentVersion, refetchComments])
+  }, [addComment, assetId, currentVersion, isLoggedIn, refetchComments, shareSession, token])
 
   const handleGuestIdentitySave = React.useCallback(async (name: string, email: string) => {
     const identity = { name, email }
@@ -868,8 +890,8 @@ function ShareReviewInner({
                     projectId=""
                     assetType={asset.asset_type}
                     onSubmit={async (body: string, timecodeStart?: number, timecodeEnd?: number, annotationData?: Record<string, unknown>) => {
-                      const hasGuest = !!localStorage.getItem('ff_guest_identity')
-                      if (!hasGuest) {
+                      const hasIdentity = isLoggedIn || Boolean(localStorage.getItem('ff_guest_identity'))
+                      if (!hasIdentity) {
                         pendingCommentRef.current = { body, timecodeStart, timecodeEnd, annotationData }
                         setShowGuestPrompt(true)
                         return
@@ -885,7 +907,7 @@ function ShareReviewInner({
       </div>
 
       {/* Guest identity prompt */}
-      {showGuestPrompt && (
+      {showGuestPrompt && !isLoggedIn && (
         <GuestIdentityPrompt
           onSave={handleGuestIdentitySave}
           onCancel={() => { setShowGuestPrompt(false); pendingCommentRef.current = null }}
@@ -1194,6 +1216,7 @@ export function FolderShareViewer({
         token={token}
         shareSession={shareSession}
         asset={viewingAsset}
+        viewerName={viewerName}
         permission={permission}
         allowDownload={allowDownload}
         onBack={() => setViewingAsset(null)}

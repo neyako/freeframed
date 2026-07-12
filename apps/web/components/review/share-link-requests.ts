@@ -21,6 +21,10 @@ const CREATE_PATH: Record<ShareTarget["kind"], (id: string) => string> = {
   project: (id) => `/projects/${id}/share`,
 };
 
+const linkLoadRequests = new Map<
+  string,
+  Promise<ManagedShareLink | null>
+>();
 const linkRequests = new Map<string, Promise<ManagedShareLink>>();
 
 function isShareLinkArray(
@@ -124,20 +128,40 @@ async function loadProjectRootLink(
   );
 }
 
-async function loadOrCreateLink(
+async function loadExistingLink(
   target: ShareTarget,
-): Promise<ManagedShareLink> {
+): Promise<ManagedShareLink | null> {
   const response = await api.get<
     readonly ShareLinkCandidate[] | ShareListEnvelope
   >(getListPath(target));
   const links = normaliseShareLinks(response);
   if (target.kind === "project") {
-    const projectRootLink = await loadProjectRootLink(target, links);
-    if (projectRootLink) return projectRootLink;
-  } else {
-    const existing = links.find((candidate) => candidate.is_enabled) ?? links[0];
-    if (existing) return withLinkDefaults(existing);
+    return loadProjectRootLink(target, links);
   }
+
+  const existing = links.find((candidate) => candidate.is_enabled);
+  return existing ? withLinkDefaults(existing) : null;
+}
+
+export function loadLink(
+  target: ShareTarget,
+): Promise<ManagedShareLink | null> {
+  const requestKey = getRequestKey(target);
+  let request = linkLoadRequests.get(requestKey);
+  if (!request) {
+    request = loadExistingLink(target).finally(() => {
+      linkLoadRequests.delete(requestKey);
+    });
+    linkLoadRequests.set(requestKey, request);
+  }
+  return request;
+}
+
+async function loadOrCreateLink(
+  target: ShareTarget,
+): Promise<ManagedShareLink> {
+  const existing = await loadLink(target);
+  if (existing) return existing;
 
   const created = await api.post<ShareLinkCandidate>(
     CREATE_PATH[target.kind](target.id),

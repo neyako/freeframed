@@ -182,7 +182,7 @@ describe("QuickShare", () => {
     );
   });
 
-  it("shows a copyable link once the upload completes", async () => {
+  it("shows a copyable internal asset URL without creating a share link", async () => {
     const user = userEvent.setup();
     const view = renderQuickShare();
     const file = new File(["cut"], "hero.mov", { type: "video/quicktime" });
@@ -201,12 +201,16 @@ describe("QuickShare", () => {
     mocks.uploadState.files = [completedUpload()];
     view.rerenderQuickShare();
 
-    expect(
-      await screen.findByText("https://app.test/share/token"),
-    ).toBeInTheDocument();
+    const assetUrl = `${window.location.origin}/assets/asset-1`;
+    expect(await screen.findByText(assetUrl)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /open asset/i })).toHaveAttribute(
       "href",
       "/assets/asset-1",
+    );
+    expect(mockedApi.get).not.toHaveBeenCalledWith("/assets/asset-1/shares");
+    expect(mockedApi.post).not.toHaveBeenCalledWith(
+      "/assets/asset-1/share",
+      expect.anything(),
     );
 
     await user.click(screen.getByRole("button", { name: /^copy$/i }));

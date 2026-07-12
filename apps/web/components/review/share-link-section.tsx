@@ -8,6 +8,7 @@ import { api } from "@/lib/api";
 import { LinkControls } from "./share-link-controls";
 import {
   getRequestTarget,
+  loadLink,
   requestLink,
   withLinkDefaults,
 } from "./share-link-requests";
@@ -44,7 +45,7 @@ export function SingleLinkSection({ target, children }: SingleLinkSectionProps) 
     setError(null);
     void (async () => {
       try {
-        const nextLink = await requestLink(requestTarget);
+        const nextLink = await loadLink(requestTarget);
         if (!cancelled) setLink(nextLink);
       } catch (err) {
         if (!cancelled) {

@@ -47,7 +47,7 @@ describe("ShareDialog", () => {
     Element.prototype.scrollIntoView ??= vi.fn();
   });
 
-  it("creates and edits one asset share link when no link exists", async () => {
+  it("creates and edits one asset share link only after an explicit click", async () => {
     const user = userEvent.setup();
     const link = createdShareLink();
     const share = directShare();
@@ -78,6 +78,13 @@ describe("ShareDialog", () => {
       screen.queryByRole("button", { name: /new share link/i }),
     ).not.toBeInTheDocument();
     expect(screen.queryByText(/add to existing share links/i)).not.toBeInTheDocument();
+
+    expect(await screen.findByText("No share link")).toBeInTheDocument();
+    expect(mockedApi.post).not.toHaveBeenCalled();
+
+    await user.click(
+      screen.getByRole("button", { name: /create share link/i }),
+    );
 
     expect(await screen.findByText("Anyone with the link")).toBeInTheDocument();
     expect(screen.getByText(/\/share\/token$/)).toBeInTheDocument();
@@ -149,6 +156,13 @@ describe("ShareDialog", () => {
       />,
     );
 
+    expect(await screen.findByText("No share link")).toBeInTheDocument();
+    expect(mockedApi.post).not.toHaveBeenCalled();
+
+    await user.click(
+      screen.getByRole("button", { name: /create share link/i }),
+    );
+
     expect(await screen.findByText("Anyone with the link")).toBeInTheDocument();
     expect(screen.getByText(/\/share\/folder-token$/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /invite people/i })).toBeInTheDocument();
@@ -192,6 +206,7 @@ describe("ShareDialog", () => {
     );
 
     expect(await screen.findByText("Anyone with the link")).toBeInTheDocument();
+    expect(mockedApi.post).not.toHaveBeenCalled();
     await user.click(screen.getByRole("button", { name: /invite people/i }));
     const peopleForm = screen
       .getByPlaceholderText("user@example.com")
@@ -451,6 +466,13 @@ describe("ShareDialog", () => {
         projectId="project-1"
         withPeople
       />,
+    );
+
+    expect(await screen.findByText("No share link")).toBeInTheDocument();
+    expect(mockedApi.post).not.toHaveBeenCalled();
+
+    await user.click(
+      screen.getByRole("button", { name: /create share link/i }),
     );
 
     expect(await screen.findByText("Anyone with the link")).toBeInTheDocument();

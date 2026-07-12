@@ -2,46 +2,33 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { AlertCircle, Loader2, UploadCloud } from "lucide-react";
+import { AlertCircle, UploadCloud } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { CopyButton } from "@/components/review/share-link-control-primitives";
-import {
-  requestLink,
-  withLinkDefaults,
-} from "@/components/review/share-link-requests";
 import { api } from "@/lib/api";
 import {
   getUploadDisplayProgress,
   useUploadStore,
 } from "@/stores/upload-store";
 import type { Project } from "@/types";
-import type { ManagedShareLink } from "@/components/review/share-targets";
 
 const QUICK_SHARE_NAME = "Quick Shares";
-
-function getShareUrl(link: ManagedShareLink) {
-  return (
-    link.url ??
-    `${typeof window !== "undefined" ? window.location.origin : ""}/share/${link.token}`
-  );
-}
 
 export function QuickShare() {
   const inputRef = React.useRef<HTMLInputElement>(null);
   const projectRequestRef = React.useRef<Promise<Project> | null>(null);
-  const requestedShareAssetId = React.useRef<string | null>(null);
   const [project, setProject] = React.useState<Project | null>(null);
   const [projectError, setProjectError] = React.useState<string | null>(null);
   const [uploadId, setUploadId] = React.useState<string | null>(null);
-  const [shareLink, setShareLink] = React.useState<ManagedShareLink | null>(null);
-  const [shareLoading, setShareLoading] = React.useState(false);
-  const [shareError, setShareError] = React.useState<string | null>(null);
   const [fileError, setFileError] = React.useState<string | null>(null);
   const { files, startUpload } = useUploadStore();
   const activeUpload = files.find((file) => file.id === uploadId);
   const assetId = activeUpload?.assetId ?? null;
-  const shareUrl = shareLink ? getShareUrl(shareLink) : null;
+  const assetUrl =
+    assetId && activeUpload?.status === "complete"
+      ? `${typeof window !== "undefined" ? window.location.origin : ""}/assets/${assetId}`
+      : null;
 
   const ensureQuickShareProject = React.useCallback(async () => {
     if (project) return project;
@@ -71,23 +58,6 @@ export function QuickShare() {
     });
   }, [ensureQuickShareProject]);
 
-  React.useEffect(() => {
-    if (!assetId || activeUpload?.status !== "complete") return;
-    if (requestedShareAssetId.current === assetId) return;
-    requestedShareAssetId.current = assetId;
-    setShareLoading(true);
-    setShareError(null);
-    setShareLink(null);
-    void requestLink({ kind: "asset", id: assetId })
-      .then((link) => setShareLink(withLinkDefaults(link)))
-      .catch((err) => {
-        setShareError(
-          err instanceof Error ? err.message : "Failed to create share link",
-        );
-      })
-      .finally(() => setShareLoading(false));
-  }, [activeUpload?.status, assetId]);
-
   async function handleFile(file: File | null) {
     if (!file) return;
     if (!file.type.startsWith("video/")) {
@@ -96,9 +66,6 @@ export function QuickShare() {
     }
 
     setFileError(null);
-    setShareError(null);
-    setShareLink(null);
-    requestedShareAssetId.current = null;
 
     let quickProject: Project;
     try {
@@ -135,7 +102,7 @@ export function QuickShare() {
     activeUpload?.status === "failed"
       ? activeUpload.error ?? "Upload failed"
       : null;
-  const message = projectError ?? fileError ?? uploadError ?? shareError;
+  const message = projectError ?? fileError ?? uploadError;
 
   return (
     <section className="rounded-lg border border-border bg-bg-secondary p-5">
@@ -198,27 +165,20 @@ export function QuickShare() {
           </div>
         )}
 
-        {(shareLoading || shareUrl) && assetId && (
+        {assetUrl && assetId && (
           <div className="rounded border border-border bg-bg-primary">
-            {shareLoading ? (
-              <div className="flex items-center gap-2 px-3 py-3 font-mono text-xs text-text-secondary">
-                <Loader2 className="h-4 w-4 animate-spin text-text-tertiary" />
-                Preparing share link...
+            <div className="flex flex-col gap-3 px-3 py-3 sm:flex-row sm:items-center">
+              <div className="min-w-0 flex-1">
+                <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-text-tertiary">Asset URL</p>
+                <p className="mt-1 truncate font-mono text-xs text-text-secondary">{assetUrl}</p>
               </div>
-            ) : shareUrl ? (
-              <div className="flex flex-col gap-3 px-3 py-3 sm:flex-row sm:items-center">
-                <div className="min-w-0 flex-1">
-                  <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-text-tertiary">Share URL</p>
-                  <p className="mt-1 truncate font-mono text-xs text-text-secondary">{shareUrl}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CopyButton text={shareUrl} disabled={false} />
-                  <Button asChild variant="secondary" size="md">
-                    <Link href={`/assets/${assetId}`}>Open asset</Link>
-                  </Button>
-                </div>
+              <div className="flex items-center gap-2">
+                <CopyButton text={assetUrl} disabled={false} />
+                <Button asChild variant="secondary" size="md">
+                  <Link href={`/assets/${assetId}`}>Open asset</Link>
+                </Button>
               </div>
-            ) : null}
+            </div>
           </div>
         )}
       </div>

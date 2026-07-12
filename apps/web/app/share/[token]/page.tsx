@@ -169,6 +169,7 @@ export default function SharePage({
         permission: SharePermission
         allowDownload: boolean
         showVersions: boolean
+        viewerName: string | null
         branding: ProjectBranding | null
       }
     | {
@@ -260,6 +261,7 @@ export default function SharePage({
         permission: data.permission,
         allowDownload: data.allow_download ?? false,
         showVersions: data.show_versions ?? true,
+        viewerName: data.viewer_name ?? null,
         branding: data.branding ?? null,
       })
     } catch {
@@ -347,6 +349,7 @@ export default function SharePage({
       shareSession={shareSession}
       assetId={state.asset.id}
       assetName={state.asset.name}
+      viewerName={state.viewerName}
       permission={state.permission}
       allowDownload={state.allowDownload}
     />
