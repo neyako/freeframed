@@ -22,10 +22,10 @@ def select_backend(setting: str, encoders_text: str, has_dri: bool, has_nvidia: 
         return selected
     if has_nvidia and "h264_nvenc" in encoders_text:
         return "nvenc"
-    if has_dri and "h264_qsv" in encoders_text:
-        return "qsv"
     if has_dri and "h264_vaapi" in encoders_text:
         return "vaapi"
+    if has_dri and "h264_qsv" in encoders_text:
+        return "qsv"
     return "software"
 
 
@@ -102,19 +102,34 @@ def build_hls_command(
     hls_dir: str | os.PathLike[str],
     backend: str,
     device: str = "/dev/dri/renderD128",
+    hw_decode: bool = False,
 ) -> list[str]:
     hls_path = os.fspath(hls_dir)
     split_outputs = "".join(f"[v{index}]" for index in range(len(qualities)))
     suffix = _filter_suffix(backend)
+    use_vaapi_hw_decode = backend == "vaapi" and hw_decode
     filter_complex = f"[v:0]split={len(qualities)}{split_outputs};"
-    filter_complex += ";".join(
-        f"[v{index}]scale={quality_map[quality][0]}:force_original_aspect_ratio=decrease,"
-        f"pad=ceil(iw/2)*2:ceil(ih/2)*2{suffix}[{quality}]"
-        for index, quality in enumerate(qualities)
-    )
+    filter_branches: list[str] = []
+    for index, quality in enumerate(qualities):
+        scale = quality_map[quality][0]
+        if use_vaapi_hw_decode:
+            width, height = scale.split(":", 1)
+            filter_branches.append(
+                f"[v{index}]scale_vaapi=w={width}:h={height}:"
+                "force_original_aspect_ratio=decrease:force_divisible_by=2:format=nv12"
+                f"[{quality}]"
+            )
+        else:
+            filter_branches.append(
+                f"[v{index}]scale={scale}:force_original_aspect_ratio=decrease,"
+                f"pad=ceil(iw/2)*2:ceil(ih/2)*2{suffix}[{quality}]"
+            )
+    filter_complex += ";".join(filter_branches)
 
     cmd = ["ffmpeg", "-y"]
     cmd += _global_args(backend, device)
+    if use_vaapi_hw_decode:
+        cmd += ["-hwaccel", "vaapi", "-hwaccel_output_format", "vaapi"]
     cmd += ["-i", input_url, "-filter_complex", filter_complex]
 
     for index, quality in enumerate(qualities):

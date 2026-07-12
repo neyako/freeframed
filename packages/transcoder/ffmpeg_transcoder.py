@@ -1,4 +1,5 @@
 import json
+import logging
 import shutil
 import subprocess
 import tempfile
@@ -8,6 +9,8 @@ from typing import Callable, TypedDict
 
 from .base import BaseTranscoder, TranscodeJob, TranscodeResult, VideoMetadata
 from .hwaccel import build_hls_command, resolve_backend
+
+logger = logging.getLogger(__name__)
 
 
 class WaveformData(TypedDict):
@@ -35,6 +38,23 @@ def _parse_progress_percent(line: str, duration: float) -> float | None:
         return None
     percent = (out_time_us / 1_000_000) / duration * 100
     return max(0.0, min(99.0, percent))
+
+
+def _stderr_tail(stderr: str | bytes | None, sensitive_url: str) -> str:
+    if isinstance(stderr, bytes):
+        stderr = stderr.decode("utf-8", errors="replace")
+    return (stderr or "").replace(sensitive_url, "<redacted input URL>")[-2000:]
+
+
+def _reset_hls_dir(hls_dir: Path, qualities: list[str]) -> None:
+    for child in hls_dir.iterdir():
+        if child.is_dir() and not child.is_symlink():
+            shutil.rmtree(child, ignore_errors=True)
+        else:
+            child.unlink(missing_ok=True)
+
+    for quality in qualities:
+        (hls_dir / quality).mkdir(exist_ok=True)
 
 
 class FFmpegTranscoder(BaseTranscoder):
@@ -147,30 +167,50 @@ class FFmpegTranscoder(BaseTranscoder):
             for q in qualities:
                 (hls_dir / q).mkdir(exist_ok=True)
 
-            ffmpeg_cmd = build_hls_command(
-                input_url, qualities, QUALITY_MAP, hls_dir, backend, self.vaapi_device
+            initial_hw_decode = backend == "vaapi"
+            logger.info(
+                "Starting HLS transcode: backend=%s hw_decode=%s",
+                backend,
+                initial_hw_decode,
             )
+            if backend == "vaapi":
+                attempts = [
+                    ("vaapi", True, "vaapi-full-hw"),
+                    ("vaapi", False, "vaapi-hwupload"),
+                    ("software", False, "software"),
+                ]
+            elif backend == "software":
+                attempts = [("software", False, "software")]
+            else:
+                attempts = [
+                    (backend, False, backend),
+                    ("software", False, "software"),
+                ]
 
             # Timeout scales with expected duration - 4 hours for very large files
-            try:
-                self._run_ffmpeg_with_progress(ffmpeg_cmd, duration, progress_callback)
-            except subprocess.CalledProcessError:
-                if backend == "software":
-                    raise
-
-                for child in hls_dir.iterdir():
-                    if child.is_dir() and not child.is_symlink():
-                        shutil.rmtree(child, ignore_errors=True)
-                    else:
-                        child.unlink(missing_ok=True)
-
-                for q in qualities:
-                    (hls_dir / q).mkdir(exist_ok=True)
-
+            for attempt_index, (attempt_backend, hw_decode, mode_name) in enumerate(attempts):
                 ffmpeg_cmd = build_hls_command(
-                    input_url, qualities, QUALITY_MAP, hls_dir, "software", self.vaapi_device
+                    input_url,
+                    qualities,
+                    QUALITY_MAP,
+                    hls_dir,
+                    attempt_backend,
+                    self.vaapi_device,
+                    hw_decode=hw_decode,
                 )
-                self._run_ffmpeg_with_progress(ffmpeg_cmd, duration, progress_callback)
+                try:
+                    self._run_ffmpeg_with_progress(ffmpeg_cmd, duration, progress_callback)
+                except subprocess.CalledProcessError as error:
+                    if attempt_index == len(attempts) - 1:
+                        raise
+                    logger.warning(
+                        "FFmpeg transcode mode failed: mode=%s stderr_tail=%s",
+                        mode_name,
+                        _stderr_tail(error.stderr, input_url),
+                    )
+                    _reset_hls_dir(hls_dir, qualities)
+                else:
+                    break
 
             # 4. Upload HLS files to S3
             uploaded_keys = []

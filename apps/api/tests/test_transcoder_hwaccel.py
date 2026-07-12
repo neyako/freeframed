@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import logging
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
@@ -9,7 +11,7 @@ import pytest
 
 from packages.transcoder import hwaccel
 from packages.transcoder.base import TranscodeJob, TranscodeResult
-from packages.transcoder.ffmpeg_transcoder import _parse_progress_percent
+from packages.transcoder.ffmpeg_transcoder import _parse_progress_percent, _stderr_tail
 from packages.transcoder.hwaccel import (
     BACKENDS,
     build_hls_command,
@@ -27,13 +29,14 @@ QUALITY_MAP = {
 QUALITIES = ["1080p", "720p", "360p"]
 
 
-def _build(backend: str, hls_dir: Path) -> list[str]:
+def _build(backend: str, hls_dir: Path, *, hw_decode: bool = False) -> list[str]:
     return build_hls_command(
         "https://example.test/input.mp4",
         QUALITIES,
         QUALITY_MAP,
         hls_dir,
         backend,
+        hw_decode=hw_decode,
     )
 
 
@@ -44,8 +47,9 @@ def _filter_complex(cmd: list[str]) -> str:
 class TestSelectBackend:
     def test_select_backend_auto_prefers_backends_when_available(self) -> None:
         assert select_backend("auto", "h264_nvenc h264_qsv h264_vaapi", True, True) == "nvenc"
-        assert select_backend("auto", "h264_qsv h264_vaapi", True, False) == "qsv"
+        assert select_backend("auto", "h264_qsv h264_vaapi", True, False) == "vaapi"
         assert select_backend("auto", "h264_vaapi", True, False) == "vaapi"
+        assert select_backend("auto", "h264_qsv", True, False) == "qsv"
         assert select_backend("auto", "", False, False) == "software"
 
     def test_select_backend_forced_backend_ignores_probe(self) -> None:
@@ -79,16 +83,42 @@ class TestResolveBackend:
 
 
 class TestRuntimeFallback:
-    def test_transcode_retries_with_software_after_hardware_failure(
+    @pytest.mark.parametrize(
+        ("resolved_backend", "failed_modes", "expected_build_modes"),
+        [
+            (
+                "nvenc",
+                [("nvenc", b"nvenc stderr")],
+                [("nvenc", False), ("software", False)],
+            ),
+            (
+                "vaapi",
+                [
+                    ("vaapi-full-hw", b"full-hw bytes stderr"),
+                    ("vaapi-hwupload", "hwupload string stderr"),
+                ],
+                [
+                    ("vaapi", True),
+                    ("vaapi", False),
+                    ("software", False),
+                ],
+            ),
+        ],
+    )
+    def test_transcode_logs_and_falls_back_through_expected_modes(
         self,
+        caplog: pytest.LogCaptureFixture,
         monkeypatch: pytest.MonkeyPatch,
+        resolved_backend: str,
+        failed_modes: list[tuple[str, str | bytes]],
+        expected_build_modes: list[tuple[str, bool]],
     ) -> None:
         from packages.transcoder import ffmpeg_transcoder
 
-        build_backends = []
-        run_commands = []
+        build_modes: list[tuple[str, bool]] = []
         hls_dirs: list[Path] = []
-        partial_numeric_outputs: list[Path] = []
+        partial_outputs: list[Path] = []
+        stderr_by_mode = dict(failed_modes)
 
         def fake_build_hls_command(
             input_url: str,
@@ -97,28 +127,45 @@ class TestRuntimeFallback:
             hls_dir: Path,
             backend: str,
             device: str,
+            hw_decode: bool = False,
         ) -> list[str]:
-            build_backends.append(backend)
+            build_modes.append((backend, hw_decode))
             hls_dirs.append(hls_dir)
-            return ["ffmpeg-hls", backend]
+            if backend == "vaapi":
+                mode = "vaapi-full-hw" if hw_decode else "vaapi-hwupload"
+            else:
+                mode = backend
+            return ["ffmpeg-hls", mode]
 
-        def fake_run(cmd: list[str], **kwargs: bool | int | str) -> subprocess.CompletedProcess[str]:
-            run_commands.append(cmd)
-            if cmd == ["ffmpeg-hls", "nvenc"]:
-                partial_output = hls_dirs[-1] / "0" / "seg_000.ts"
-                partial_output.parent.mkdir()
-                partial_output.write_text("partial hardware segment", encoding="utf-8")
-                partial_numeric_outputs.append(partial_output)
-                raise subprocess.CalledProcessError(1, cmd)
-            if cmd == ["ffmpeg-hls", "software"]:
-                partial_output = partial_numeric_outputs[-1]
-                assert not partial_output.exists()
-                assert not partial_output.parent.exists()
-                for quality in QUALITIES:
-                    assert (hls_dirs[-1] / quality).is_dir()
-            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+        def fake_run(
+            cmd: list[str],
+            **kwargs: bool | int | str,
+        ) -> subprocess.CompletedProcess[str]:
+            if cmd[:1] != ["ffmpeg-hls"]:
+                return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
-        monkeypatch.setattr(ffmpeg_transcoder, "resolve_backend", lambda setting, device: "nvenc")
+            if partial_outputs:
+                previous_output = partial_outputs[-1]
+                assert not previous_output.exists()
+                assert not previous_output.parent.exists()
+            for quality in QUALITIES:
+                assert (hls_dirs[-1] / quality).is_dir()
+
+            mode = cmd[1]
+            if mode == "software":
+                return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+            partial_output = hls_dirs[-1] / str(len(partial_outputs)) / "seg_000.ts"
+            partial_output.parent.mkdir()
+            partial_output.write_text(f"partial {mode} segment", encoding="utf-8")
+            partial_outputs.append(partial_output)
+            raise subprocess.CalledProcessError(1, cmd, stderr=stderr_by_mode[mode])
+
+        monkeypatch.setattr(
+            ffmpeg_transcoder,
+            "resolve_backend",
+            lambda setting, device: resolved_backend,
+        )
         monkeypatch.setattr(ffmpeg_transcoder, "build_hls_command", fake_build_hls_command)
         monkeypatch.setattr(ffmpeg_transcoder.subprocess, "run", fake_run)
 
@@ -134,11 +181,31 @@ class TestRuntimeFallback:
             output_s3_prefix="processed/asset-1/version-1",
         )
 
-        result = anyio.run(transcoder.transcode, job)
+        with caplog.at_level(logging.INFO, logger=ffmpeg_transcoder.__name__):
+            result = anyio.run(transcoder.transcode, job)
 
         assert result.success is True
-        assert build_backends == ["nvenc", "software"]
-        assert ["ffmpeg-hls", "software"] in run_commands
+        assert build_modes == expected_build_modes
+        info_messages = [
+            record.getMessage()
+            for record in caplog.records
+            if record.name == ffmpeg_transcoder.__name__ and record.levelno == logging.INFO
+        ]
+        assert any(
+            f"backend={resolved_backend}" in message
+            and f"hw_decode={resolved_backend == 'vaapi'}" in message
+            for message in info_messages
+        )
+        warnings = [
+            record.getMessage()
+            for record in caplog.records
+            if record.name == ffmpeg_transcoder.__name__ and record.levelno == logging.WARNING
+        ]
+        assert len(warnings) == len(failed_modes)
+        for warning, (mode, stderr) in zip(warnings, failed_modes, strict=True):
+            stderr_text = stderr.decode("utf-8") if isinstance(stderr, bytes) else stderr
+            assert mode in warning
+            assert stderr_text in warning
 
 
 class TestTaskSettingsWiring:
@@ -283,6 +350,63 @@ class TestBuildHlsCommand:
         assert "h264_vaapi" in cmd
         assert ",format=nv12,hwupload" in _filter_complex(cmd)
 
+    def test_build_hls_command_vaapi_hw_decode_uses_gpu_decode_and_scale(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        cmd = build_hls_command(
+            "https://example.test/input.mp4",
+            QUALITIES,
+            QUALITY_MAP,
+            tmp_path,
+            "vaapi",
+            hw_decode=True,
+        )
+        filter_complex = _filter_complex(cmd)
+
+        input_index = cmd.index("-i")
+        assert cmd[input_index - 4 : input_index] == [
+            "-hwaccel",
+            "vaapi",
+            "-hwaccel_output_format",
+            "vaapi",
+        ]
+        assert "scale_vaapi=" in filter_complex
+        assert "scale_vaapi=w=1920:h=1080" in filter_complex
+        assert "force_divisible_by=2" in filter_complex
+        assert ":format=nv12" in filter_complex
+        assert "hwupload" not in filter_complex
+        assert "pad=" not in filter_complex
+
+    def test_build_hls_command_vaapi_hw_decode_false_matches_legacy_argv(self) -> None:
+        cmd = build_hls_command(
+            "https://example.test/input.mp4",
+            QUALITIES,
+            QUALITY_MAP,
+            "/tmp/hls",
+            "vaapi",
+            hw_decode=False,
+        )
+
+        assert hashlib.sha256("\0".join(cmd).encode()).hexdigest() == (
+            "19a71a171d80477df52217bd97fbabd92eeddaba5081d23439970688fa84648e"
+        )
+
+    @pytest.mark.parametrize("backend", ["software", "nvenc", "qsv"])
+    def test_build_hls_command_hw_decode_is_ignored_for_non_vaapi_backends(
+        self,
+        backend: str,
+        tmp_path: Path,
+    ) -> None:
+        assert build_hls_command(
+            "https://example.test/input.mp4",
+            QUALITIES,
+            QUALITY_MAP,
+            tmp_path,
+            backend,
+            hw_decode=True,
+        ) == _build(backend, tmp_path)
+
     def test_build_hls_command_qsv_adds_device_encoder_and_upload_filter(
         self,
         tmp_path: Path,
@@ -326,3 +450,18 @@ class TestParseProgressPercent:
 
     def test_unrelated_progress_key_returns_none(self) -> None:
         assert _parse_progress_percent("frame=120", 10) is None
+
+
+class TestStderrTail:
+    @pytest.mark.parametrize("as_bytes", [False, True])
+    def test_stderr_tail_limits_output_and_redacts_presigned_url(self, as_bytes: bool) -> None:
+        sensitive_url = "https://example.test/input.mp4?X-Amz-Signature=secret"
+        stderr_text = f"{'x' * 2100} {sensitive_url} final diagnostic"
+        stderr = stderr_text.encode("utf-8") if as_bytes else stderr_text
+
+        tail = _stderr_tail(stderr, sensitive_url)
+
+        assert len(tail) == 2000
+        assert "secret" not in tail
+        assert "<redacted input URL>" in tail
+        assert tail.endswith("final diagnostic")
