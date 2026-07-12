@@ -391,17 +391,6 @@ export interface Collection {
   deleted_at: string | null;
 }
 
-export interface CollectionShare {
-  id: string;
-  collection_id: string;
-  token: string;
-  permission: SharePermission;
-  expires_at: string | null;
-  created_by: string;
-  created_at: string;
-  deleted_at: string | null;
-}
-
 // ─── Activity, Mentions & Notifications ───────────────────────────────────────
 
 export interface Mention {
