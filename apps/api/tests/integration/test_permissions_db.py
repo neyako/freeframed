@@ -43,6 +43,24 @@ def test_require_project_role_allows_owner_for_editor_minimum(
     assert member.role == ProjectRole.owner
 
 
+def test_require_project_role_allows_transient_superadmin_owner(
+    db,
+    make_project,
+    make_user,
+) -> None:
+    project, _owner = make_project()
+    superadmin = make_user()
+    superadmin.is_superadmin = True
+    db.flush()
+
+    member = require_project_role(db, project.id, superadmin, ProjectRole.owner)
+
+    assert member.project_id == project.id
+    assert member.user_id == superadmin.id
+    assert member.role == ProjectRole.owner
+    assert member not in db
+
+
 def test_require_project_role_rejects_viewer_for_editor_minimum(
     db,
     make_project,

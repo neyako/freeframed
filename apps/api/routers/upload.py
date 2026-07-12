@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from typing import Optional
 from ..database import get_db
 from ..middleware.auth import get_current_user
-from ..models.user import User
+from ..models.user import User, UserStatus
 from ..models.asset import Asset, AssetVersion, MediaFile, AssetType, ProcessingStatus, FileType
 from ..models.folder import Folder
 from ..models.project import Project, ProjectMember, ProjectRole
@@ -26,16 +26,16 @@ from ..schemas.upload import (
 router = APIRouter(prefix="/upload", tags=["upload"])
 
 
-def find_quick_share_reviewer_id(db: Session, project: Project) -> Optional[uuid.UUID]:
-    """Return the user_id to assign quick-share uploads to.
-
-    A member with the ``reviewer`` role wins if one is designated; otherwise
-    fall back to the project owner (single-box NAS: owner = the reviewer).
-    """
+def find_quick_share_reviewer_id(
+    db: Session,
+    project: Project,
+    uploader_id: uuid.UUID,
+) -> Optional[uuid.UUID]:
     if not project.is_quick_share:
         return None
     base = db.query(ProjectMember).filter(
         ProjectMember.project_id == project.id,
+        ProjectMember.user_id != uploader_id,
         ProjectMember.deleted_at.is_(None),
     )
     reviewer = (
@@ -45,7 +45,20 @@ def find_quick_share_reviewer_id(db: Session, project: Project) -> Optional[uuid
     )
     if reviewer is not None:
         return reviewer.user_id
-    return project.created_by
+    if project.created_by != uploader_id:
+        return project.created_by
+    superadmin = (
+        db.query(User)
+        .filter(
+            User.is_superadmin == True,
+            User.id != uploader_id,
+            User.deleted_at.is_(None),
+            User.status == UserStatus.active,
+        )
+        .order_by(User.created_at.asc())
+        .first()
+    )
+    return superadmin.id if superadmin is not None else None
 
 
 def _get_upload_media_file(db: Session, version_id: uuid.UUID) -> MediaFile:
@@ -100,8 +113,8 @@ def initiate_upload(
         )
         db.add(asset)
         db.flush()
-        reviewer_id = find_quick_share_reviewer_id(db, project)
-        if reviewer_id is not None and reviewer_id != current_user.id:
+        reviewer_id = find_quick_share_reviewer_id(db, project, current_user.id)
+        if reviewer_id is not None:
             asset.assignee_id = reviewer_id
             notification = Notification(
                 user_id=reviewer_id,

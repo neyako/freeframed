@@ -114,6 +114,30 @@ def test_asset_access_denies_unrelated_private_reader(db, make_project, make_use
     assert _access_values(access) == (False, False, False, False, None)
 
 
+def test_asset_access_allows_superadmin_without_membership(db, make_project, make_user) -> None:
+    project, owner = make_project()
+    actor = make_user()
+    actor.is_superadmin = True
+    asset = _add_asset(db, project.id, owner.id)
+    db.flush()
+
+    access = permissions.get_asset_access(db, asset, actor)
+
+    assert _access_values(access) == (True, True, True, True, None)
+
+
+def test_asset_access_allows_assignee_to_review_without_membership(db, make_project, make_user) -> None:
+    project, owner = make_project()
+    actor = make_user()
+    asset = _add_asset(db, project.id, owner.id)
+    asset.assignee_id = actor.id
+    db.flush()
+
+    access = permissions.get_asset_access(db, asset, actor)
+
+    assert _access_values(access) == (True, True, True, False, None)
+
+
 def test_asset_access_folder_share_inherits_to_descendant(db, make_project, make_user) -> None:
     project, owner = make_project()
     actor = make_user()

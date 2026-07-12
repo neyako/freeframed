@@ -106,6 +106,39 @@ def test_quick_share_upload_falls_back_to_owner(db, make_project, make_user) -> 
     assert notification is not None
 
 
+def test_quick_share_upload_owned_by_uploader_falls_back_to_superadmin(
+    db,
+    make_project,
+    make_user,
+) -> None:
+    # Given: uploader owns the quick-share project and no reviewer is designated
+    project, uploader = make_project()
+    project.is_quick_share = True
+    _add_member(db, project.id, uploader.id, ProjectRole.owner)
+    superadmin = make_user("admin@example.com", "Admin")
+    superadmin.is_superadmin = True
+    db.commit()
+
+    # When: the owner uploads
+    response = _initiate_upload(db, uploader, project.id)
+
+    # Then: asset is assigned to the first active superadmin, never the uploader
+    assert response.status_code == 200, response.text
+    asset_id = uuid.UUID(response.json()["asset_id"])
+    asset = db.query(Asset).filter(Asset.id == asset_id, Asset.deleted_at.is_(None)).one()
+    assert asset.assignee_id == superadmin.id
+    notification = (
+        db.query(Notification)
+        .filter(
+            Notification.user_id == superadmin.id,
+            Notification.type == NotificationType.assignment,
+            Notification.asset_id == asset.id,
+        )
+        .one_or_none()
+    )
+    assert notification is not None
+
+
 def test_non_quick_share_upload_leaves_asset_unassigned(db, make_project, make_user) -> None:
     # Given
     project, _owner = make_project()

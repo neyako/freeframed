@@ -51,6 +51,14 @@ def require_project_role(
         ProjectRole.viewer: 1,
     }
     member = get_project_member(db, project_id, user.id)
+    if user.is_superadmin:
+        if member is not None:
+            return member
+        return ProjectMember(
+            project_id=project_id,
+            user_id=user.id,
+            role=ProjectRole.owner,
+        )
     if not member:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not a project member")
     if ROLE_RANK[member.role] < ROLE_RANK[minimum_role]:
@@ -111,6 +119,14 @@ def get_asset_access(db: Session, asset: Asset, user: User) -> AssetAccess:
     project = get_project(db, asset.project_id)
     if project is None:
         return AssetAccess(False, False, False, False, None)
+    if user.is_superadmin:
+        return AssetAccess(
+            can_read=True,
+            can_comment=True,
+            can_approve=True,
+            is_project_member=True,
+            direct_permission=None,
+        )
     member = _find_project_member(db, asset.project_id, user.id)
     direct_permission = _get_direct_permission(db, asset, user.id)
     member_can_comment = False
@@ -137,11 +153,12 @@ def get_asset_access(db: Session, asset: Asset, user: User) -> AssetAccess:
         case unreachable:
             assert_never(unreachable)
     is_project_member = member is not None
-    can_read = is_project_member or direct_permission is not None or project.is_public
+    is_assignee = asset.assignee_id == user.id
+    can_read = is_project_member or direct_permission is not None or project.is_public or is_assignee
     return AssetAccess(
         can_read=can_read,
-        can_comment=member_can_comment or direct_can_comment,
-        can_approve=member_can_approve or direct_can_approve,
+        can_comment=member_can_comment or direct_can_comment or is_assignee,
+        can_approve=member_can_approve or direct_can_approve or is_assignee,
         is_project_member=is_project_member,
         direct_permission=direct_permission,
     )

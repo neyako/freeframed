@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, PropertyMock
 
 import pytest
+from fastapi import HTTPException
 from sqlalchemy.exc import InvalidRequestError
 
 from apps.api.models.approval import ApprovalStatus
@@ -62,6 +63,11 @@ def _configure_approval_route(monkeypatch, scoped, action, db, actor, asset, cre
         return module.approve_shared_asset if action == "approve" else module.reject_shared_asset
     monkeypatch.setattr(module, "_get_asset", lambda *args: asset)
     monkeypatch.setattr(module, "get_asset_access", lambda *args: SimpleNamespace(can_approve=True))
+    monkeypatch.setattr(
+        module,
+        "get_active_version",
+        lambda *args: SimpleNamespace(created_by=asset.created_by),
+    )
     return module.approve_asset if action == "approve" else module.reject_asset
 
 
@@ -69,6 +75,60 @@ def _read_before_commit(expired: list[bool], value: str) -> str:
     if expired[0]:
         raise InvalidRequestError("expired")
     return value
+
+
+@pytest.mark.parametrize(
+    ("action", "version_created_by_user"),
+    [("approve", True), ("reject", False)],
+)
+def test_approval_routes_reject_review_of_own_upload(
+    monkeypatch,
+    action,
+    version_created_by_user,
+) -> None:
+    actor = SimpleNamespace(id=uuid.uuid4(), name="Reviewer", email="reviewer@example.invalid")
+    asset = SimpleNamespace(
+        id=uuid.uuid4(),
+        name="Asset",
+        created_by=uuid.uuid4() if version_created_by_user else actor.id,
+    )
+    version = SimpleNamespace(created_by=actor.id if version_created_by_user else None)
+    db = MagicMock()
+    approval = MagicMock()
+    route = _configure_approval_route(monkeypatch, False, action, db, actor, asset, None, approval)
+    version_lookup = MagicMock(return_value=version)
+    upsert = MagicMock(return_value=approval)
+    monkeypatch.setattr(approvals, "get_active_version", version_lookup)
+    monkeypatch.setattr(approvals, "upsert_approval", upsert)
+    body = ApprovalCreate(version_id=uuid.uuid4(), note="Synthetic note")
+
+    with pytest.raises(HTTPException) as exc:
+        route(asset.id, body, db, actor)
+
+    assert exc.value.status_code == 403
+    assert exc.value.detail == "You cannot review your own upload"
+    version_lookup.assert_called_once_with(db, asset, body.version_id)
+    upsert.assert_not_called()
+
+
+@pytest.mark.parametrize("action", ["approve", "reject"])
+def test_approval_routes_allow_different_user_to_review_version(monkeypatch, action) -> None:
+    actor = SimpleNamespace(id=uuid.uuid4(), name="Reviewer", email="reviewer@example.invalid")
+    version_creator_id = uuid.uuid4()
+    asset = SimpleNamespace(id=uuid.uuid4(), name="Asset", created_by=version_creator_id)
+    creator = SimpleNamespace(id=version_creator_id, email="creator@example.invalid")
+    version = SimpleNamespace(created_by=version_creator_id)
+    db = MagicMock()
+    approval = MagicMock()
+    route = _configure_approval_route(monkeypatch, False, action, db, actor, asset, creator, approval)
+    version_lookup = MagicMock(return_value=version)
+    monkeypatch.setattr(approvals, "get_active_version", version_lookup)
+    body = ApprovalCreate(version_id=uuid.uuid4(), note="Synthetic note")
+
+    result = route(asset.id, body, db, actor)
+
+    version_lookup.assert_called_once_with(db, asset, body.version_id)
+    assert result is approval
 
 
 @pytest.mark.parametrize("scoped", [False, True])

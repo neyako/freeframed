@@ -132,7 +132,6 @@ def test_cross_user_quick_share_assets_are_denied_over_http(db, make_user) -> No
     # Given
     user_a = make_user("asset-a@invalid.test", "Asset A")
     user_b = make_user("asset-b@invalid.test", "Asset B")
-    user_a.is_superadmin = True
     project_a = _project_with_owner(db, user_a)
     project_b = _project_with_owner(db, user_b)
     project_a.is_quick_share = True

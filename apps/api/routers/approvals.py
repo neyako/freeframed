@@ -39,6 +39,13 @@ def approve_asset(
     asset = _get_asset(db, asset_id)
     if not get_asset_access(db, asset, current_user).can_approve:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Approval permission required")
+    version = get_active_version(db, asset, body.version_id)
+    version_creator_id = version.created_by if version.created_by is not None else asset.created_by
+    if version_creator_id == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You cannot review your own upload",
+        )
 
     approval = upsert_approval(db, asset, body.version_id, current_user, ApprovalStatus.approved, body.note)
 
@@ -77,6 +84,13 @@ def reject_asset(
     asset = _get_asset(db, asset_id)
     if not get_asset_access(db, asset, current_user).can_approve:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Approval permission required")
+    version = get_active_version(db, asset, body.version_id)
+    version_creator_id = version.created_by if version.created_by is not None else asset.created_by
+    if version_creator_id == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You cannot review your own upload",
+        )
 
     approval = upsert_approval(db, asset, body.version_id, current_user, ApprovalStatus.rejected, body.note)
 
