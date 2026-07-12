@@ -55,7 +55,6 @@ function isAssetVersionStatus(
 ): value is AssetVersion["processing_status"] {
   return (
     value === "uploading" ||
-    value === "queued" ||
     value === "processing" ||
     value === "ready" ||
     value === "failed"
@@ -102,7 +101,6 @@ function getPreferredVersion(
 function shouldPollVersion(version: AssetVersion | null | undefined): boolean {
   return (
     version?.processing_status === "uploading" ||
-    version?.processing_status === "queued" ||
     version?.processing_status === "processing"
   );
 }

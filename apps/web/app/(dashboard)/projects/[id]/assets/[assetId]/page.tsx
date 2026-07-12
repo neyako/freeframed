@@ -269,7 +269,6 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
 
   const versionReady = currentVersion?.processing_status === 'ready'
   const versionProcessing =
-    currentVersion?.processing_status === 'queued' ||
     currentVersion?.processing_status === 'processing' ||
     currentVersion?.processing_status === 'uploading'
 

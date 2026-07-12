@@ -1,7 +1,7 @@
 import { create, type StateCreator } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { api } from '@/lib/api'
-import type { AssetResponse, AssetVersionStatus } from '@/types'
+import type { AssetResponse } from '@/types'
 
 const CHUNK_SIZE = 10 * 1024 * 1024 // 10 MB
 
@@ -130,18 +130,13 @@ interface UploadStore {
   refreshProcessingItems: () => Promise<void>
 }
 
-function assertNever(status: never): never {
-  throw new Error(`Unexpected processing status: ${status}`)
-}
-
-function mapProcessingStatus(status: AssetVersionStatus): UploadStatus {
+function mapProcessingStatus(status: string): UploadStatus {
   switch (status) {
     case 'uploading': return 'uploading'
-    case 'queued': return 'processing'
     case 'processing': return 'processing'
     case 'ready': return 'complete'
     case 'failed': return 'failed'
-    default: return assertNever(status)
+    default: return 'complete'
   }
 }
 
