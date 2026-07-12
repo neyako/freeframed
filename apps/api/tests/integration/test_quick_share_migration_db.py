@@ -15,7 +15,9 @@ from sqlalchemy.exc import ProgrammingError
 
 ROOT = Path(__file__).resolve().parents[4]
 API_ROOT = ROOT / "apps/api"
-DATABASE_URL = os.environ["TEST_DATABASE_URL"]
+DATABASE_URL = os.getenv("TEST_DATABASE_URL")
+if DATABASE_URL is None:
+    pytest.skip("TEST_DATABASE_URL not set", allow_module_level=True)
 os.environ["DATABASE_URL"] = DATABASE_URL
 sys.path.insert(0, str(API_ROOT))
 register_uuid()

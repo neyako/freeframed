@@ -15,7 +15,10 @@ from unittest.mock import patch, MagicMock
 # Set required environment variables BEFORE importing the app modules.
 # This must happen before any import of apps.api.config or apps.api.main.
 os.environ.setdefault("DATABASE_URL", "postgresql://user:pass@localhost:5432/freeframe_test")
-os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
+# Deliberately unreachable: unit tests must exercise the Redis fail-open
+# paths, never a live local Redis (whose rate-limit counters persist across
+# runs and cause order-dependent 429 failures).
+os.environ["REDIS_URL"] = "redis://127.0.0.1:1/0"
 os.environ.setdefault("S3_BUCKET", "freeframe-test")
 os.environ.setdefault("S3_ENDPOINT", "http://localhost:9000")
 os.environ.setdefault("S3_ACCESS_KEY", "testkey")
