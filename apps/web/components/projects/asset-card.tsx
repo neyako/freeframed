@@ -32,6 +32,7 @@ interface AssetCardProps {
   selected?: boolean
   onSelect?: (e: React.MouseEvent) => void
   onDragStart?: (e: React.DragEvent) => void
+  dragEnabled?: boolean
   onShare?: () => void
   onDownload?: () => void
   onRename?: () => void
@@ -70,6 +71,7 @@ export function AssetCard({
   selected = false,
   onSelect,
   onDragStart,
+  dragEnabled = true,
   onShare,
   onDownload,
   onRename,
@@ -89,7 +91,7 @@ export function AssetCard({
 
   return (
     <div
-      draggable
+      draggable={dragEnabled || undefined}
       onDragStart={onDragStart}
       className={cn(
         'group flex flex-col rounded-lg overflow-hidden transition-colors duration-150 cursor-pointer border',

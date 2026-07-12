@@ -66,6 +66,7 @@ interface AssetGridProps {
   onAssetDelete?: (asset: Asset) => void
   /** Actions rendered on the right side of the navigator bar */
   actions?: React.ReactNode
+  scopedReadOnly?: boolean
 }
 
 // Grid column classes based on card size
@@ -115,20 +116,22 @@ export function AssetGrid({
   onAssetRename,
   onAssetDelete,
   actions,
+  scopedReadOnly = false,
 }: AssetGridProps) {
   const [selectedAssetIds, setSelectedAssetIds] = React.useState<Set<string>>(new Set())
   const [selectedFolderIds, setSelectedFolderIds] = React.useState<Set<string>>(new Set())
   const [moveDialogOpen, setMoveDialogOpen] = React.useState(false)
+  const effectiveShareMode = shareMode && !scopedReadOnly
 
   // Legacy alias
   const selectedIds = selectedAssetIds
 
   // Clear selection when share mode changes
   React.useEffect(() => {
-    if (!shareMode) return
+    if (!effectiveShareMode) return
     setSelectedAssetIds(new Set())
     setSelectedFolderIds(new Set())
-  }, [shareMode])
+  }, [effectiveShareMode])
 
   const {
     layout,
@@ -211,7 +214,7 @@ export function AssetGrid({
   return (
     <div className="flex flex-col gap-3 relative">
       {/* ─── Share Selection Mode Bar ──────────────────────────────────── */}
-      {shareMode && (
+      {effectiveShareMode && (
         <div className="flex items-center justify-between rounded-lg border border-accent/30 bg-accent/5 px-4 py-2.5">
           <span className="text-sm font-medium text-text-primary">
             Select items to share
@@ -243,7 +246,7 @@ export function AssetGrid({
       )}
 
       {/* ─── Navigator Bar (Frame.io style) ─────────────────────────────── */}
-      {!shareMode && (
+      {!effectiveShareMode && (
         <div className="flex flex-wrap items-center gap-1 border-b border-border pb-2.5">
           {/* Left group: Appearance + Fields + Sort */}
           <div className="hidden lg:flex items-center gap-1">
@@ -282,9 +285,9 @@ export function AssetGrid({
                     'group/folder relative',
                     isFolderSelected && 'ring-2 ring-accent rounded-lg',
                   )}
-                  onClick={shareMode ? (e) => { e.stopPropagation(); toggleFolderSelect(folder.id) } : undefined}
+                  onClick={effectiveShareMode ? (e) => { e.stopPropagation(); toggleFolderSelect(folder.id) } : undefined}
                 >
-                  <button
+                  {!scopedReadOnly && <button
                     className={cn(
                       'absolute top-2 left-2 z-10 h-5 w-5 rounded border flex items-center justify-center transition-all',
                       isFolderSelected
@@ -294,15 +297,29 @@ export function AssetGrid({
                     onClick={(e) => { e.stopPropagation(); toggleFolderSelect(folder.id) }}
                   >
                     {isFolderSelected && <Check className="h-3 w-3" />}
-                  </button>
-                  <FolderCard
-                    folder={folder}
-                    onOpen={shareMode ? () => {} : onFolderOpen!}
-                    onRename={shareMode ? undefined : onFolderRename}
-                    onDelete={shareMode ? undefined : onFolderDelete}
-                    onShare={shareMode ? undefined : onFolderShare}
-                    onDropItems={shareMode ? undefined : onDropToFolder}
-                  />
+                  </button>}
+                  {scopedReadOnly ? (
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-3 rounded-lg border border-border bg-bg-secondary px-3 py-4 text-left hover:border-border-strong"
+                      onClick={() => onFolderOpen?.(folder)}
+                    >
+                      <FolderIcon className="h-6 w-6 text-text-tertiary" />
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-medium text-text-primary">{folder.name}</span>
+                        <span className="font-mono text-[10px] text-text-tertiary">{folder.item_count ?? 0} items</span>
+                      </span>
+                    </button>
+                  ) : (
+                    <FolderCard
+                      folder={folder}
+                      onOpen={effectiveShareMode ? () => {} : onFolderOpen!}
+                      onRename={effectiveShareMode ? undefined : onFolderRename}
+                      onDelete={effectiveShareMode ? undefined : onFolderDelete}
+                      onShare={effectiveShareMode ? undefined : onFolderShare}
+                      onDropItems={effectiveShareMode ? undefined : onDropToFolder}
+                    />
+                  )}
                 </div>
               )
             })}
@@ -322,9 +339,11 @@ export function AssetGrid({
         <div className="rounded-lg border border-border bg-bg-secondary">
           <EmptyState
             icon={Layers}
-            title="No assets"
-            description="Upload your first asset to get started."
-            action={onUpload ? { label: 'Upload', onClick: onUpload } : undefined}
+            title={scopedReadOnly ? 'No assets in this folder' : 'No assets'}
+            description={scopedReadOnly
+              ? 'No assets are available in this shared folder.'
+              : 'Upload your first asset to get started.'}
+            action={!scopedReadOnly && onUpload ? { label: 'Upload', onClick: onUpload } : undefined}
           />
         </div>
       ) : layout === 'grid' && filtered.length > 0 ? (
@@ -337,7 +356,7 @@ export function AssetGrid({
                 selectedAssetId === asset.id && 'ring-2 ring-accent ring-offset-1 ring-offset-bg-primary',
               )}
               onClick={(e) => {
-                if (shareMode) {
+                if (effectiveShareMode) {
                   e.stopPropagation()
                   toggleAssetSelect(asset.id)
                 } else {
@@ -355,18 +374,23 @@ export function AssetGrid({
                 thumbnailUrl={thumbnails[asset.id]}
                 fileSize={fileSizes[asset.id] ?? null}
                 selected={selectedAssetIds.has(asset.id)}
-                onSelect={() => toggleAssetSelect(asset.id)}
-                showInfo={showCardInfo}
+                onSelect={scopedReadOnly ? undefined : () => toggleAssetSelect(asset.id)}
+                dragEnabled={!scopedReadOnly}
+                showInfo={scopedReadOnly ? false : showCardInfo}
                 showFileSize={showFileSize}
                 showUploader={showUploader}
                 titleLines={titleLines}
                 aspectRatio={aspectRatio}
                 thumbnailScale={thumbnailScale}
-                onShare={onAssetShare ? () => onAssetShare(asset) : undefined}
-                onDownload={onAssetDownload ? () => onAssetDownload(asset) : undefined}
-                onRename={onAssetRename ? () => onAssetRename(asset) : undefined}
-                onDelete={onAssetDelete ? () => onAssetDelete(asset) : undefined}
+                onShare={!scopedReadOnly && onAssetShare ? () => onAssetShare(asset) : undefined}
+                onDownload={!scopedReadOnly && onAssetDownload ? () => onAssetDownload(asset) : undefined}
+                onRename={!scopedReadOnly && onAssetRename ? () => onAssetRename(asset) : undefined}
+                onDelete={!scopedReadOnly && onAssetDelete ? () => onAssetDelete(asset) : undefined}
                 onDragStart={(e: React.DragEvent) => {
+                  if (scopedReadOnly) {
+                    e.preventDefault()
+                    return
+                  }
                   const ids = selectedAssetIds.has(asset.id)
                     ? Array.from(selectedIds)
                     : [asset.id]
@@ -377,6 +401,9 @@ export function AssetGrid({
                   e.dataTransfer.effectAllowed = 'move'
                 }}
               />
+              {scopedReadOnly && (
+                <p className="px-2 pt-2 pb-1.5 text-sm font-medium text-text-primary truncate">{asset.name}</p>
+              )}
             </div>
           ))}
         </div>
@@ -412,7 +439,7 @@ export function AssetGrid({
                 {/* Folder icon with checkbox overlay — aligned with asset thumbnail */}
                 <div className="ff-dotgrid relative h-10 w-10 shrink-0 rounded bg-bg-tertiary flex items-center justify-center overflow-hidden">
                   <FolderIcon className="h-5 w-5 text-text-tertiary/60" />
-                  <button
+                  {!scopedReadOnly && <button
                     className={cn(
                       'absolute inset-0 flex items-center justify-center transition-all',
                       isFolderSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100',
@@ -427,7 +454,7 @@ export function AssetGrid({
                     )}>
                       {isFolderSelected && <Check className="h-2.5 w-2.5" />}
                     </div>
-                  </button>
+                  </button>}
                 </div>
 
                 {/* Name */}
@@ -454,7 +481,7 @@ export function AssetGrid({
                 <div className="w-8 shrink-0" />
 
                 {/* Context menu */}
-                <div className="w-8 shrink-0 flex justify-center opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity">
+                {!scopedReadOnly && <div className="w-8 shrink-0 flex justify-center opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity">
                   <DropdownMenu.Root>
                     <DropdownMenu.Trigger asChild>
                       <button
@@ -501,7 +528,7 @@ export function AssetGrid({
                       </DropdownMenu.Content>
                     </DropdownMenu.Portal>
                   </DropdownMenu.Root>
-                </div>
+                </div>}
               </div>
             )
           })}
@@ -516,7 +543,7 @@ export function AssetGrid({
               <div
                 key={asset.id}
                 onClick={(e) => {
-                  if (shareMode) {
+                  if (effectiveShareMode) {
                     e.stopPropagation()
                     toggleAssetSelect(asset.id)
                   } else {
@@ -538,7 +565,7 @@ export function AssetGrid({
                   ) : (
                     <TypeIcon className="h-6 w-6 text-text-tertiary/60" />
                   )}
-                  <button
+                  {!scopedReadOnly && <button
                     className={cn(
                       'absolute inset-0 flex items-center justify-center transition-all',
                       selectedAssetIds.has(asset.id) ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100',
@@ -553,7 +580,7 @@ export function AssetGrid({
                     )}>
                       {selectedAssetIds.has(asset.id) && <Check className="h-2.5 w-2.5" />}
                     </div>
-                  </button>
+                  </button>}
                 </div>
                 {/* Name + status */}
                 <div className="flex-1 min-w-0">
@@ -584,7 +611,7 @@ export function AssetGrid({
                   {assignee && <Avatar src={assignee.avatar_url} name={assignee.name} size="sm" />}
                 </div>
                 {/* Context menu — hidden until hover */}
-                <div className="w-8 shrink-0 flex justify-center opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity">
+                {!scopedReadOnly && <div className="w-8 shrink-0 flex justify-center opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity">
                   <DropdownMenu.Root>
                     <DropdownMenu.Trigger asChild>
                       <button
@@ -648,7 +675,7 @@ export function AssetGrid({
                       </DropdownMenu.Content>
                     </DropdownMenu.Portal>
                   </DropdownMenu.Root>
-                </div>
+                </div>}
               </div>
             )
           })}
@@ -656,7 +683,7 @@ export function AssetGrid({
       ) : null}
 
       {/* Bottom selection action bar (Frame.io style) */}
-      {!shareMode && totalSelected > 0 && (
+      {!scopedReadOnly && !effectiveShareMode && totalSelected > 0 && (
         <div className="sticky bottom-0 z-20 flex items-center gap-3 rounded-lg border border-border bg-bg-elevated px-4 py-2.5 shadow-xl">
           <button onClick={clearSelection} className="text-text-tertiary hover:text-text-primary transition-colors">
             <X className="h-4 w-4" />
@@ -709,7 +736,7 @@ export function AssetGrid({
         </div>
       )}
 
-      <MoveToDialog
+      {!scopedReadOnly && <MoveToDialog
         open={moveDialogOpen}
         onOpenChange={setMoveDialogOpen}
         projectName={projectName}
@@ -720,7 +747,7 @@ export function AssetGrid({
           onBulkMove?.(Array.from(selectedAssetIds), Array.from(selectedFolderIds), targetFolderId)
           clearSelection()
         }}
-      />
+      />}
     </div>
   )
 }

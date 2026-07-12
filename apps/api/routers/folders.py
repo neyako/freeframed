@@ -22,6 +22,12 @@ from ..schemas.folder import (
     FolderUpdate,
 )
 from ..services.permissions import require_project_role, get_project_member, is_public_project
+from ..services.folder_access import (
+    FolderAccess,
+    folder_is_in_scope,
+    folder_scope_select,
+    resolve_folder_access,
+)
 
 router = APIRouter(tags=["folders"])
 
@@ -121,6 +127,58 @@ def _folder_to_response(db: Session, folder: Folder) -> FolderResponse:
     resp = FolderResponse.model_validate(folder)
     resp.item_count = _compute_item_count(db, folder.id)
     return resp
+
+
+def _folder_access_for_reader(
+    db: Session,
+    project_id: uuid.UUID,
+    user_id: uuid.UUID,
+) -> FolderAccess | None:
+    member = get_project_member(db, project_id, user_id)
+    if member is not None or is_public_project(db, project_id):
+        return None
+    access = resolve_folder_access(db, project_id, user_id)
+    if access is None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not a project member")
+    return access
+
+
+def _parse_folder_filter(value: str) -> uuid.UUID:
+    try:
+        return uuid.UUID(value)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Invalid folder ID",
+        ) from exc
+
+
+def _scoped_folder_responses(
+    db: Session,
+    folders: list[Folder],
+    project_id: uuid.UUID,
+    access: FolderAccess,
+) -> list[FolderResponse]:
+    folder_ids = [folder.id for folder in folders]
+    scoped_ids = folder_scope_select(project_id, access.accessible_root_ids)
+    subfolder_counts = dict(db.query(Folder.parent_id, func.count(Folder.id)).filter(
+        Folder.parent_id.in_(folder_ids),
+        Folder.id.in_(scoped_ids),
+        Folder.deleted_at.is_(None),
+    ).group_by(Folder.parent_id).all()) if folder_ids else {}
+    asset_counts = dict(db.query(Asset.folder_id, func.count(Asset.id)).filter(
+        Asset.folder_id.in_(folder_ids),
+        Asset.deleted_at.is_(None),
+    ).group_by(Asset.folder_id).all()) if folder_ids else {}
+    roots = set(access.accessible_root_ids)
+    responses = []
+    for folder in folders:
+        response = FolderResponse.model_validate(folder)
+        if folder.id in roots:
+            response.parent_id = None
+        response.item_count = subfolder_counts.get(folder.id, 0) + asset_counts.get(folder.id, 0)
+        responses.append(response)
+    return responses
 
 
 def _get_descendant_ids_including_deleted(db: Session, folder_id: uuid.UUID) -> list[uuid.UUID]:
@@ -235,20 +293,31 @@ def list_folders(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # Allow access if user is a project member OR the project is public
-    member = get_project_member(db, project_id, current_user.id)
-    if not member and not is_public_project(db, project_id):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not a project member")
+    access = _folder_access_for_reader(db, project_id, current_user.id)
 
     query = db.query(Folder).filter(
         Folder.project_id == project_id,
         Folder.deleted_at.is_(None),
     )
 
+    if access is not None:
+        query = query.filter(Folder.id.in_(
+            folder_scope_select(project_id, access.accessible_root_ids)
+        ))
+        if parent_id == "root":
+            query = query.filter(Folder.id.in_(access.accessible_root_ids))
+        elif parent_id is not None:
+            parsed_parent_id = _parse_folder_filter(parent_id)
+            if not folder_is_in_scope(db, project_id, parsed_parent_id, access):
+                raise HTTPException(status_code=404, detail="Folder not found")
+            query = query.filter(Folder.parent_id == parsed_parent_id)
+        folders = query.order_by(Folder.created_at.desc()).all()
+        return _scoped_folder_responses(db, folders, project_id, access)
+
     if parent_id == "root":
         query = query.filter(Folder.parent_id.is_(None))
     elif parent_id is not None:
-        query = query.filter(Folder.parent_id == uuid.UUID(parent_id))
+        query = query.filter(Folder.parent_id == _parse_folder_filter(parent_id))
 
     folders = query.order_by(Folder.created_at.desc()).all()
     return [_folder_to_response(db, f) for f in folders]
@@ -260,16 +329,17 @@ def get_folder_tree(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # Allow access if user is a project member OR the project is public
-    member = get_project_member(db, project_id, current_user.id)
-    if not member and not is_public_project(db, project_id):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not a project member")
+    access = _folder_access_for_reader(db, project_id, current_user.id)
 
-    all_folders = (
-        db.query(Folder)
-        .filter(Folder.project_id == project_id, Folder.deleted_at.is_(None))
-        .all()
+    query = db.query(Folder).filter(
+        Folder.project_id == project_id,
+        Folder.deleted_at.is_(None),
     )
+    if access is not None:
+        query = query.filter(Folder.id.in_(
+            folder_scope_select(project_id, access.accessible_root_ids)
+        ))
+    all_folders = query.all()
 
     # Batch-compute item counts (avoid N+1 queries)
     folder_ids = [f.id for f in all_folders]
@@ -294,7 +364,7 @@ def get_folder_tree(
         folder_map[f.id] = FolderTreeNode(
             id=f.id,
             name=f.name,
-            parent_id=f.parent_id,
+            parent_id=None if access is not None and f.id in access.accessible_root_ids else f.parent_id,
             item_count=(subfolder_counts.get(f.id, 0) + asset_counts.get(f.id, 0)),
         )
 

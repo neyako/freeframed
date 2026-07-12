@@ -14,7 +14,8 @@ from ..models.share import AssetShare
 from ..models.activity import Mention, Notification, NotificationType
 from ..schemas.asset import AssetResponse, AssetVersionResponse, AssetUpdate, StreamUrlResponse, MediaFileResponse
 from ..schemas.notification import AssignmentUpdate
-from ..services.permissions import require_project_role, require_asset_access, can_access_asset, is_public_project, get_project_member
+from ..services.permissions import get_asset_access, require_project_role, require_asset_access, can_access_asset, is_public_project, get_project_member
+from ..services.folder_access import folder_is_in_scope, folder_scope_select, resolve_folder_access
 from ..services.s3_service import generate_presigned_get_url, build_download_filename
 from .hls_proxy import create_hls_token
 from ..schemas.upload import InitiateUploadRequest, InitiateUploadResponse, ALLOWED_MIME_TYPES, MAX_FILE_SIZE_BYTES, mime_to_asset_type
@@ -112,17 +113,36 @@ def list_assets(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # Allow access if user is a project member OR the project is public
     member = get_project_member(db, project_id, current_user.id)
+    direct_access = None
     if not member and not is_public_project(db, project_id):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not a project member")
+        direct_access = resolve_folder_access(db, project_id, current_user.id)
+        if direct_access is None:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not a project member")
 
     query = db.query(Asset).filter(
         Asset.project_id == project_id,
         Asset.deleted_at.is_(None),
     )
 
-    if folder_id == "root":
+    if direct_access is not None:
+        query = query.filter(Asset.folder_id.in_(
+            folder_scope_select(project_id, direct_access.accessible_root_ids)
+        ))
+        if folder_id == "root":
+            query = query.filter(False)
+        elif folder_id is not None:
+            try:
+                parsed_folder_id = uuid.UUID(folder_id)
+            except ValueError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="Invalid folder ID",
+                ) from exc
+            if not folder_is_in_scope(db, project_id, parsed_folder_id, direct_access):
+                raise HTTPException(status_code=404, detail="Folder not found")
+            query = query.filter(Asset.folder_id == parsed_folder_id)
+    elif folder_id == "root":
         query = query.filter(Asset.folder_id.is_(None))
     elif folder_id is not None:
         query = query.filter(Asset.folder_id == uuid.UUID(folder_id))
@@ -239,7 +259,14 @@ def get_stream_url(
     asset = db.query(Asset).filter(Asset.id == asset_id, Asset.deleted_at.is_(None)).first()
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
-    require_asset_access(db, asset, current_user)
+    access = get_asset_access(db, asset, current_user)
+    if not access.can_read:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+    if download and not access.is_project_member and not is_public_project(db, asset.project_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Download requires project membership",
+        )
 
     # Get the requested version or latest
     if version_id:

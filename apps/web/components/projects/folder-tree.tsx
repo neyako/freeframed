@@ -27,6 +27,7 @@ interface FolderTreeProps {
   onDeleteFolder: (folderId: string) => Promise<void>
   // Drag-drop targets
   onDropItems?: (targetFolderId: string | null, assetIds: string[], folderIds: string[]) => void
+  scopedRoots?: boolean
 }
 
 interface FolderNodeProps {
@@ -38,6 +39,7 @@ interface FolderNodeProps {
   onRenameFolder: (folderId: string, name: string) => Promise<void>
   onDeleteFolder: (folderId: string) => Promise<void>
   onDropItems?: (targetFolderId: string | null, assetIds: string[], folderIds: string[]) => void
+  scopedRoots: boolean
 }
 
 function FolderNode({
@@ -49,6 +51,7 @@ function FolderNode({
   onRenameFolder,
   onDeleteFolder,
   onDropItems,
+  scopedRoots,
 }: FolderNodeProps) {
   const [expanded, setExpanded] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -106,10 +109,11 @@ function FolderNode({
         )}
         style={{ paddingLeft: `${8 + depth * 16}px` }}
         onClick={handleClick}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
+        onDragOver={scopedRoots ? undefined : handleDragOver}
+        onDragLeave={scopedRoots ? undefined : handleDragLeave}
+        onDrop={scopedRoots ? undefined : handleDrop}
         onContextMenu={(e) => {
+          if (scopedRoots) return
           e.preventDefault()
           setMenuOpen((p) => !p)
         }}
@@ -154,7 +158,7 @@ function FolderNode({
         )}
 
         {/* Context menu button */}
-        <button
+        {!scopedRoots && <button
           className="opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 shrink-0 h-5 w-5 flex items-center justify-center rounded hover:bg-bg-hover transition-opacity"
           onClick={(e) => {
             e.stopPropagation()
@@ -162,11 +166,11 @@ function FolderNode({
           }}
         >
           <MoreHorizontal className="h-3 w-3" />
-        </button>
+        </button>}
       </div>
 
       {/* Context menu */}
-      {menuOpen && (
+      {menuOpen && !scopedRoots && (
         <div className="ml-8 mt-0.5 mb-1 rounded-lg border border-border bg-bg-elevated shadow-xl py-1 z-50 w-44">
           <button
             className="flex w-full items-center gap-2 px-3 py-1.5 text-[12px] text-text-secondary hover:bg-bg-hover hover:text-text-primary"
@@ -216,6 +220,7 @@ function FolderNode({
               onRenameFolder={onRenameFolder}
               onDeleteFolder={onDeleteFolder}
               onDropItems={onDropItems}
+              scopedRoots={scopedRoots}
             />
           ))}
         </div>
@@ -235,13 +240,14 @@ export function FolderTree({
   onRenameFolder,
   onDeleteFolder,
   onDropItems,
+  scopedRoots = false,
 }: FolderTreeProps) {
   const [isDragOverRoot, setIsDragOverRoot] = useState(false)
 
   return (
     <div className="space-y-0.5">
       {/* Project root */}
-      <div
+      {!scopedRoots && <div
         className={cn(
           'flex items-center gap-2 px-2 py-1.5 rounded font-mono text-xs tracking-[0.04em] cursor-pointer transition-colors',
           currentFolderId === null && !showTrash
@@ -266,25 +272,26 @@ export function FolderTree({
       >
         <FolderOpen className="h-4 w-4 shrink-0" />
         <span className="truncate">{projectName}</span>
-      </div>
+      </div>}
 
       {/* Folder tree */}
       {tree.map((node) => (
         <FolderNode
           key={node.id}
           node={node}
-          depth={1}
+          depth={scopedRoots ? 0 : 1}
           currentFolderId={currentFolderId}
           onSelectFolder={onSelectFolder}
           onCreateFolder={onCreateFolder}
           onRenameFolder={onRenameFolder}
           onDeleteFolder={onDeleteFolder}
           onDropItems={onDropItems}
+          scopedRoots={scopedRoots}
         />
       ))}
 
       {/* Recently Deleted */}
-      <div
+      {!scopedRoots && <div
         className={cn(
           'flex items-center gap-2 px-2 py-1 rounded font-mono text-xs tracking-[0.04em] cursor-pointer transition-colors mt-2',
           showTrash
@@ -295,7 +302,7 @@ export function FolderTree({
       >
         <Trash2 className="h-3.5 w-3.5 shrink-0" />
         <span>Recently Deleted</span>
-      </div>
+      </div>}
     </div>
   )
 }

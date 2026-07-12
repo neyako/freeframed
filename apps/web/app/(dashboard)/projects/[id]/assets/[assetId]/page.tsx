@@ -11,13 +11,14 @@ import { AnnotationCanvas } from '@/components/review/annotation-canvas'
 import { AnnotationOverlay } from '@/components/review/annotation-overlay'
 import { CommentPanel } from '@/components/review/comment-panel'
 import { CommentInput } from '@/components/review/comment-input'
-// ApprovalBar removed for now
+import { ApprovalBar } from '@/components/review/approval-bar'
 import { VersionSwitcher } from '@/components/review/version-switcher'
 import { ShareDialog } from '@/components/review/share-dialog'
 import { useReviewStore } from '@/stores/review-store'
 import { useAuthStore } from '@/stores/auth-store'
 import { useComments } from '@/hooks/use-comments'
 import { api } from '@/lib/api'
+import { isFolderDirectProject, resolveFolderPermission } from '@/lib/project-access'
 import { useUploadStore } from '@/stores/upload-store'
 import { useBreadcrumbStore } from '@/stores/breadcrumb-store'
 import {
@@ -34,7 +35,8 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { usePageTitle } from '@/hooks/use-page-title'
-import type { Project, AssetResponse, ProjectMember, FolderTreeNode } from '@/types'
+import type { ApiError } from '@/lib/api'
+import type { AssetResponse, FolderTreeNode, ProjectAccessResponse } from '@/types'
 
 const acceptByType: Record<string, string> = {
   video: 'video/*',
@@ -46,7 +48,7 @@ const acceptByType: Record<string, string> = {
 function ReviewScreenInner({ projectId }: { projectId: string }) {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { asset, versions, isLoading, refetchComments, refetchVersions } = useReview()
+  const { asset, versions, isLoading, error: reviewError, refetchComments, refetchVersions } = useReview()
   const { currentVersion, isDrawingMode, focusedCommentId, seekTo, setFocusedCommentId, setActiveAnnotation } = useReviewStore()
   const { user } = useAuthStore()
   const startVersionUpload = useUploadStore((s) => s.startVersionUpload)
@@ -57,6 +59,11 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
   const [annotationData, setAnnotationData] = useState<Record<string, unknown> | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [downloading, setDownloading] = useState(false)
+
+  const { data: project, error: projectError } = useSWR<ProjectAccessResponse, ApiError>(
+    `/projects/${projectId}`,
+    () => api.get<ProjectAccessResponse>(`/projects/${projectId}`),
+  )
 
   async function handleDownload() {
     if (!asset || downloading) return
@@ -82,7 +89,9 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
 
   // Fetch folder tree to build the folder path for the breadcrumb
   const { data: folderTree } = useSWR<FolderTreeNode[]>(
-    asset ? `/projects/${projectId}/folder-tree` : null,
+    asset && project && !reviewError && projectError === undefined
+      ? `/projects/${projectId}/folder-tree`
+      : null,
     () => api.get<FolderTreeNode[]>(`/projects/${projectId}/folder-tree`),
   )
 
@@ -115,27 +124,23 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
     ])
   }, [asset?.id, asset?.name, asset?.folder_id, folderTree, setExtraCrumbs])
 
-  // Fetch project info for breadcrumb + register project name as label
-  const { data: project } = useSWR<Project>(
-    `/projects/${projectId}`,
-    () => api.get<Project>(`/projects/${projectId}`),
-  )
   useEffect(() => {
     if (project?.name) setLabel(projectId, project.name)
   }, [project?.name, projectId, setLabel])
 
-  // Role-based permissions
-  const { data: members } = useSWR<ProjectMember[]>(
-    `/projects/${projectId}/members`,
-    () => api.get<ProjectMember[]>(`/projects/${projectId}/members`),
-  )
-  const currentMember = members?.find((m) => m.user_id === user?.id)
-  const currentRole = currentMember?.role ?? 'viewer'
-  const canComment = currentRole !== 'viewer'
+  const folderDirect = isFolderDirectProject(project)
+  const folderPermission = folderDirect && asset?.folder_id
+    ? resolveFolderPermission(project.folder_access, asset.folder_id, folderTree ?? [])
+    : null
+  const currentRole = project?.role ?? 'viewer'
+  const canComment = currentRole !== 'viewer' || folderPermission === 'comment' || folderPermission === 'approve'
+  const canApprove = folderDirect
+    ? folderPermission === 'approve'
+    : currentRole === 'owner' || currentRole === 'editor' || currentRole === 'reviewer'
 
   // Fetch all assets for navigation (1 of N)
   const { data: allAssets } = useSWR<AssetResponse[]>(
-    `/projects/${projectId}/assets`,
+    project && !reviewError && projectError === undefined ? `/projects/${projectId}/assets` : null,
     () => api.get<AssetResponse[]>(`/projects/${projectId}/assets`),
   )
 
@@ -213,7 +218,18 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [prevAsset, nextAsset])
 
-  if (isLoading || !asset) {
+  if (reviewError || projectError) {
+    return (
+      <div className="flex h-full items-center justify-center px-6 text-center">
+        <div>
+          <h1 className="text-base font-semibold text-text-primary">Access denied</h1>
+          <p className="mt-1 text-sm text-text-tertiary">Your access to this asset is no longer active.</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (isLoading || !asset || !project) {
     return (
       <div className="flex h-full items-center justify-center">
         <div className="flex flex-col items-center gap-3">
@@ -311,7 +327,7 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
             assetId={asset.id}
             comments={comments}
             className="flex-1 min-h-0"
-            onDownload={handleDownload}
+            onDownload={folderDirect ? undefined : handleDownload}
             overlay={
               <>
                 <AnnotationOverlay key={focusedCommentId ?? 'none'} />
@@ -406,7 +422,7 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
         {/* Right: version, share, sidebar toggle */}
         <div className="flex items-center gap-2 shrink-0 flex-1 justify-end">
           {/* Hidden file input for new version upload */}
-          <input
+          {!folderDirect && <input
             ref={versionFileInputRef}
             type="file"
             className="hidden"
@@ -419,17 +435,17 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
               // Refetch versions after a short delay to show the new uploading version
               setTimeout(() => refetchVersions(), 800)
             }}
-          />
+          />}
           <VersionSwitcher versions={versions} />
-          <button
+          {!folderDirect && <button
             onClick={() => versionFileInputRef.current?.click()}
             className="hidden md:inline-flex h-[34px] items-center gap-2 rounded border border-border-strong px-3.5 font-mono text-[11px] uppercase tracking-[0.08em] text-text-primary hover:border-text-primary hover:bg-bg-hover transition-colors"
             title="Upload new version"
           >
             <Upload className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">New version</span>
-          </button>
-          <button
+          </button>}
+          {!folderDirect && <button
             onClick={handleDownload}
             disabled={downloading}
             className="inline-flex h-[34px] items-center gap-2 rounded border border-border-strong px-3.5 font-mono text-[11px] uppercase tracking-[0.08em] text-text-primary hover:border-text-primary hover:bg-bg-hover transition-colors disabled:opacity-50"
@@ -437,10 +453,10 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
           >
             {downloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
             <span className="hidden sm:inline">Download</span>
-          </button>
-          <div className="hidden md:block">
+          </button>}
+          {!folderDirect && <div className="hidden md:block">
             <ShareDialog assetId={asset.id} assetName={asset.name} projectId={projectId} asset={asset} />
-          </div>
+          </div>}
           <button
             onClick={() => setSidebarOpen((p) => !p)}
             className={cn(
@@ -455,6 +471,14 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
           </button>
         </div>
       </div>
+
+      {canApprove && currentVersion && (
+        <ApprovalBar
+          assetId={asset.id}
+          versionId={currentVersion.id}
+          currentUserId={user?.id}
+        />
+      )}
 
       {/* ─── Main content: viewer + sidebar ────────────────────────────── */}
       <div className="flex flex-col md:flex-row flex-1 overflow-hidden min-h-0">
@@ -496,7 +520,20 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
             {/* Content */}
             <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
               <div className={cn('flex-1 flex flex-col min-h-0 overflow-hidden', isDrawingMode && 'hidden md:flex')}>
-                <CommentPanel
+                {folderDirect && !canComment ? (
+                  <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                    {comments.length === 0 ? (
+                      <p className="text-xs text-text-tertiary">No comments yet</p>
+                    ) : comments.map((comment) => (
+                      <div key={comment.id} className="rounded border border-border bg-bg-primary p-3">
+                        <p className="text-xs font-medium text-text-secondary">
+                          {comment.author?.name ?? comment.guest_author?.name ?? 'Reviewer'}
+                        </p>
+                        <p className="mt-1 text-sm text-text-primary whitespace-pre-wrap">{comment.body}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : <CommentPanel
                   comments={comments as any}
                   currentUserId={user?.id}
                   onResolve={resolveComment}
@@ -505,7 +542,7 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
                   onRemoveReaction={removeReaction}
                   onReply={() => {}}
                   onSubmitReply={handleSubmitReply}
-                />
+                />}
               </div>
               {canComment && (
                 <CommentInput

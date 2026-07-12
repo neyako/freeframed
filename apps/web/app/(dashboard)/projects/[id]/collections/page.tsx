@@ -17,7 +17,8 @@ import {
   Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
+import { isFolderDirectProject } from "@/lib/project-access";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CollectionCard } from "@/components/projects/collection-card";
@@ -25,7 +26,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import type {
   Collection,
   CollectionShare,
-  Project,
+  ProjectAccessResponse,
   SharePermission,
 } from "@/types";
 
@@ -331,15 +332,20 @@ export default function CollectionsPage() {
   const [shareCollection, setShareCollection] =
     React.useState<Collection | null>(null);
 
-  const { data: project } = useSWR<Project>(`/projects/${projectId}`, () =>
-    api.get<Project>(`/projects/${projectId}`),
+  const {
+    data: project,
+    error: projectError,
+    isLoading: projectLoading,
+  } = useSWR<ProjectAccessResponse, ApiError>(`/projects/${projectId}`, () =>
+    api.get<ProjectAccessResponse>(`/projects/${projectId}`),
   );
+  const folderDirect = isFolderDirectProject(project);
 
   const {
     data: collections,
     isLoading,
     mutate,
-  } = useSWR<Collection[]>(`/projects/${projectId}/collections`, () =>
+  } = useSWR<Collection[]>(project && !folderDirect ? `/projects/${projectId}/collections` : null, () =>
     api.get<Collection[]>(`/projects/${projectId}/collections`),
   );
 
@@ -392,6 +398,21 @@ export default function CollectionsPage() {
       setIsCreating(false);
     }
   };
+
+  if (projectError || folderDirect) {
+    return (
+      <div className="flex h-full items-center justify-center px-6 text-center">
+        <div>
+          <h1 className="text-base font-semibold text-text-primary">Access denied</h1>
+          <p className="mt-1 text-sm text-text-tertiary">Collections require full project access.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (projectLoading || !project) {
+    return <div className="flex h-full items-center justify-center text-sm text-text-tertiary">Loading project...</div>;
+  }
 
   return (
     <div className="p-6 space-y-6">

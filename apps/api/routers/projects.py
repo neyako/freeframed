@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import and_, func
 from sqlalchemy.exc import IntegrityError
 import uuid
 from datetime import datetime, timezone
@@ -11,12 +11,13 @@ from ..models.project import Project, ProjectMember, ProjectRole, ProjectType
 from ..models.asset import Asset, AssetVersion, MediaFile
 from ..models.folder import Folder
 from ..models.share import AssetShare, ShareLink
-from ..schemas.project import ProjectCreate, ProjectUpdate, ProjectResponse, ProjectMemberResponse, AddProjectMemberRequest, UpdateProjectMemberRequest
+from ..schemas.project import FolderAccessGrantResponse, FolderAccessResponse, FolderDirectProjectResponse, ProjectAccessResponse, ProjectCreate, ProjectUpdate, ProjectResponse, ProjectMemberResponse, AddProjectMemberRequest, UpdateProjectMemberRequest
 from ..tasks.email_tasks import send_project_added_email
 from ..tasks.celery_app import send_task_safe
 from ..services.s3_service import put_object, generate_presigned_get_url, delete_object
 from ..services.workspace_service import get_workspace_name
 from ..config import settings
+from ..services.folder_access import folder_scope_select, resolve_folder_access
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -30,6 +31,19 @@ def _resolve_poster_url(project: Project) -> str | None:
     if project.poster_s3_key:
         return generate_presigned_get_url(project.poster_s3_key)
     return None
+
+
+def _project_to_response(project: Project) -> ProjectResponse:
+    return ProjectResponse(
+        id=project.id,
+        name=project.name,
+        description=project.description,
+        project_type=project.project_type,
+        created_by=project.created_by,
+        created_at=project.created_at,
+        is_public=project.is_public,
+        is_quick_share=project.is_quick_share,
+    )
 
 def _require_project_owner(db: Session, project_id: uuid.UUID, user: User) -> ProjectMember:
     member = db.query(ProjectMember).filter(
@@ -174,7 +188,7 @@ def list_projects(db: Session = Depends(get_db), current_user: User = Depends(ge
 
     result = []
     for p in projects:
-        resp = ProjectResponse.model_validate(p)
+        resp = _project_to_response(p)
         resp.poster_url = _resolve_poster_url(p)
         resp.asset_count = asset_counts.get(p.id, 0)
         resp.storage_bytes = storage_map.get(p.id, 0)
@@ -184,17 +198,64 @@ def list_projects(db: Session = Depends(get_db), current_user: User = Depends(ge
 
     return result
 
-@router.get("/{project_id}", response_model=ProjectResponse)
-def get_project(project_id: uuid.UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+@router.get("/{project_id}", response_model=ProjectAccessResponse)
+def get_project(
+    project_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ProjectAccessResponse:
     project = _get_project(db, project_id)
     member = db.query(ProjectMember).filter(
         ProjectMember.project_id == project_id,
         ProjectMember.user_id == current_user.id,
         ProjectMember.deleted_at.is_(None),
     ).first()
+    folder_access = None
     if not member and not project.is_public:
-        raise HTTPException(status_code=403, detail="Not a project member")
-    resp = ProjectResponse.model_validate(project)
+        folder_access = resolve_folder_access(db, project_id, current_user.id)
+        if folder_access is None:
+            raise HTTPException(status_code=403, detail="Not a project member")
+    if folder_access is not None:
+        scoped_asset_count, scoped_storage_bytes = (
+            db.query(
+                func.count(func.distinct(Asset.id)),
+                func.coalesce(func.sum(MediaFile.file_size_bytes), 0),
+            )
+            .outerjoin(
+                AssetVersion,
+                and_(
+                    AssetVersion.asset_id == Asset.id,
+                    AssetVersion.deleted_at.is_(None),
+                ),
+            )
+            .outerjoin(MediaFile, MediaFile.version_id == AssetVersion.id)
+            .filter(
+                Asset.project_id == project_id,
+                Asset.folder_id.in_(
+                    folder_scope_select(project_id, folder_access.accessible_root_ids)
+                ),
+                Asset.deleted_at.is_(None),
+            )
+            .one()
+        )
+        scoped = FolderDirectProjectResponse(
+            id=project.id,
+            name=project.name,
+            asset_count=int(scoped_asset_count),
+            storage_bytes=int(scoped_storage_bytes),
+            folder_access=FolderAccessResponse(
+                accessible_root_ids=list(folder_access.accessible_root_ids),
+                grants=[
+                    FolderAccessGrantResponse(
+                        folder_id=grant.folder_id,
+                        permission=grant.permission,
+                    )
+                    for grant in folder_access.grants
+                ],
+            ),
+        )
+        return scoped
+    resp = _project_to_response(project)
     resp.poster_url = _resolve_poster_url(project)
     if member:
         resp.role = member.role
@@ -202,11 +263,13 @@ def get_project(project_id: uuid.UUID, db: Session = Depends(get_db), current_us
     resp.asset_count = db.query(func.count(Asset.id)).filter(
         Asset.project_id == project_id, Asset.deleted_at.is_(None),
     ).scalar() or 0
-    resp.storage_bytes = db.query(func.coalesce(func.sum(MediaFile.file_size_bytes), 0)).join(
-        AssetVersion, MediaFile.version_id == AssetVersion.id
-    ).join(Asset, AssetVersion.asset_id == Asset.id).filter(
-        Asset.project_id == project_id, Asset.deleted_at.is_(None),
-    ).scalar() or 0
+    resp.storage_bytes = int(
+        db.query(func.coalesce(func.sum(MediaFile.file_size_bytes), 0)).join(
+            AssetVersion, MediaFile.version_id == AssetVersion.id
+        ).join(Asset, AssetVersion.asset_id == Asset.id).filter(
+            Asset.project_id == project_id, Asset.deleted_at.is_(None),
+        ).scalar() or 0
+    )
     resp.member_count = db.query(func.count(ProjectMember.id)).filter(
         ProjectMember.project_id == project_id, ProjectMember.deleted_at.is_(None),
     ).scalar() or 0
@@ -224,7 +287,7 @@ def update_project(project_id: uuid.UUID, body: ProjectUpdate, db: Session = Dep
         project.is_public = body.is_public
     db.commit()
     db.refresh(project)
-    resp = ProjectResponse.model_validate(project)
+    resp = _project_to_response(project)
     resp.poster_url = _resolve_poster_url(project)
     return resp
 
@@ -402,7 +465,7 @@ async def upload_project_poster(
     db.commit()
     db.refresh(project)
 
-    resp = ProjectResponse.model_validate(project)
+    resp = _project_to_response(project)
     resp.poster_url = _resolve_poster_url(project)
     return resp
 

@@ -141,6 +141,33 @@ def _apply_direct_share_permission(existing: AssetShare, requested: SharePermiss
     existing.permission = requested
 
 
+def _validated_folder_share_url(
+    db: Session,
+    folder_id: uuid.UUID,
+    share_token: str | None,
+) -> str:
+    if share_token is None:
+        folder = _get_folder(db, folder_id)
+        return f"{settings.frontend_url}/projects/{folder.project_id}?folder={folder_id}"
+    now = datetime.now(timezone.utc)
+    link = db.query(ShareLink).filter(
+        ShareLink.token == share_token,
+        ShareLink.folder_id == folder_id,
+        ShareLink.asset_id.is_(None),
+        ShareLink.project_id.is_(None),
+        ShareLink.visibility == ShareVisibility.secure,
+        ShareLink.is_enabled.is_(True),
+        ShareLink.deleted_at.is_(None),
+        sqlalchemy.or_(ShareLink.expires_at.is_(None), ShareLink.expires_at > now),
+    ).first()
+    if link is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Invalid folder share token",
+        )
+    return f"{settings.frontend_url}/share/{link.token}"
+
+
 def _get_project_id_from_link(db: Session, link: ShareLink) -> uuid.UUID:
     if link.project_id:
         return link.project_id
@@ -796,6 +823,7 @@ def share_folder_with_user(
     folder = _get_folder(db, folder_id)
     require_project_role(db, folder.project_id, current_user, ProjectRole.editor)
     shared_user = _resolve_active_share_recipient(db, body)
+    folder_link = _validated_folder_share_url(db, folder_id, body.share_token)
     _lock_active_project(db, folder.project_id)
 
     existing = db.query(AssetShare).filter(
@@ -806,24 +834,19 @@ def share_folder_with_user(
         _apply_direct_share_permission(existing, body.permission)
         db.commit()
         db.refresh(existing)
-        return existing
+        direct_share = existing
+    else:
+        direct_share = AssetShare(
+            folder_id=folder_id,
+            shared_with_user_id=shared_user.id,
+            permission=body.permission,
+            shared_by=current_user.id,
+        )
+        db.add(direct_share)
+        db.commit()
+        db.refresh(direct_share)
 
-    folder_link = (
-        f"{settings.frontend_url}/share/{body.share_token}"
-        if body.share_token
-        else f"{settings.frontend_url}/projects/{folder.project_id}?folder={folder_id}"
-    )
     workspace_name = get_workspace_name(db)
-    direct_share = AssetShare(
-        folder_id=folder_id,
-        shared_with_user_id=shared_user.id,
-        permission=body.permission,
-        shared_by=current_user.id,
-    )
-    db.add(direct_share)
-    db.commit()
-    db.refresh(direct_share)
-
     send_task_safe(send_share_email,
         to_email=shared_user.email,
         sharer_name=current_user.name or current_user.email,

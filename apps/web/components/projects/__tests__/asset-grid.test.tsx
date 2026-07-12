@@ -150,4 +150,64 @@ describe('AssetGrid asset activation', () => {
     expect(onAssetOpen).toHaveBeenCalledWith(asset)
     expect(onAssetSelect).not.toHaveBeenCalled()
   })
+
+  it('keeps scoped read-only cards openable without selection or mutation controls', () => {
+    const onAssetOpen = vi.fn()
+    const { container } = render(
+      <AssetGrid
+        assets={[asset]}
+        projectId="project-1"
+        scopedReadOnly
+        onAssetOpen={onAssetOpen}
+        onAssetShare={vi.fn()}
+        onAssetDownload={vi.fn()}
+        onAssetRename={vi.fn()}
+        onAssetDelete={vi.fn()}
+        onBulkDelete={vi.fn()}
+        onBulkMove={vi.fn()}
+        onBulkDownload={vi.fn()}
+      />,
+    )
+
+    fireEvent.click(screen.getByText('Hero.mov'))
+
+    expect(onAssetOpen).toHaveBeenCalledWith(asset)
+    expect(container.querySelector('[draggable="true"]')).not.toBeInTheDocument()
+    expect(screen.queryByText('Download')).not.toBeInTheDocument()
+    expect(screen.queryByText('Create Share Link')).not.toBeInTheDocument()
+  })
+
+  it('lets scoped read-only browsing dominate share mode and selection', () => {
+    const onAssetOpen = vi.fn()
+    const { container } = render(
+      <AssetGrid
+        assets={[asset]}
+        projectId="project-1"
+        shareMode
+        scopedReadOnly
+        onAssetOpen={onAssetOpen}
+        onCreateShareLink={vi.fn()}
+      />,
+    )
+
+    fireEvent.click(screen.getByText('Hero.mov'))
+
+    expect(onAssetOpen).toHaveBeenCalledWith(asset)
+    expect(screen.queryByText('Create Share Link')).not.toBeInTheDocument()
+    expect(container.querySelector('[draggable]')).not.toBeInTheDocument()
+  })
+
+  it('uses capability-accurate empty copy for scoped read-only folders', () => {
+    render(
+      <AssetGrid
+        assets={[]}
+        folders={[]}
+        projectId="project-1"
+        scopedReadOnly
+      />,
+    )
+
+    expect(screen.getByText('No assets in this folder')).toBeInTheDocument()
+    expect(screen.queryByText(/upload your first asset/i)).not.toBeInTheDocument()
+  })
 })

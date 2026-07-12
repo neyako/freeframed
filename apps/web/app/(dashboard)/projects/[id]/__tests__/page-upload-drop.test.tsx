@@ -42,6 +42,7 @@ vi.mock('swr', () => ({
           project_type: 'personal',
           created_at: '2026-06-30T08:00:00Z',
           deleted_at: null,
+          role: 'owner',
         },
         isLoading: false,
       }

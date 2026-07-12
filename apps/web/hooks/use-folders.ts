@@ -5,7 +5,7 @@ import { api } from '@/lib/api'
 import type { Folder, FolderTreeNode, TrashResponse } from '@/types'
 
 export function useFolders(projectId: string) {
-  const { data: tree, mutate: mutateTree } = useSWR<FolderTreeNode[]>(
+  const { data: tree, mutate: mutateTree, isLoading } = useSWR<FolderTreeNode[]>(
     projectId ? `/projects/${projectId}/folder-tree` : null,
     (key: string) => api.get<FolderTreeNode[]>(key),
   )
@@ -65,6 +65,7 @@ export function useFolders(projectId: string) {
 
   return {
     tree: tree ?? [],
+    isLoading,
     mutateTree,
     createFolder,
     renameFolder,
@@ -77,9 +78,9 @@ export function useFolders(projectId: string) {
   }
 }
 
-export function useTrash(projectId: string) {
+export function useTrash(projectId: string, enabled = true) {
   const { data, mutate, isLoading } = useSWR<TrashResponse>(
-    projectId ? `/projects/${projectId}/trash` : null,
+    projectId && enabled ? `/projects/${projectId}/trash` : null,
     (key: string) => api.get<TrashResponse>(key),
   )
 

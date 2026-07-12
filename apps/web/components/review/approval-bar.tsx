@@ -19,6 +19,8 @@ interface ApprovalsResponse {
   approvals: ApprovalWithUser[]
 }
 
+type ApprovalListResponse = ApprovalWithUser[] | ApprovalsResponse
+
 // ─── Status visual config ─────────────────────────────────────────────────────
 
 const statusConfig: Record<
@@ -108,9 +110,9 @@ function RejectNoteDialog({ onConfirm, onCancel }: RejectNoteProps) {
 export function ApprovalBar({ assetId, versionId, currentUserId, className }: ApprovalBarProps) {
   const swrKey = assetId ? `/assets/${assetId}/approvals?version_id=${versionId}` : null
 
-  const { data, isLoading, mutate } = useSWR<ApprovalsResponse>(
+  const { data, error, isLoading, mutate } = useSWR<ApprovalListResponse>(
     swrKey,
-    (key: string) => api.get<ApprovalsResponse>(key),
+    (key: string) => api.get<ApprovalListResponse>(key),
     { revalidateOnFocus: false },
   )
 
@@ -118,7 +120,7 @@ export function ApprovalBar({ assetId, versionId, currentUserId, className }: Ap
   const [showRejectDialog, setShowRejectDialog] = React.useState(false)
   const [actionError, setActionError] = React.useState<string | null>(null)
 
-  const approvals = data?.approvals ?? []
+  const approvals = Array.isArray(data) ? data : data?.approvals ?? []
   const myApproval = approvals.find((a) => a.user_id === currentUserId)
 
   async function handleApprove() {
@@ -151,6 +153,14 @@ export function ApprovalBar({ assetId, versionId, currentUserId, className }: Ap
   const approvedCount = approvals.filter((a) => a.status === 'approved').length
   const rejectedCount = approvals.filter((a) => a.status === 'rejected').length
   const pendingCount = approvals.filter((a) => a.status === 'pending').length
+
+  if (error) {
+    return (
+      <div className={cn('border-b border-border bg-bg-secondary px-4 py-2 text-xs font-medium text-accent', className)}>
+        Unable to load approvals
+      </div>
+    )
+  }
 
   return (
     <>

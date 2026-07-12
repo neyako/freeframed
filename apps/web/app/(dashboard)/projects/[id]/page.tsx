@@ -23,8 +23,14 @@ import {
 } from "lucide-react";
 import { cn, formatRelativeTime, formatBytes } from "@/lib/utils";
 import { StorageMeter } from "@/components/dashboard/storage-meter";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import { findVersionCandidate } from "@/lib/version-match";
+import {
+  findFolderPath,
+  hasFullProjectAccess,
+  isFolderDirectProject,
+  resolveFolderPermission,
+} from "@/lib/project-access";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Segmented } from "@/components/ui/segmented";
@@ -48,9 +54,8 @@ import { ProjectMembersDialog } from "@/components/projects/project-members-dial
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { usePageTitle } from "@/hooks/use-page-title";
 import type {
-  Project,
+  ProjectAccessResponse,
   AssetResponse,
-  ProjectMember,
   User,
   Folder,
 } from "@/types";
@@ -110,6 +115,7 @@ export default function ProjectDetailPage() {
 
   const {
     tree,
+    isLoading: loadingTree,
     mutateTree,
     createFolder,
     renameFolder,
@@ -121,22 +127,37 @@ export default function ProjectDetailPage() {
     restoreFolder,
   } = useFolders(projectId);
 
-  const { trash, mutateTrash } = useTrash(projectId);
-
   // Comments for the selected asset
   const selectedVersionId = selectedAsset?.latest_version?.id || null;
   const {
     comments,
+    createComment,
     resolveComment,
     deleteComment,
     addReaction,
     removeReaction,
   } = useComments(selectedAsset?.id || null, selectedVersionId);
 
-  const { data: project, isLoading: loadingProject } = useSWR<Project>(
+  const { data: project, error: projectError, isLoading: loadingProject } = useSWR<ProjectAccessResponse, ApiError>(
     `/projects/${projectId}`,
-    () => api.get<Project>(`/projects/${projectId}`),
+    () => api.get<ProjectAccessResponse>(`/projects/${projectId}`),
   );
+  const folderDirect = isFolderDirectProject(project);
+  const fullProjectAccess = projectError === undefined && hasFullProjectAccess(project);
+  const selectedFolderPath = currentFolderId ? findFolderPath(tree, currentFolderId) : null;
+  const folderSelectionDenied = folderDirect && !loadingTree
+    && currentFolderId !== null && selectedFolderPath === null;
+  const canFetchCollections = project !== undefined && projectError === undefined
+    && (!folderDirect || (!loadingTree && currentFolderId !== null && selectedFolderPath !== null));
+  const { trash, mutateTrash } = useTrash(projectId, fullProjectAccess);
+
+  React.useEffect(() => {
+    if (!folderDirect || currentFolderId !== null) return;
+    const firstRoot = project.folder_access.accessible_root_ids[0];
+    if (!firstRoot) return;
+    setCurrentFolderId(firstRoot);
+    router.push(`/projects/${projectId}?folder=${firstRoot}`);
+  }, [currentFolderId, folderDirect, project, projectId, router]);
 
   // Register project name for header breadcrumb + page title
   usePageTitle(project?.name ?? null);
@@ -180,13 +201,13 @@ export default function ProjectDetailPage() {
     isLoading: loadingAssets,
     mutate: mutateAssets,
   } = useSWR<AssetResponse[]>(
-    showTrash ? null : `/projects/${projectId}/assets?${folderParam}`,
+    showTrash || !canFetchCollections ? null : `/projects/${projectId}/assets?${folderParam}`,
     (key: string) => api.get<AssetResponse[]>(key),
   );
 
   // Subfolders for current view
   const { data: subfolders, mutate: mutateSubfolders } = useSWR<Folder[]>(
-    showTrash
+    showTrash || !canFetchCollections
       ? null
       : `/projects/${projectId}/folders?parent_id=${currentFolderId ?? "root"}`,
     (key: string) => api.get<Folder[]>(key),
@@ -226,9 +247,9 @@ export default function ProjectDetailPage() {
 
   // Fetch user info for asset authors
   const authorIds = React.useMemo(() => {
-    if (!assets) return [];
+    if (!assets || folderDirect) return [];
     return Array.from(new Set(assets.map((a) => a.created_by)));
-  }, [assets]);
+  }, [assets, folderDirect]);
 
   const { data: authorUsers } = useSWR<User[]>(
     authorIds.length > 0 ? `/users?ids=${authorIds.join(",")}` : null,
@@ -241,20 +262,15 @@ export default function ProjectDetailPage() {
       for (const u of authorUsers) map[u.id] = u.name;
     }
     // Fallback: current user
-    if (user) map[user.id] = user.name;
+    if (user && !folderDirect) map[user.id] = user.name;
     return map;
-  }, [authorUsers, user]);
-
-  const { data: members } = useSWR<ProjectMember[]>(
-    `/projects/${projectId}/members`,
-    () => api.get<ProjectMember[]>(`/projects/${projectId}/members`),
-  );
+  }, [authorUsers, user, folderDirect]);
 
   const assigneeIds = React.useMemo(() => {
-    if (!assets) return [];
+    if (!assets || folderDirect) return [];
     const ids = assets.map((a) => a.assignee_id).filter(Boolean) as string[];
     return Array.from(new Set(ids));
-  }, [assets]);
+  }, [assets, folderDirect]);
 
   const { data: assigneeUsers } = useSWR<User[]>(
     assigneeIds.length > 0 ? `/users?ids=${assigneeIds.join(",")}` : null,
@@ -267,14 +283,18 @@ export default function ProjectDetailPage() {
   }, [assigneeUsers]);
 
   // ─── Role-based permissions ───────────────────────────────────────────────
-  const currentMember = members?.find((m) => m.user_id === user?.id);
-  const currentRole = currentMember?.role ?? "viewer";
+  const currentRole = project?.role ?? "viewer";
   // owner → Full Access, editor → Edit & Share, reviewer → Comment Only, viewer → View Only
   const canUpload = currentRole === "owner" || currentRole === "editor";
   const canCreateFolder = currentRole === "owner" || currentRole === "editor";
   const canShare = currentRole === "owner" || currentRole === "editor";
   const canManageMembers = currentRole === "owner";
-  const canComment = currentRole !== "viewer";
+  const selectedFolderPermission = folderDirect && selectedAsset?.folder_id
+    ? resolveFolderPermission(project.folder_access, selectedAsset.folder_id, tree)
+    : null;
+  const canComment = folderDirect
+    ? selectedFolderPermission === "comment" || selectedFolderPermission === "approve"
+    : currentRole !== "viewer";
 
   function openBulkShare(assetIds: string[], folderIds: string[]) {
     if (!canShare) return;
@@ -350,6 +370,7 @@ export default function ProjectDetailPage() {
 
   const handleSelectFolder = React.useCallback(
     (folderId: string | null) => {
+      if (folderDirect && folderId === null) return;
       setCurrentFolderId(folderId);
       setShowTrash(false);
       const url = folderId
@@ -357,8 +378,39 @@ export default function ProjectDetailPage() {
         : `/projects/${projectId}`;
       window.history.replaceState(null, "", url);
     },
-    [projectId],
+    [folderDirect, projectId],
   );
+
+  if (loadingProject) {
+    return <div className="flex h-full items-center justify-center text-sm text-text-tertiary">Loading project...</div>;
+  }
+
+  if (projectError) {
+    const accessDenied = projectError.status === 403 || projectError.status === 404;
+    return (
+      <div className="flex h-full items-center justify-center px-6 text-center">
+        <div>
+          <h1 className="text-base font-semibold text-text-primary">
+            {accessDenied ? "Access denied" : "Unable to load project"}
+          </h1>
+          <p className="mt-1 text-sm text-text-tertiary">
+            {accessDenied ? "Your access to this project is no longer active." : "Please try again."}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (folderSelectionDenied) {
+    return (
+      <div className="flex h-full items-center justify-center px-6 text-center">
+        <div>
+          <h1 className="text-base font-semibold text-text-primary">Access denied</h1>
+          <p className="mt-1 text-sm text-text-tertiary">This folder is outside your shared access.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full flex-col lg:flex-row overflow-hidden">
@@ -435,6 +487,7 @@ export default function ProjectDetailPage() {
               mutateAssets();
               mutateSubfolders();
             }}
+            scopedRoots={folderDirect}
           />
         </div>
 
@@ -442,9 +495,9 @@ export default function ProjectDetailPage() {
         <div className="flex-1" />
 
         {/* Storage indicator — project usage against real disk capacity */}
-        <div className="border-t border-border shrink-0 px-4 pb-5 pt-4 space-y-2">
+        {!folderDirect && <div className="border-t border-border shrink-0 px-4 pb-5 pt-4 space-y-2">
           <StorageMeter usedBytes={project?.storage_bytes ?? 0} />
-        </div>
+        </div>}
       </div>
       )}
 
@@ -527,7 +580,7 @@ export default function ProjectDetailPage() {
         </div>
         {/* Mobile folder strip — desktop uses the sidebar */}
         <div className="lg:hidden flex gap-2 overflow-x-auto px-4 py-3 border-b border-border [scrollbar-width:none]">
-          <button
+          {!folderDirect && <button
             type="button"
             onClick={() => handleSelectFolder(null)}
             className={cn(
@@ -539,7 +592,7 @@ export default function ProjectDetailPage() {
           >
             <FolderIcon className="h-[13px] w-[13px]" />
             {project?.name ?? 'Project'}
-          </button>
+          </button>}
           {(tree ?? []).map((node) => (
             <button
               key={node.id}
@@ -556,7 +609,7 @@ export default function ProjectDetailPage() {
               {node.name}
             </button>
           ))}
-          <button
+          {!folderDirect && <button
             type="button"
             onClick={() => { setShowTrash(true); setCurrentFolderId(null); }}
             className={cn(
@@ -568,7 +621,7 @@ export default function ProjectDetailPage() {
           >
             <Trash2 className="h-[13px] w-[13px]" />
             Deleted
-          </button>
+          </button>}
         </div>
         <div className="px-5 pt-3 pb-6 space-y-3">
           {showTrash ? (
@@ -651,6 +704,7 @@ export default function ProjectDetailPage() {
               authorNames={authorNames}
               fileSizes={fileSizes}
               selectedAssetId={selectedAsset?.id}
+              scopedReadOnly={folderDirect}
               onUpload={() => uploadInputRef.current?.click()}
               onAssetSelect={(asset, e) => {
                 e?.stopPropagation();
@@ -907,7 +961,7 @@ export default function ProjectDetailPage() {
               {rightTab === "comments" ? (
                   /* Comments tab — real comments */
                   <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-                    {comments.length > 0 ? (
+                    {comments.length > 0 && canComment ? (
                       <CommentPanel
                         comments={comments}
                         currentUserId={user?.id}
@@ -916,8 +970,21 @@ export default function ProjectDetailPage() {
                         onAddReaction={addReaction}
                         onRemoveReaction={removeReaction}
                         onReply={() => {}}
-                        onSubmitReply={async () => {}}
+                        onSubmitReply={async (parentId, body) => {
+                          await createComment(body, undefined, undefined, undefined, parentId);
+                        }}
                       />
+                    ) : comments.length > 0 ? (
+                      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                        {comments.map((comment) => (
+                          <div key={comment.id} className="rounded border border-border bg-bg-primary p-3">
+                            <p className="text-xs font-medium text-text-secondary">
+                              {comment.author?.name ?? comment.guest_author?.name ?? "Reviewer"}
+                            </p>
+                            <p className="mt-1 text-sm text-text-primary whitespace-pre-wrap">{comment.body}</p>
+                          </div>
+                        ))}
+                      </div>
                     ) : (
                       <div className="flex-1 flex items-center justify-center p-6 text-center">
                         <div>
@@ -1037,7 +1104,7 @@ export default function ProjectDetailPage() {
                           Open in Player
                         </Link>
                       </Button>
-                      <Button
+                      {!folderDirect && <Button
                         variant="secondary"
                         size="sm"
                         className="gap-1"
@@ -1059,7 +1126,7 @@ export default function ProjectDetailPage() {
                         }}
                       >
                         <Download className="h-3.5 w-3.5" /> Download
-                      </Button>
+                      </Button>}
                     </div>
                   </div>
                 )}

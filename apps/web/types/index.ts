@@ -16,6 +16,17 @@ export type ProjectType = "personal" | "team";
 
 export type SharePermission = "view" | "comment" | "approve";
 
+export type FolderAccessGrant = {
+  readonly folder_id: string;
+  readonly permission: SharePermission;
+};
+
+export type FolderDirectAccess = {
+  readonly kind: "folder_direct";
+  readonly accessible_root_ids: readonly string[];
+  readonly grants: readonly FolderAccessGrant[];
+};
+
 export type NotificationType = "mention" | "assignment" | "due_soon" | "comment" | "approval";
 
 export type UserStatus = "active" | "deactivated" | "pending_invite" | "pending_verification";
@@ -94,8 +105,21 @@ export interface Project {
   asset_count?: number;
   storage_bytes?: number;
   member_count?: number;
-  role?: string | null;
+  role?: ProjectRole | null;
+  folder_access?: FolderDirectAccess | null;
 }
+
+export interface FolderDirectProject {
+  id: string;
+  name: string;
+  asset_count: number;
+  storage_bytes: number;
+  member_count: 0;
+  role: null;
+  folder_access: FolderDirectAccess;
+}
+
+export type ProjectAccessResponse = Project | FolderDirectProject;
 
 export interface ProjectMember {
   id: string;
