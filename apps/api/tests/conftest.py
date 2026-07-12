@@ -25,6 +25,14 @@ os.environ.setdefault("JWT_SECRET", "test-jwt-secret-key-for-tests-only")
 os.environ.setdefault("FRONTEND_URL", "http://localhost:3000")
 
 
+@pytest.fixture(autouse=True)
+def configured_application(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "apps.api.middleware.setup_guard._setup_complete",
+        True,
+    )
+
+
 _FAKE_HASH = "$2b$12$fakehashfortestsonlythisisnotrealatall000000000000000"
 
 

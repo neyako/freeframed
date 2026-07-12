@@ -16,8 +16,23 @@ jobs:
   test:
     name: Test (release gate)
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: user
+          POSTGRES_PASSWORD: pass
+          POSTGRES_DB: freeframe_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     env:
       DATABASE_URL: postgresql://user:pass@localhost:5432/freeframe_test
+      TEST_DATABASE_URL: postgresql://user:pass@localhost:5432/freeframe_test
       REDIS_URL: redis://localhost:6379/0
       S3_BUCKET: freeframe-test
       S3_ENDPOINT: http://localhost:9000
@@ -37,7 +52,15 @@ jobs:
       - name: Install dependencies
         run: pip install -r apps/api/requirements-dev.txt
       - name: Run tests
-        run: python -m pytest apps/api/tests/ -q
+        run: |
+          set -o pipefail
+          python -m pytest apps/api/tests/ -q 2>&1 | tee test-output.txt
+          PASSED=$(sed -nE 's/^([0-9]+) passed(,| in).*/\1/p' test-output.txt | tail -1)
+          echo "Tests passed: $PASSED"
+          if [[ ! "$PASSED" =~ ^[0-9]+$ ]] || (( PASSED < 100 )); then
+            echo "::error::Expected at least 100 tests to pass but got ${PASSED:-0} — tests may have been deleted, gutted, or skipped"
+            exit 1
+          fi
 
   publish:
     name: Build & push images
