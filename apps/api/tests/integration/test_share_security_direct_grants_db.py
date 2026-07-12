@@ -52,7 +52,7 @@ def test_concurrent_direct_shares_create_one_active_grant(
         session = session_factory()
         try:
             route_start_gate.wait()
-            actor = SimpleNamespace(id=owner.id, name=owner.name, email=owner.email)
+            actor = SimpleNamespace(id=owner.id, name=owner.name, email=owner.email, is_superadmin=False)
             body = DirectShareCreate(user_id=recipient.id, permission=permission)
             if target_kind == "asset":
                 share.share_with_user(asset.id, body, session, actor)

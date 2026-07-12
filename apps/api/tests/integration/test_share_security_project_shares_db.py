@@ -209,7 +209,7 @@ def test_concurrent_project_direct_shares_create_one_membership_without_downgrad
     def invoke(permission: SharePermission) -> None:
         session = session_factory()
         try:
-            actor = SimpleNamespace(id=owner.id, name=owner.name, email=owner.email)
+            actor = SimpleNamespace(id=owner.id, name=owner.name, email=owner.email, is_superadmin=False)
             share.share_project_with_user(
                 project.id,
                 DirectShareCreate(user_id=recipient.id, permission=permission),

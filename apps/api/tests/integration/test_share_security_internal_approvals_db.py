@@ -204,7 +204,9 @@ def test_concurrent_internal_approval_upserts_one_row(
     project, owner = make_project()
     reviewer = make_user()
     _add_member(db, project.id, reviewer.id, ProjectRole.reviewer)
-    asset = _add_asset(db, project.id, reviewer.id)
+    # Asset must belong to someone other than the reviewer: reviewing your
+    # own upload is now rejected with 403.
+    asset = _add_asset(db, project.id, owner.id)
     version = _add_version(db, asset)
     db.commit()
     monkeypatch.setattr(approvals, "send_task_safe", lambda *args, **kwargs: None)
@@ -226,7 +228,7 @@ def test_concurrent_internal_approval_upserts_one_row(
         session = session_factory()
         try:
             route_start_gate.wait()
-            actor = SimpleNamespace(id=reviewer.id, name=reviewer.name, email=reviewer.email)
+            actor = SimpleNamespace(id=reviewer.id, name=reviewer.name, email=reviewer.email, is_superadmin=False)
             body = ApprovalCreate(version_id=version.id)
             if action == "approve":
                 approvals.approve_asset(asset.id, body, session, actor)
