@@ -1,4 +1,3 @@
-import secrets
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
@@ -9,7 +8,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..middleware.auth import get_current_user
 from ..models.asset import Asset
-from ..models.metadata import AssetMetadata, Collection, CollectionShare, MetadataField
+from ..models.metadata import AssetMetadata, Collection, MetadataField
 from ..models.project import ProjectRole
 from ..models.user import User
 from ..schemas.asset import AssetResponse
@@ -18,8 +17,6 @@ from ..schemas.metadata import (
     AssetMetadataSet,
     CollectionCreate,
     CollectionResponse,
-    CollectionShareCreate,
-    CollectionShareResponse,
     MetadataFieldCreate,
     MetadataFieldResponse,
 )
@@ -316,97 +313,4 @@ def delete_collection(
     if not collection:
         raise HTTPException(status_code=404, detail="Collection not found")
     collection.deleted_at = datetime.now(timezone.utc)
-    db.commit()
-
-
-# ── Collection Sharing ─────────────────────────────────────────────────────────
-
-@router.post(
-    "/projects/{project_id}/collections/{collection_id}/share",
-    status_code=status.HTTP_201_CREATED,
-)
-def share_collection(
-    project_id: uuid.UUID,
-    collection_id: uuid.UUID,
-    body: CollectionShareCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    require_project_role(db, project_id, current_user, ProjectRole.editor)
-    collection = db.query(Collection).filter(
-        Collection.id == collection_id,
-        Collection.project_id == project_id,
-        Collection.deleted_at.is_(None),
-    ).first()
-    if not collection:
-        raise HTTPException(status_code=404, detail="Collection not found")
-
-    token = secrets.token_urlsafe(32)
-    share = CollectionShare(
-        collection_id=collection_id,
-        token=token,
-        permission=body.permission,
-        expires_at=body.expires_at,
-        created_by=current_user.id,
-    )
-    db.add(share)
-    db.commit()
-    db.refresh(share)
-    return {"id": str(share.id), "token": share.token, "permission": share.permission}
-
-
-@router.get(
-    "/projects/{project_id}/collections/{collection_id}/shares",
-    response_model=list[CollectionShareResponse],
-)
-def list_collection_shares(
-    project_id: uuid.UUID,
-    collection_id: uuid.UUID,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    require_project_role(db, project_id, current_user, ProjectRole.viewer)
-    collection = db.query(Collection).filter(
-        Collection.id == collection_id,
-        Collection.project_id == project_id,
-        Collection.deleted_at.is_(None),
-    ).first()
-    if not collection:
-        raise HTTPException(status_code=404, detail="Collection not found")
-
-    shares = db.query(CollectionShare).filter(
-        CollectionShare.collection_id == collection_id,
-        CollectionShare.deleted_at.is_(None),
-    ).all()
-    return shares
-
-
-@router.delete(
-    "/projects/{project_id}/collections/{collection_id}/share/{share_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-)
-def remove_collection_share(
-    project_id: uuid.UUID,
-    collection_id: uuid.UUID,
-    share_id: uuid.UUID,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    require_project_role(db, project_id, current_user, ProjectRole.editor)
-    collection = db.query(Collection).filter(
-        Collection.id == collection_id,
-        Collection.project_id == project_id,
-        Collection.deleted_at.is_(None),
-    ).first()
-    if not collection:
-        raise HTTPException(status_code=404, detail="Collection not found")
-
-    share = db.query(CollectionShare).filter(
-        CollectionShare.id == share_id,
-        CollectionShare.collection_id == collection_id,
-        CollectionShare.deleted_at.is_(None),
-    ).first()
-    if not share:
-        raise HTTPException(status_code=404, detail="Share not found")
-    share.deleted_at = datetime.now(timezone.utc)
     db.commit()

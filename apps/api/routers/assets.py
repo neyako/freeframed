@@ -10,7 +10,6 @@ from ..middleware.auth import get_current_user
 from ..models.user import User
 from ..models.asset import Asset, AssetVersion, MediaFile, AssetType, FileType, ProcessingStatus
 from ..models.project import Project, ProjectMember, ProjectRole
-from ..models.share import AssetShare
 from ..models.activity import Mention, Notification, NotificationType
 from ..schemas.asset import AssetResponse, AssetVersionResponse, AssetUpdate, StreamUrlResponse, MediaFileResponse
 from ..schemas.notification import AssignmentUpdate

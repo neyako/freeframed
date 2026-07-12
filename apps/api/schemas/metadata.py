@@ -1,9 +1,6 @@
-from datetime import datetime
 from pydantic import BaseModel
 import uuid
 from typing import Any, Literal, Optional
-
-from ..models.share import SharePermission
 
 
 class MetadataFieldCreate(BaseModel):
@@ -50,14 +47,3 @@ class CollectionResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class CollectionShareCreate(BaseModel):
-    permission: SharePermission = SharePermission.view
-    expires_at: Optional[datetime] = None
-
-
-class CollectionShareResponse(BaseModel):
-    id: uuid.UUID
-    token: str
-    permission: SharePermission
-    expires_at: Optional[datetime] = None
-    model_config = {"from_attributes": True}
