@@ -42,6 +42,7 @@ from ..schemas.share import (
 from ..schemas.approval import ApprovalCreate, ApprovalResponse
 from ..services.approval_service import get_active_version, upsert_approval
 from ..services.permissions import (
+    _is_descendant_of as _is_active_descendant_of,
     get_project_member,
     require_project_role,
     validate_asset_in_share,
@@ -258,19 +259,6 @@ def _log_share_activity(
         db.commit()
     except Exception:
         db.rollback()
-
-
-def _is_descendant_of(db: Session, folder_id: uuid.UUID, ancestor_id: uuid.UUID) -> bool:
-    """Check if folder_id is a descendant of ancestor_id via parent chain traversal."""
-    current_id = folder_id
-    visited = set()
-    while current_id and current_id not in visited:
-        if current_id == ancestor_id:
-            return True
-        visited.add(current_id)
-        folder = db.query(Folder.parent_id).filter(Folder.id == current_id).first()
-        current_id = folder.parent_id if folder else None
-    return False
 
 
 def _get_latest_media_file(db: Session, asset_id: uuid.UUID) -> Optional[MediaFile]:
@@ -1284,6 +1272,29 @@ def _validate_secure_approval_link(
     return link, current_user
 
 
+def _validate_share_approval_version(
+    db: Session,
+    link: ShareLink,
+    asset: Asset,
+    version_id: uuid.UUID,
+) -> None:
+    version = get_active_version(db, asset, version_id)
+    if link.show_versions:
+        return
+    latest_visible = (
+        db.query(AssetVersion.id)
+        .filter(
+            AssetVersion.asset_id == asset.id,
+            AssetVersion.deleted_at.is_(None),
+            AssetVersion.processing_status == ProcessingStatus.ready,
+        )
+        .order_by(AssetVersion.version_number.desc())
+        .first()
+    )
+    if latest_visible is None or latest_visible.id != version.id:
+        raise HTTPException(status_code=404, detail="Asset version not found")
+
+
 @router.post(
     "/share/{token}/assets/{asset_id}/approve",
     response_model=ApprovalResponse,
@@ -1299,6 +1310,7 @@ def approve_shared_asset(
     link, actor = _validate_secure_approval_link(db, token, share_session, current_user)
     asset = _get_asset(db, asset_id)
     validate_asset_in_share(db, link, asset)
+    _validate_share_approval_version(db, link, asset, body.version_id)
     approval = upsert_approval(
         db,
         asset,
@@ -1346,6 +1358,7 @@ def reject_shared_asset(
     link, actor = _validate_secure_approval_link(db, token, share_session, current_user)
     asset = _get_asset(db, asset_id)
     validate_asset_in_share(db, link, asset)
+    _validate_share_approval_version(db, link, asset, body.version_id)
     approval = upsert_approval(
         db,
         asset,
@@ -1393,7 +1406,7 @@ def list_shared_approvals(
     link, _actor = _validate_secure_approval_link(db, token, share_session, current_user)
     asset = _get_asset(db, asset_id)
     validate_asset_in_share(db, link, asset)
-    get_active_version(db, asset, version_id)
+    _validate_share_approval_version(db, link, asset, version_id)
     return (
         db.query(Approval)
         .filter(
@@ -1499,7 +1512,7 @@ def get_folder_share_assets(
             f = db.query(Folder).filter(Folder.id == folder_id, Folder.deleted_at.is_(None)).first()
             if not f or f.project_id != link.project_id:
                 raise HTTPException(status_code=403, detail="Folder is not within the shared project")
-        elif folder_id != link.folder_id and not _is_descendant_of(db, folder_id, link.folder_id):
+        elif folder_id != link.folder_id and not _is_active_descendant_of(db, folder_id, link.folder_id):
             raise HTTPException(status_code=403, detail="Folder is not within the shared folder")
         target_folder_id = folder_id
 

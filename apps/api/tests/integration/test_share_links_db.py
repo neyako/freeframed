@@ -6,6 +6,7 @@ from fastapi import HTTPException
 from apps.api.models.asset import Asset, AssetType
 from apps.api.models.folder import Folder
 from apps.api.models.share import ShareLink, SharePermission
+from apps.api.routers import share
 from apps.api.services.permissions import validate_asset_in_share, validate_share_link
 
 
@@ -110,5 +111,44 @@ def test_validate_asset_in_share_rejects_sibling_folder_asset(
 
     with pytest.raises(HTTPException) as exc:
         validate_asset_in_share(db, link, asset)
+
+    assert exc.value.status_code == 403
+
+
+def test_folder_share_browse_rejects_active_descendant_below_deleted_ancestor(
+    db,
+    make_project,
+) -> None:
+    project, owner = make_project()
+    root = _add_folder(db, project.id, owner.id, "root")
+    deleted_parent = _add_folder(
+        db,
+        project.id,
+        owner.id,
+        "deleted-parent",
+        parent_id=root.id,
+    )
+    deleted_parent.deleted_at = datetime.now(timezone.utc)
+    leaf = _add_folder(
+        db,
+        project.id,
+        owner.id,
+        "leaf",
+        parent_id=deleted_parent.id,
+    )
+    _add_asset(db, project.id, owner.id, folder_id=leaf.id)
+    link = _add_share_link(db, owner.id, "deleted-ancestor-token", folder_id=root.id)
+    db.commit()
+
+    with pytest.raises(HTTPException) as exc:
+        share.get_folder_share_assets(
+            link.token,
+            folder_id=leaf.id,
+            page=1,
+            per_page=50,
+            share_session=None,
+            db=db,
+            current_user=None,
+        )
 
     assert exc.value.status_code == 403

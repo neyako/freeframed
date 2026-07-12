@@ -3,7 +3,9 @@ from __future__ import annotations
 from ._share_security_support import (
     Approval,
     ApprovalCreate,
+    AssetVersion,
     HTTPException,
+    ProcessingStatus,
     SharePermission,
     ShareVisibility,
     _add_asset,
@@ -71,6 +73,70 @@ def test_every_share_approval_route_rejects_invalid_in_scope_version(
                 link.token,
                 asset.id,
                 invalid_version_id,
+                None,
+                db,
+                actor,
+            )
+
+    assert exc_info.value.status_code == 404
+    assert db.query(Approval).count() == before
+
+
+@pytest.mark.parametrize("action", ["approve", "reject", "list"])
+def test_every_share_approval_route_rejects_hidden_older_version(
+    db,
+    make_project,
+    make_user,
+    monkeypatch,
+    action,
+) -> None:
+    project, owner = make_project()
+    actor = make_user()
+    asset = _add_asset(db, project.id, owner.id)
+    older = _add_version(db, asset)
+    latest = AssetVersion(
+        asset_id=asset.id,
+        version_number=2,
+        processing_status=ProcessingStatus.ready,
+        created_by=owner.id,
+    )
+    db.add(latest)
+    link = _add_link(
+        db,
+        asset,
+        owner.id,
+        permission=SharePermission.approve,
+        visibility=ShareVisibility.secure,
+    )
+    link.show_versions = False
+    db.commit()
+    monkeypatch.setattr(share, "send_task_safe", lambda *args, **kwargs: None)
+    before = db.query(Approval).count()
+
+    with pytest.raises(HTTPException) as exc_info:
+        if action == "approve":
+            share.approve_shared_asset(
+                link.token,
+                asset.id,
+                ApprovalCreate(version_id=older.id),
+                None,
+                db,
+                actor,
+            )
+        elif action == "reject":
+            share.reject_shared_asset(
+                link.token,
+                asset.id,
+                ApprovalCreate(version_id=older.id),
+                None,
+                db,
+                actor,
+            )
+        else:
+            share.list_shared_approvals(
+                link.token,
+                asset.id,
+                older.id,
                 None,
                 db,
                 actor,
@@ -166,4 +232,3 @@ def test_share_approval_rejects_wrong_session_stale_links_and_scoped_list(
             actor,
         )
     )
-
