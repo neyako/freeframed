@@ -55,7 +55,6 @@ describe("ShareDialog", () => {
     mockedApi.get.mockImplementation(async (path: string) => {
       if (path === "/assets/asset-1/shares") return [];
       if (path === "/assets/asset-1/direct-shares") return [share];
-      if (path === "/organizations/project-1/teams") return { teams: [] };
       return [];
     });
     mockedApi.post.mockImplementation(async (path: string) => {
@@ -135,7 +134,6 @@ describe("ShareDialog", () => {
     mockedApi.get.mockImplementation(async (path: string) => {
       if (path === "/folders/folder-1/shares") return [];
       if (path === "/folders/folder-1/direct-shares") return [];
-      if (path === "/organizations/project-1/teams") return { teams: [] };
       return [];
     });
     mockedApi.post.mockImplementation(async (path: string) => {
@@ -166,6 +164,43 @@ describe("ShareDialog", () => {
     await waitFor(() => {
       expect(mockedApi.get).toHaveBeenCalledWith("/folders/folder-1/direct-shares");
     });
+
+    const peopleForm = screen
+      .getByPlaceholderText("user@example.com")
+      .closest("form") as HTMLElement;
+    await user.click(within(peopleForm).getByRole("combobox"));
+    expect(screen.getByRole("option", { name: /comment/i })).toBeInTheDocument();
+  });
+
+  it("offers only view and approve for project direct shares", async () => {
+    const user = userEvent.setup();
+
+    mockedApi.get.mockImplementation(async (path: string) => {
+      if (path === "/projects/project-1/share-links?search=Launch%20Film") {
+        return [projectShareListItem()];
+      }
+      if (path === "/share/project-token/details") return projectShareDetails();
+      return [];
+    });
+
+    render(
+      <SharePanel
+        target={{ kind: "project", id: "project-1", name: "Launch Film" }}
+        projectId="project-1"
+        withPeople
+      />,
+    );
+
+    expect(await screen.findByText("Anyone with the link")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /invite people/i }));
+    const peopleForm = screen
+      .getByPlaceholderText("user@example.com")
+      .closest("form") as HTMLElement;
+    await user.click(within(peopleForm).getByRole("combobox"));
+
+    expect(screen.getByRole("option", { name: /view/i })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: /approve/i })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: /comment/i })).not.toBeInTheDocument();
   });
 
   it("hydrates the project root link from mixed project share list items", async () => {
@@ -403,7 +438,6 @@ describe("ShareDialog", () => {
     mockedApi.get.mockImplementation(async (path: string) => {
       if (path === "/assets/asset-1/shares") return [];
       if (path === "/assets/asset-1/direct-shares") return [];
-      if (path === "/organizations/project-1/teams") return { teams: [] };
       return [];
     });
     mockedApi.post.mockImplementation(async (path: string) => {

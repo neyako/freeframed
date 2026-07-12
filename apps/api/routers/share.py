@@ -718,13 +718,19 @@ def share_project_with_user(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    # ponytail: no comment-only project role; project-scoped AssetShare.permission if comment-only shares are ever needed
+    if body.permission == SharePermission.comment:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Project shares support view or approve permission",
+        )
+
     project = _lock_active_project(db, project_id)
     require_project_role(db, project_id, current_user, ProjectRole.owner)
     shared_user = _resolve_active_share_recipient(db, body)
 
     requested_role = {
         SharePermission.view: ProjectRole.viewer,
-        SharePermission.comment: ProjectRole.reviewer,
         SharePermission.approve: ProjectRole.reviewer,
     }[body.permission]
     role_rank = {
@@ -778,7 +784,6 @@ def share_project_with_user(
         id=membership.id,
         project_id=project_id,
         shared_with_user_id=shared_user.id,
-        shared_with_team_id=None,
         permission=body.permission,
         created_at=membership.invited_at,
     )
@@ -798,8 +803,6 @@ def list_folder_share_links(
     ).all()
     return [_share_link_response(link) for link in links]
 
-
-# ── Folder direct user/team sharing ──────────────────────────────────────────
 
 @router.post("/folders/{folder_id}/share/user", response_model=DirectShareResponse, status_code=status.HTTP_201_CREATED)
 def share_folder_with_user(
@@ -845,18 +848,6 @@ def share_folder_with_user(
     )
 
     return direct_share
-
-
-@router.post("/folders/{folder_id}/share/team", response_model=DirectShareResponse, status_code=status.HTTP_201_CREATED)
-def share_folder_with_team(
-    folder_id: uuid.UUID,
-    body: DirectShareCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    folder = _get_folder(db, folder_id)
-    require_project_role(db, folder.project_id, current_user, ProjectRole.editor)
-    raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Team sharing is not supported")
 
 
 # ── Delete folder share ──────────────────────────────────────────────────────
@@ -916,7 +907,6 @@ def delete_folder_share(
     duplicates = db.query(AssetShare).filter(
         AssetShare.folder_id == folder_id,
         AssetShare.shared_with_user_id == share.shared_with_user_id,
-        AssetShare.shared_with_team_id == share.shared_with_team_id,
         AssetShare.deleted_at.is_(None),
     ).all()
     deleted_at = datetime.now(timezone.utc)
@@ -924,8 +914,6 @@ def delete_folder_share(
         duplicate.deleted_at = deleted_at
     db.commit()
 
-
-# ── Direct user/team sharing (assets) ────────────────────────────────────────
 
 @router.post("/assets/{asset_id}/share/user", response_model=DirectShareResponse, status_code=status.HTTP_201_CREATED)
 def share_with_user(
@@ -976,18 +964,6 @@ def share_with_user(
     )
 
     return direct_share
-
-
-@router.post("/assets/{asset_id}/share/team", response_model=DirectShareResponse, status_code=status.HTTP_201_CREATED)
-def share_with_team(
-    asset_id: uuid.UUID,
-    body: DirectShareCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    asset = _get_asset(db, asset_id)
-    require_project_role(db, asset.project_id, current_user, ProjectRole.editor)
-    raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Team sharing is not supported")
 
 
 # ── Project-level share link listing ──────────────────────────────────────────
@@ -1508,6 +1484,19 @@ def get_folder_share_assets(
     target_folder_id = link.folder_id  # None for project root shares
     if folder_id:
         if is_project_share:
+            if is_multi_share:
+                multi_folder_ids = {
+                    item.folder_id for item in multi_share_items if item.folder_id
+                }
+                folder_is_shared = folder_id in multi_folder_ids or any(
+                    _is_active_descendant_of(db, folder_id, shared_folder_id)
+                    for shared_folder_id in multi_folder_ids
+                )
+                if not folder_is_shared:
+                    raise HTTPException(
+                        status_code=403,
+                        detail="Folder is not within the shared items",
+                    )
             # Project share: validate folder belongs to this project
             f = db.query(Folder).filter(Folder.id == folder_id, Folder.deleted_at.is_(None)).first()
             if not f or f.project_id != link.project_id:

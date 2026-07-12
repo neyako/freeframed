@@ -1,4 +1,4 @@
-import type { SharePermission, ShareVisibility, Team } from "@/types";
+import type { SharePermission, ShareVisibility } from "@/types";
 
 export type { ShareVisibility } from "@/types";
 
@@ -7,9 +7,7 @@ export type ShareTarget =
   | { readonly kind: "folder"; readonly id: string }
   | { readonly kind: "project"; readonly id: string; readonly name?: string };
 
-export type PeopleShareTarget =
-  | { readonly kind: "asset"; readonly id: string }
-  | { readonly kind: "folder"; readonly id: string };
+export type PeopleShareTarget = ShareTarget;
 
 export interface ShareListEnvelope {
   readonly share_links: readonly ShareLinkCandidate[];
@@ -65,12 +63,7 @@ export interface DirectShare {
   readonly asset_id?: string | null;
   readonly folder_id?: string | null;
   readonly project_id?: string | null;
-  readonly shared_with_user_id: string | null;
-  readonly shared_with_team_id?: string | null;
+  readonly shared_with_user_id: string;
   readonly permission: SharePermission;
   readonly created_at?: string;
-}
-
-export interface TeamsResponse {
-  readonly teams: readonly Team[];
 }

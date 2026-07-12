@@ -29,7 +29,6 @@ from ._share_security_support import (
     ("permission", "expected_role"),
     [
         (SharePermission.view, ProjectRole.viewer),
-        (SharePermission.comment, ProjectRole.reviewer),
         (SharePermission.approve, ProjectRole.reviewer),
     ],
 )

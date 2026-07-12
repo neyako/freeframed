@@ -8,8 +8,6 @@ export type AssetVersionStatus = "uploading" | "processing" | "ready" | "failed"
 
 export type OrgRole = "owner" | "admin" | "member";
 
-export type TeamRole = "lead" | "member";
-
 export type ProjectRole = "owner" | "editor" | "reviewer" | "viewer";
 
 export type ProjectType = "personal" | "team";
@@ -69,24 +67,6 @@ export interface User {
 
 export interface AdminUser extends User {
   invite_token: string | null;
-}
-
-export interface Team {
-  id: string;
-  org_id: string;
-  name: string;
-  description: string | null;
-  created_at: string;
-  deleted_at: string | null;
-}
-
-export interface TeamMember {
-  id: string;
-  team_id: string;
-  user_id: string;
-  role: TeamRole;
-  added_at: string;
-  deleted_at: string | null;
 }
 
 export interface Project {
@@ -311,7 +291,6 @@ export interface AssetShare {
   id: string;
   asset_id: string;
   shared_with_user_id: string | null;
-  shared_with_team_id: string | null;
   permission: SharePermission;
   shared_by: string;
   created_at: string;

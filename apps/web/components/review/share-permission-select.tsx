@@ -18,12 +18,14 @@ interface PermissionSelectProps {
   readonly value: SharePermission;
   readonly onChange: (value: SharePermission) => void;
   readonly disabled?: boolean;
+  readonly permissions?: readonly SharePermission[];
 }
 
 export function PermissionSelect({
   value,
   onChange,
   disabled,
+  permissions = SHARE_PERMISSIONS,
 }: PermissionSelectProps) {
   function handleValueChange(nextValue: string) {
     if (isSharePermission(nextValue)) onChange(nextValue);
@@ -54,7 +56,7 @@ export function PermissionSelect({
           sideOffset={4}
         >
           <Select.Viewport className="p-1">
-            {SHARE_PERMISSIONS.map((permission) => (
+            {permissions.map((permission) => (
               <Select.Item
                 key={permission}
                 value={permission}

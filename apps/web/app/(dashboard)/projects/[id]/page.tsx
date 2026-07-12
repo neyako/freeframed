@@ -1182,6 +1182,7 @@ export default function ProjectDetailPage() {
                     name: project?.name ?? "Project",
                   }}
                   projectId={projectId}
+                  withPeople
                 />
               )}
               {activeShare?.kind === "folder" && (

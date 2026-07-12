@@ -220,7 +220,6 @@ class FolderShareAssetsResponse(BaseModel):
 class DirectShareCreate(BaseModel):
     permission: SharePermission = SharePermission.view
     user_id: Optional[uuid.UUID] = None
-    team_id: Optional[uuid.UUID] = None
     email: Optional[str] = None  # Alternative to user_id — invite by email
     share_token: Optional[str] = None  # If sharing from a share link context, include token for email link
 
@@ -231,7 +230,6 @@ class DirectShareResponse(BaseModel):
     folder_id: Optional[uuid.UUID] = None
     project_id: Optional[uuid.UUID] = None
     shared_with_user_id: Optional[uuid.UUID]
-    shared_with_team_id: Optional[uuid.UUID]
     permission: SharePermission
     created_at: datetime
     model_config = {"from_attributes": True}

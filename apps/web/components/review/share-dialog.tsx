@@ -20,16 +20,14 @@ interface SharePanelProps {
 
 export function SharePanel({
   target,
-  projectId,
   withPeople = false,
 }: SharePanelProps) {
   const [showPeople, setShowPeople] = React.useState(false);
-  const peopleTarget: PeopleShareTarget | null =
-    target.kind === "project" ? null : target;
+  const peopleTarget: PeopleShareTarget = target;
 
   return (
     <SingleLinkSection target={target}>
-      {withPeople && peopleTarget && (
+      {withPeople && (
         <>
           <button
             type="button"
@@ -49,7 +47,7 @@ export function SharePanel({
           </button>
           {showPeople && (
             <div className="border-b border-border-secondary px-5 py-4">
-              <DirectTab target={peopleTarget} orgId={projectId} />
+              <DirectTab target={peopleTarget} />
             </div>
           )}
         </>

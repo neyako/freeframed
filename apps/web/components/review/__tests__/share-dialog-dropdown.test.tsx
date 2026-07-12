@@ -33,7 +33,6 @@ describe("ShareDialog dropdown", () => {
     mockedApi.get.mockImplementation(async (path: string) => {
       if (path === "/assets/asset-1/shares") return [link];
       if (path === "/assets/asset-1/direct-shares") return [];
-      if (path === "/organizations/project-1/teams") return { teams: [] };
       return [];
     });
     mockedApi.delete.mockResolvedValue(undefined);

@@ -28,7 +28,6 @@ export function directShare() {
     asset_id: "asset-1",
     folder_id: null,
     shared_with_user_id: "user-12345678",
-    shared_with_team_id: null,
     permission: "view",
     created_at: "2026-06-29T00:00:00Z",
   } as const;
