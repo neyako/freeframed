@@ -7,7 +7,7 @@
 > in `plans/README.md` — unless a reviewer dispatched you and told you they
 > maintain the index.
 >
-> **Drift check (run first)**: `git diff --stat 96b6644..HEAD -- apps/api/routers/folders.py apps/api/services/s3_service.py apps/api/tasks/ apps/api/config.py`
+> **Drift check (run first)**: `git diff --stat 89cf1b8..HEAD -- apps/api/routers/folders.py apps/api/services/s3_service.py apps/api/tasks/ apps/api/config.py`
 > If any in-scope file changed since this plan was written, compare the
 > "Current state" excerpts against the live code before proceeding; on a
 > mismatch, treat it as a STOP condition.
@@ -19,10 +19,13 @@
 - **Risk**: MED — this plan introduces the codebase's FIRST permanent-delete
   path; a bug here destroys user media. The design below is deliberately
   conservative (age threshold + explicit endpoint + dry-run task mode).
-- **Depends on**: plan 082 (order only — both edit `folders.py`; land 082
-  first or rebase)
+- **Depends on**: plan 082 — landed (`8283482`), no longer blocking
 - **Category**: direction / feature
 - **Planned at**: commit `96b6644`, 2026-07-12
+- **Revised**: 2026-07-13 after BLOCKED report — full FK graph mapped (was
+  incomplete), third S3 prefix `watermarked/{asset_id}/` added, audit-history
+  semantics decided by maintainer: **SET NULL + keep** for `activity_logs`,
+  `share_link_activity` untouched, everything with a NOT NULL FK hard-deleted.
 
 ## Why this matters
 
@@ -44,9 +47,9 @@ window, and (c) the S3 prefix-deletion helper both need.
 Files:
 
 - `apps/api/routers/assets.py:207-218` — `delete_asset`: soft-delete only.
-- `apps/api/routers/folders.py:551-601` — `list_trash` (per-project trashed
-  folders + assets); `:603-628` `restore_asset`; `:630-…` `restore_folder`
-  (uses `_lock_active_project`).
+- `apps/api/routers/folders.py:592` — `list_trash` (per-project trashed
+  folders + assets); `:644` `restore_asset`; `:671` `restore_folder`
+  (uses `_lock_active_project`). (Line refs updated after plan 082 landed.)
 - `apps/api/services/s3_service.py` — has `delete_object(s3_key)` (line
   ~262, single-key) and `get_s3_client()`; has NO list-prefix or bulk-delete
   helper.
@@ -60,13 +63,27 @@ Files:
     (`upload.py:130-131`)
   - processed HLS/thumbnails: `processed/{project_id}/{asset_id}/{version_id}/...`
     (`transcode_tasks.py:61`)
-  - So **everything belonging to an asset lives under the two prefixes**
-    `raw/{project_id}/{asset_id}/` and `processed/{project_id}/{asset_id}/`.
-- Models: `Asset`, `AssetVersion`, `MediaFile` (`models/asset.py`; MediaFile
-  has `s3_key_raw`, `s3_key_processed`, `s3_key_thumbnail`), `Comment` +
-  comment attachments (attachments have own `s3_key`, deleted via
-  `comments.py:617`), `ShareLink`/`AssetShare` (`models/share.py`) — all
-  soft-deletable and FK-linked to assets.
+  - watermarked outputs: `watermarked/{asset_id}/output{ext}`
+    (`watermark_tasks.py:114`) — NOTE: no project_id segment in this one.
+  - So everything belonging to an asset lives under the THREE prefixes
+    `raw/{project_id}/{asset_id}/`, `processed/{project_id}/{asset_id}/`,
+    and `watermarked/{asset_id}/`.
+- **Full FK graph around Asset** (verified 2026-07-13 via
+  `grep -rn "assets.id\|asset_id" apps/api/models/`):
+  - Direct FK to `assets.id`, NOT NULL: `AssetVersion` (asset.py:58),
+    `Comment` (comment.py:20), `AssetMetadata` (metadata.py:35),
+    `Approval` (approval.py:22), `Notification` (activity.py:52).
+  - Direct FK to `assets.id`, nullable: `ShareLink` (share.py:25),
+    `ShareLinkItem` (share.py:64), `AssetShare` (share.py:78),
+    `ActivityLog` (activity.py:41).
+  - Transitive: `CarouselItem` (asset.py:92-93, FKs `asset_versions.id` +
+    `media_files.id`); `CommentReaction` + `Mention` (comment.py:53,
+    activity.py:30, FK `comments.id`); comment annotations/attachments.
+  - No FK at all: `ShareLinkActivity.asset_id` (share.py:110, plain UUID) —
+    unaffected by hard deletes, leave untouched.
+- MediaFile has `s3_key_raw`, `s3_key_processed`, `s3_key_thumbnail`;
+  comment attachments have own `s3_key`, already hard-deleted via
+  `comments.py:617`.
 
 `delete_asset` today:
 
@@ -149,7 +166,7 @@ Conventions:
 ```python
 def delete_prefix(prefix: str) -> int:
     """Permanently delete every object under prefix. Returns count deleted."""
-    if not prefix or prefix.strip("/") in ("", "raw", "processed"):
+    if not prefix or prefix.strip("/") in ("", "raw", "processed", "watermarked"):
         raise ValueError(f"refusing to delete overly broad prefix: {prefix!r}")
     s3 = get_s3_client()
     deleted = 0
@@ -188,17 +205,25 @@ Behavior:
    folder were cascade-trashed at the same time (see `delete_folder`) so the
    asset query already covers their media.
 2. For each asset: call
-   `delete_prefix(f"raw/{asset.project_id}/{asset.id}/")` and
-   `delete_prefix(f"processed/{asset.project_id}/{asset.id}/")` (skip when
-   `dry_run`).
+   `delete_prefix(f"raw/{asset.project_id}/{asset.id}/")`,
+   `delete_prefix(f"processed/{asset.project_id}/{asset.id}/")`, and
+   `delete_prefix(f"watermarked/{asset.id}/")` (skip when `dry_run`).
 3. Hard-delete DB rows in FK-safe order, ONLY for the selected ids:
-   comments' annotations/attachments rows → `Comment` → `AssetShare` →
-   `ShareLink` (asset-scoped) → `MediaFile` → `AssetVersion` → `Asset`;
-   then folder-scoped `AssetShare`/`ShareLink` → `Folder` for selected
-   folders. Inspect `apps/api/models/` first and follow the actual FK graph —
-   if a model you didn't expect references Asset (`grep -rn "assets.id"
-   apps/api/models/`), STOP and report rather than guessing. Notifications
-   referencing the asset: delete or null per the FK's nullability.
+   1. `CommentReaction`, `Mention`, comment annotations/attachments →
+      `Comment`
+   2. `Notification`, `Approval`, `AssetMetadata` (all NOT NULL FK —
+      meaningless without the asset, hard-delete)
+   3. `ShareLinkItem` rows for the asset → asset-scoped `AssetShare` →
+      asset-scoped `ShareLink` (a multi-item ShareLink loses only this
+      asset's item, the link itself survives)
+   4. `CarouselItem` (FKs versions + media) → `MediaFile` → `AssetVersion`
+      → `Asset`
+   5. Folder pass: folder-scoped `ShareLinkItem`/`AssetShare`/`ShareLink` →
+      `Folder` for selected folders.
+   6. **Audit history (maintainer decision 2026-07-13, keep it)**:
+      `ActivityLog.asset_id` → `UPDATE ... SET asset_id = NULL` for purged
+      ids (rows + JSONB payload survive); `ShareLinkActivity` has no FK —
+      do not touch it.
 4. Return `{"assets_purged": n, "folders_purged": m, "objects_deleted": k,
    "dry_run": dry_run}`.
 
@@ -256,7 +281,8 @@ patched (record calls):
 
 1. **Endpoint purges trashed only**: 2 assets, trash 1, empty trash →
    trashed asset's rows GONE (hard), live asset untouched; `delete_prefix`
-   called with exactly its two prefixes.
+   called with exactly its three prefixes (`raw/…`, `processed/…`,
+   `watermarked/{asset_id}/`).
 2. **Restore wins before purge**: trash → restore → empty trash → asset
    survives, no S3 calls for it.
 3. **Retention window**: one asset trashed "45 days ago" (set `deleted_at`
@@ -264,10 +290,17 @@ patched (record calls):
    `older_than = now - 30d` purges only the old one.
 4. **Permissions**: editor (non-owner) → 403.
 5. **Dry run**: `dry_run=True` reports counts, deletes nothing.
-6. **Prefix guard**: `delete_prefix("raw/")` raises `ValueError` (unit-style,
-   no DB needed — can live in the same file).
+6. **Prefix guard**: `delete_prefix("raw/")` and `delete_prefix("watermarked")`
+   raise `ValueError` (unit-style, no DB needed — can live in the same file).
+7. **Full FK graph**: purged asset with a metadata value, an approval, a
+   notification, a share-link item, a carousel item, and a comment with one
+   reaction + one mention → purge succeeds (no IntegrityError), all those
+   rows gone.
+8. **Audit history survives**: purged asset with an `ActivityLog` row and a
+   `ShareLinkActivity` row → after purge, ActivityLog row exists with
+   `asset_id IS NULL`, ShareLinkActivity row untouched.
 
-**Verify**: `TEST_DATABASE_URL=... python -m pytest apps/api/tests/integration/test_trash_purge_db.py -v` → 6 pass.
+**Verify**: `TEST_DATABASE_URL=... python -m pytest apps/api/tests/integration/test_trash_purge_db.py -v` → 8 pass.
 
 ## Test plan
 
@@ -281,7 +314,8 @@ soft-delete/restore behavior.
 - [ ] `delete_prefix` exists with the broad-prefix guard; guard test passes
 - [ ] `POST /projects/{id}/trash/empty` exists, owner-gated
 - [ ] `purge_expired_trash` beat entry present; `TRASH_RETENTION_DAYS` in both `.env.example`s
-- [ ] ≥6 new integration tests pass (or skip cleanly without env)
+- [ ] ≥8 new integration tests pass (or skip cleanly without env)
+- [ ] `ActivityLog` rows survive purge with nulled `asset_id`; `ShareLinkActivity` untouched
 - [ ] Full API suite green in CI
 - [ ] `git status` clean outside in-scope list; `plans/README.md` updated
 
@@ -289,17 +323,19 @@ soft-delete/restore behavior.
 
 Stop and report back (do not improvise) if:
 
-- The FK graph around Asset contains a model this plan didn't list
-  (`grep -rn "assets.id\|asset_id" apps/api/models/` shows something beyond
-  AssetVersion/MediaFile/Comment/AssetShare/ShareLink/Notification/annotation
-  /attachment tables) — the hard-delete order must be re-derived, not guessed.
-- Any S3 key for an asset's media exists OUTSIDE the two documented prefixes
-  (check `grep -rn "s3_key" apps/api/routers/upload.py apps/api/tasks/` for
-  key construction you don't recognize).
+- The FK graph around Asset contains a model beyond the "Full FK graph"
+  list in Current state (re-run
+  `grep -rn "assets.id\|asset_id" apps/api/models/` and compare) — the
+  hard-delete order must be re-derived, not guessed.
+- Any S3 key for an asset's media exists OUTSIDE the three documented
+  prefixes (check `grep -rn "s3_key\|_key = " apps/api/routers/upload.py
+  apps/api/tasks/` for key construction you don't recognize).
 - Hard-deleting rows trips an FK constraint in tests — report the constraint,
   don't switch to `ON DELETE CASCADE` migrations on your own.
-- Anything suggests share links must survive purge for audit/history reasons
-  (e.g. an activity table FK) — product call, report it.
+
+Resolved 2026-07-13 (no longer STOP conditions): incomplete FK list —
+now fully mapped above; `watermarked/` prefix — now in scope; audit-history
+semantics — maintainer chose SET NULL + keep (see Step 2.3.6).
 
 ## Maintenance notes
 
