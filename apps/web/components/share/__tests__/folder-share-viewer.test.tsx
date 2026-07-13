@@ -57,8 +57,17 @@ vi.mock("@/components/review/image-viewer", () => ({
 vi.mock("@/components/review/audio-player", () => ({ AudioPlayer: () => null }));
 vi.mock("@/components/review/comment-panel", () => ({ CommentPanel: () => null }));
 vi.mock("@/components/review/comment-input", () => ({
-  CommentInput: ({ onSubmit }: { readonly onSubmit: (body: string) => Promise<void> }) => (
-    <button type="button" onClick={() => void onSubmit("Looks good")}>Submit comment</button>
+  CommentInput: ({ onSubmit, visibilityLocked }: {
+    readonly onSubmit: (body: string) => Promise<void>;
+    readonly visibilityLocked?: boolean;
+  }) => (
+    <button
+      type="button"
+      data-visibility-locked={visibilityLocked ? "true" : "false"}
+      onClick={() => void onSubmit("Looks good")}
+    >
+      Submit comment
+    </button>
   ),
 }));
 vi.mock("@/components/review/annotation-overlay", () => ({ AnnotationOverlay: () => null }));
@@ -99,7 +108,9 @@ describe("ShareReviewScreen identity", () => {
       />,
     );
 
-    fireEvent.click(await screen.findByRole("button", { name: "Submit comment" }));
+    const submitButton = await screen.findByRole("button", { name: "Submit comment" });
+    expect(submitButton).toHaveAttribute("data-visibility-locked", "true");
+    fireEvent.click(submitButton);
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
     expect(screen.queryByText("Leave a comment")).not.toBeInTheDocument();

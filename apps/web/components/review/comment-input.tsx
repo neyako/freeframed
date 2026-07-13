@@ -29,6 +29,10 @@ import type { User } from "@/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+type CommentVisibility = "public" | "internal";
+
+const COMMENT_VISIBILITY_STORAGE_KEY = "ff-comment-visibility";
+
 interface CommentInputProps {
   assetId: string;
   projectId: string;
@@ -41,11 +45,12 @@ interface CommentInputProps {
     timecodeEnd?: number,
     annotationData?: Record<string, unknown>,
     parentId?: string,
-    visibility?: string,
+    visibility?: CommentVisibility,
     mentionUserIds?: string[],
   ) => Promise<void>;
   onCancelReply?: () => void;
   onPauseVideo?: () => void;
+  visibilityLocked?: boolean;
   className?: string;
 }
 
@@ -184,6 +189,7 @@ export function CommentInput({
   onSubmit,
   onCancelReply,
   onPauseVideo,
+  visibilityLocked = false,
   className,
 }: CommentInputProps) {
   const {
@@ -213,9 +219,10 @@ export function CommentInput({
   const [mentionUserIds, setMentionUserIds] = React.useState<string[]>([]);
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  const [commentVisibility, setCommentVisibility] = React.useState<
-    "public" | "internal"
-  >("public");
+  const [commentVisibility, setCommentVisibility] =
+    React.useState<CommentVisibility>(
+      visibilityLocked ? "public" : "internal",
+    );
   const [visDropdownOpen, setVisDropdownOpen] = React.useState(false);
   const [timecodeAttached, setTimecodeAttached] = React.useState(true);
   const visRef = React.useRef<HTMLDivElement>(null);
@@ -228,6 +235,25 @@ export function CommentInput({
   const [mentionQuery, setMentionQuery] = React.useState<string | null>(null);
   const [mentionStart, setMentionStart] = React.useState<number>(0);
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+
+  React.useEffect(() => {
+    if (visibilityLocked) {
+      setCommentVisibility("public");
+      setVisDropdownOpen(false);
+      return;
+    }
+
+    try {
+      const storedVisibility = localStorage.getItem(
+        COMMENT_VISIBILITY_STORAGE_KEY,
+      );
+      if (storedVisibility === "internal" || storedVisibility === "public") {
+        setCommentVisibility(storedVisibility);
+      }
+    } catch {
+      return;
+    }
+  }, [visibilityLocked]);
 
   // Close dropdowns on outside click
   React.useEffect(() => {
@@ -311,6 +337,16 @@ export function CommentInput({
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSubmit();
+    }
+  }
+
+  function selectCommentVisibility(visibility: CommentVisibility) {
+    setCommentVisibility(visibility);
+    setVisDropdownOpen(false);
+    try {
+      localStorage.setItem(COMMENT_VISIBILITY_STORAGE_KEY, visibility);
+    } catch {
+      return;
     }
   }
 
@@ -644,7 +680,10 @@ export function CommentInput({
               {/* Visibility dropdown */}
               <div className="relative" ref={visRef}>
                 <button
-                  onClick={() => setVisDropdownOpen((p) => !p)}
+                  onClick={() => {
+                    if (!visibilityLocked) setVisDropdownOpen((p) => !p);
+                  }}
+                  disabled={visibilityLocked}
                   className={cn(
                     "inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md text-[12px] transition-colors border",
                     commentVisibility === "internal"
@@ -658,9 +697,9 @@ export function CommentInput({
                     <Globe className="h-3 w-3" />
                   )}
                   {commentVisibility === "internal" ? "Internal" : "Public"}
-                  <ChevronDown className="h-3 w-3" />
+                  {!visibilityLocked && <ChevronDown className="h-3 w-3" />}
                 </button>
-                {visDropdownOpen && (
+                {!visibilityLocked && visDropdownOpen && (
                   <div className="absolute bottom-full right-0 mb-1 z-50 w-44 rounded-xl border border-border bg-bg-elevated shadow-2xl py-1.5 animate-in fade-in zoom-in-95 duration-100">
                     <button
                       className={cn(
@@ -669,10 +708,7 @@ export function CommentInput({
                           ? "text-text-primary bg-bg-tertiary"
                           : "text-text-secondary hover:bg-bg-tertiary",
                       )}
-                      onClick={() => {
-                        setCommentVisibility("public");
-                        setVisDropdownOpen(false);
-                      }}
+                      onClick={() => selectCommentVisibility("public")}
                     >
                       <Globe className="h-3.5 w-3.5" />
                       Public
@@ -684,10 +720,7 @@ export function CommentInput({
                           ? "text-accent bg-bg-tertiary"
                           : "text-text-secondary hover:bg-bg-tertiary",
                       )}
-                      onClick={() => {
-                        setCommentVisibility("internal");
-                        setVisDropdownOpen(false);
-                      }}
+                      onClick={() => selectCommentVisibility("internal")}
                     >
                       <Lock className="h-3.5 w-3.5" />
                       Internal

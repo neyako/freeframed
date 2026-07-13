@@ -904,6 +904,7 @@ function ShareReviewInner({
                     assetId={asset.id}
                     projectId=""
                     assetType={asset.asset_type}
+                    visibilityLocked
                     onSubmit={async (body: string, timecodeStart?: number, timecodeEnd?: number, annotationData?: Record<string, unknown>) => {
                       const hasIdentity = isLoggedIn || Boolean(localStorage.getItem('ff_guest_identity'))
                       if (!hasIdentity) {

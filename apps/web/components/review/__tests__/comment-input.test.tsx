@@ -48,6 +48,7 @@ async function typeAndSend(text: string) {
 
 describe("CommentInput range comments", () => {
   beforeEach(() => {
+    localStorage.clear();
     useReviewStore.setState({
       playheadTime: 0,
       rangeStart: null,
@@ -63,7 +64,7 @@ describe("CommentInput range comments", () => {
     await typeAndSend("point note");
     await waitFor(() =>
       expect(onSubmit).toHaveBeenCalledWith(
-        "point note", 12, undefined, undefined, undefined, "public", undefined,
+        "point note", 12, undefined, undefined, undefined, "internal", undefined,
       ),
     );
   });
@@ -76,7 +77,7 @@ describe("CommentInput range comments", () => {
     await typeAndSend("cut this section");
     await waitFor(() =>
       expect(onSubmit).toHaveBeenCalledWith(
-        "cut this section", 12, 18, undefined, undefined, "public", undefined,
+        "cut this section", 12, 18, undefined, undefined, "internal", undefined,
       ),
     );
     // range resets after submit — chip back in point mode
@@ -93,7 +94,7 @@ describe("CommentInput range comments", () => {
     await typeAndSend("cut this");
     await waitFor(() =>
       expect(onSubmit).toHaveBeenCalledWith(
-        "cut this", 12, 18, undefined, undefined, "public", undefined,
+        "cut this", 12, 18, undefined, undefined, "internal", undefined,
       ),
     );
   });
@@ -105,7 +106,7 @@ describe("CommentInput range comments", () => {
     await typeAndSend("same spot");
     await waitFor(() =>
       expect(onSubmit).toHaveBeenCalledWith(
-        "same spot", 12, undefined, undefined, undefined, "public", undefined,
+        "same spot", 12, undefined, undefined, undefined, "internal", undefined,
       ),
     );
   });
@@ -119,7 +120,7 @@ describe("CommentInput range comments", () => {
     await typeAndSend("just here");
     await waitFor(() =>
       expect(onSubmit).toHaveBeenCalledWith(
-        "just here", 18, undefined, undefined, undefined, "public", undefined,
+        "just here", 18, undefined, undefined, undefined, "internal", undefined,
       ),
     );
   });
@@ -135,7 +136,7 @@ describe("CommentInput range comments", () => {
     await typeAndSend("frozen out");
     await waitFor(() =>
       expect(onSubmit).toHaveBeenCalledWith(
-        "frozen out", 12, 18, undefined, undefined, "public", undefined,
+        "frozen out", 12, 18, undefined, undefined, "internal", undefined,
       ),
     );
   });
@@ -150,7 +151,7 @@ describe("CommentInput range comments", () => {
     await typeAndSend("o first");
     await waitFor(() =>
       expect(onSubmit).toHaveBeenCalledWith(
-        "o first", 8, 20, undefined, undefined, "public", undefined,
+        "o first", 8, 20, undefined, undefined, "internal", undefined,
       ),
     );
   });
@@ -163,7 +164,23 @@ describe("CommentInput range comments", () => {
     await typeAndSend("no time");
     await waitFor(() =>
       expect(onSubmit).toHaveBeenCalledWith(
-        "no time", undefined, undefined, undefined, undefined, "public", undefined,
+        "no time", undefined, undefined, undefined, undefined, "internal", undefined,
+      ),
+    );
+  });
+
+  it("restores and persists the last-used visibility", async () => {
+    localStorage.setItem("ff-comment-visibility", "public");
+    const onSubmit = setup();
+
+    fireEvent.click(await screen.findByRole("button", { name: /Public/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Internal" }));
+
+    expect(localStorage.getItem("ff-comment-visibility")).toBe("internal");
+    await typeAndSend("team note");
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledWith(
+        "team note", undefined, undefined, undefined, undefined, "internal", undefined,
       ),
     );
   });
