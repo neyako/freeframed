@@ -262,3 +262,22 @@ def put_object(
 def delete_object(s3_key: str) -> None:
     s3 = get_s3_client()
     s3.delete_object(Bucket=settings.s3_bucket, Key=s3_key)
+
+
+def delete_prefix(prefix: str) -> int:
+    """Permanently delete every object under prefix. Returns count deleted."""
+    if not prefix or prefix.strip("/") in ("", "raw", "processed", "watermarked"):
+        raise ValueError(f"refusing to delete overly broad prefix: {prefix!r}")
+    s3 = get_s3_client()
+    deleted = 0
+    paginator = s3.get_paginator("list_objects_v2")
+    for page in paginator.paginate(Bucket=settings.s3_bucket, Prefix=prefix):
+        contents = page.get("Contents") or []
+        if not contents:
+            continue
+        s3.delete_objects(
+            Bucket=settings.s3_bucket,
+            Delete={"Objects": [{"Key": o["Key"]} for o in contents]},
+        )
+        deleted += len(contents)
+    return deleted

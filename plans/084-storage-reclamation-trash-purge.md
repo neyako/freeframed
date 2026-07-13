@@ -26,6 +26,13 @@
   incomplete), third S3 prefix `watermarked/{asset_id}/` added, audit-history
   semantics decided by maintainer: **SET NULL + keep** for `activity_logs`,
   `share_link_activity` untouched, everything with a NOT NULL FK hard-deleted.
+- **Revised again**: 2026-07-13 pm after a second (correct) executor STOP —
+  three more FK edges found: `WatermarkSettings.share_link_id → share_links`
+  (nullable), `ShareLinkActivity.share_link_id → share_links` (NOT NULL),
+  `Notification.comment_id → comments` (nullable). Resolution: **ShareLink
+  rows are soft-deleted + detached, never hard-deleted** (keeps activity FK
+  valid and sidesteps watermark-settings FK), and **Notifications are deleted
+  before Comments**. Details in Step 2.3.
 
 ## Why this matters
 
@@ -81,6 +88,12 @@ Files:
     activity.py:30, FK `comments.id`); comment annotations/attachments.
   - No FK at all: `ShareLinkActivity.asset_id` (share.py:110, plain UUID) —
     unaffected by hard deletes, leave untouched.
+  - FKs INTO `share_links.id` (why links must survive as rows):
+    `ShareLinkActivity.share_link_id` (share.py:106, NOT NULL),
+    `WatermarkSettings.share_link_id` (branding.py:45, nullable),
+    `ShareLinkItem.share_link_id` (share.py:63, NOT NULL).
+  - `Notification.comment_id` (activity.py:53, nullable FK → comments) —
+    notifications must be deleted BEFORE comments.
 - MediaFile has `s3_key_raw`, `s3_key_processed`, `s3_key_thumbnail`;
   comment attachments have own `s3_key`, already hard-deleted via
   `comments.py:617`.
@@ -209,21 +222,37 @@ Behavior:
    `delete_prefix(f"processed/{asset.project_id}/{asset.id}/")`, and
    `delete_prefix(f"watermarked/{asset.id}/")` (skip when `dry_run`).
 3. Hard-delete DB rows in FK-safe order, ONLY for the selected ids:
-   1. `CommentReaction`, `Mention`, comment annotations/attachments →
-      `Comment`
-   2. `Notification`, `Approval`, `AssetMetadata` (all NOT NULL FK —
-      meaningless without the asset, hard-delete)
-   3. `ShareLinkItem` rows for the asset → asset-scoped `AssetShare` →
-      asset-scoped `ShareLink` (a multi-item ShareLink loses only this
-      asset's item, the link itself survives)
+   1. `Notification` first (`asset_id IN purged` OR `comment_id IN` comments
+      of purged assets — its nullable `comment_id` FK blocks comment deletes
+      otherwise), then `CommentReaction`, `Mention`, comment
+      annotations/attachments → `Comment`
+   2. `Approval`, `AssetMetadata` (NOT NULL FK — meaningless without the
+      asset, hard-delete)
+   3. `ShareLinkItem` rows for the asset → asset-scoped `AssetShare`
+      (hard-delete both — grants/items, not audit). Asset-scoped
+      `ShareLink` rows are **soft-deleted + retargeted, NOT hard-deleted**:
+      `UPDATE share_links SET asset_id = NULL, project_id =
+      <owning project id>, is_enabled = false, deleted_at =
+      COALESCE(deleted_at, now())` for the purged asset ids. The
+      `project_id` retarget is required by the check constraint
+      `ck_share_link_asset_or_folder_or_project` (exactly ONE of asset_id /
+      folder_id / project_id non-NULL — see migration `e8f9a0b1c2d3`); a
+      fully detached link would violate it. Rationale for keeping the row:
+      `ShareLinkActivity.share_link_id` is a NOT NULL FK and the maintainer
+      keeps audit history; `WatermarkSettings.share_link_id` also points
+      here. A multi-item ShareLink loses only this asset's item and
+      survives untouched.
    4. `CarouselItem` (FKs versions + media) → `MediaFile` → `AssetVersion`
       → `Asset`
-   5. Folder pass: folder-scoped `ShareLinkItem`/`AssetShare`/`ShareLink` →
-      `Folder` for selected folders.
+   5. Folder pass: folder-scoped `ShareLinkItem`/`AssetShare` hard-deleted;
+      folder-scoped `ShareLink` soft-deleted + retargeted (`folder_id =
+      NULL`, `project_id = <owning project id>`, same UPDATE shape as 3.3)
+      → `Folder` for selected folders.
    6. **Audit history (maintainer decision 2026-07-13, keep it)**:
       `ActivityLog.asset_id` → `UPDATE ... SET asset_id = NULL` for purged
-      ids (rows + JSONB payload survive); `ShareLinkActivity` has no FK —
-      do not touch it.
+      ids (rows + JSONB payload survive); `ShareLinkActivity` rows are not
+      touched (their link row survives per 3.3/3.5); `WatermarkSettings`
+      rows are not touched.
 4. Return `{"assets_purged": n, "folders_purged": m, "objects_deleted": k,
    "dry_run": dry_run}`.
 
@@ -293,12 +322,16 @@ patched (record calls):
 6. **Prefix guard**: `delete_prefix("raw/")` and `delete_prefix("watermarked")`
    raise `ValueError` (unit-style, no DB needed — can live in the same file).
 7. **Full FK graph**: purged asset with a metadata value, an approval, a
-   notification, a share-link item, a carousel item, and a comment with one
-   reaction + one mention → purge succeeds (no IntegrityError), all those
-   rows gone.
-8. **Audit history survives**: purged asset with an `ActivityLog` row and a
-   `ShareLinkActivity` row → after purge, ActivityLog row exists with
-   `asset_id IS NULL`, ShareLinkActivity row untouched.
+   notification (one with `comment_id` set on the asset's comment), a
+   share-link item, a carousel item, and a comment with one reaction + one
+   mention → purge succeeds (no IntegrityError), all those rows gone.
+8. **Audit history survives**: purged asset with an asset-scoped `ShareLink`
+   carrying an `ShareLinkActivity` row, a `WatermarkSettings` row, and an
+   `ActivityLog` row → after purge, ActivityLog row exists with
+   `asset_id IS NULL`; the ShareLink row still exists with
+   `asset_id IS NULL`, `project_id == owning_project_id`,
+   `is_enabled = false`, `deleted_at` set (check constraint satisfied); its
+   ShareLinkActivity and WatermarkSettings rows are untouched.
 
 **Verify**: `TEST_DATABASE_URL=... python -m pytest apps/api/tests/integration/test_trash_purge_db.py -v` → 8 pass.
 
@@ -336,6 +369,17 @@ Stop and report back (do not improvise) if:
 Resolved 2026-07-13 (no longer STOP conditions): incomplete FK list —
 now fully mapped above; `watermarked/` prefix — now in scope; audit-history
 semantics — maintainer chose SET NULL + keep (see Step 2.3.6).
+
+Resolved 2026-07-13 pm (second executor STOP, all three edges confirmed
+against models): `WatermarkSettings.share_link_id` and
+`ShareLinkActivity.share_link_id` — moot, ShareLink rows now survive as
+soft-deleted + retargeted (Step 2.3.3/2.3.5); `Notification.comment_id` —
+notifications now deleted first (Step 2.3.1).
+
+Resolved 2026-07-13 pm (third executor STOP, confirmed against migration
+`e8f9a0b1c2d3`): check constraint `ck_share_link_asset_or_folder_or_project`
+forbids fully detached links — surviving links are now retargeted to the
+owning `project_id` in the same UPDATE (Step 2.3.3/2.3.5, test 8).
 
 ## Maintenance notes
 

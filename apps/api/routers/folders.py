@@ -28,6 +28,7 @@ from ..services.folder_access import (
     folder_scope_select,
     resolve_folder_access,
 )
+from ..tasks.purge_tasks import purge_trashed_assets
 
 router = APIRouter(tags=["folders"])
 
@@ -638,6 +639,21 @@ def list_trash(
             for a in deleted_assets
         ],
     }
+
+
+@router.post("/projects/{project_id}/trash/empty", response_model=dict)
+def empty_trash(
+    project_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    require_project_role(db, project_id, current_user, ProjectRole.owner)
+    _lock_active_project(db, project_id)
+    return purge_trashed_assets(
+        db,
+        project_id=project_id,
+        older_than=datetime.now(timezone.utc),
+    )
 
 
 @router.post("/assets/{asset_id}/restore", response_model=dict)
