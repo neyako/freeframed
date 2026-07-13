@@ -54,6 +54,7 @@ class Settings(BaseSettings):
     # Worker concurrency settings
     transcoding_concurrency: int = 2  # Number of concurrent video transcoding jobs
     email_concurrency: int = 2  # Number of concurrent email sending jobs
+    trash_retention_days: int = 30
 
     # Filesystem path measured for disk capacity in /workspace/storage
     # (the all-in-one image keeps all state under /data)
