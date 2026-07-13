@@ -44,6 +44,8 @@ interface CommentPanelProps {
   onRemoveReaction: (commentId: string, emoji: string) => Promise<void>;
   onReply: (parentId: string) => void;
   onSubmitReply?: (parentId: string, body: string) => Promise<void>;
+  /** Query string appended to own-comment mutations (share-link auth context) */
+  mutationQuery?: string;
   className?: string;
 }
 
@@ -357,6 +359,8 @@ interface CommentItemProps {
   onReply: (parentId: string) => void;
   onCancelReply: () => void;
   onSubmitReply?: (parentId: string, body: string) => Promise<void>;
+  /** Query string appended to own-comment mutations (share-link auth context) */
+  mutationQuery?: string;
 }
 
 function CommentItem({
@@ -373,6 +377,7 @@ function CommentItem({
   onReply,
   onCancelReply,
   onSubmitReply,
+  mutationQuery,
 }: CommentItemProps) {
   const seekTo = useReviewStore((s) => s.seekTo);
   const setActiveAnnotation = useReviewStore((s) => s.setActiveAnnotation);
@@ -557,7 +562,10 @@ function CommentItem({
                     setSaving(true);
                     try {
                       const { api } = await import('@/lib/api');
-                      await api.patch(`/comments/${comment.id}`, { body: editBody.trim() });
+                      await api.patch(
+                        `/comments/${comment.id}${mutationQuery ? `?${mutationQuery}` : ''}`,
+                        { body: editBody.trim() },
+                      );
                       comment.body = editBody.trim();
                       setEditing(false);
                     } catch { /* silent */ }
@@ -714,6 +722,7 @@ function CommentItem({
                   onReply={onReply}
                   onCancelReply={onCancelReply}
                   onSubmitReply={onSubmitReply}
+                  mutationQuery={mutationQuery}
                 />
               ))}
             </div>
@@ -759,6 +768,7 @@ export function CommentPanel({
   onRemoveReaction,
   onReply,
   onSubmitReply,
+  mutationQuery,
   className,
 }: CommentPanelProps) {
   const focusedCommentId = useReviewStore((s) => s.focusedCommentId);
@@ -1192,6 +1202,7 @@ export function CommentPanel({
                 onReply={handleReply}
                 onCancelReply={() => setReplyingTo(null)}
                 onSubmitReply={onSubmitReply}
+                mutationQuery={mutationQuery}
               />
             </div>
           ))}

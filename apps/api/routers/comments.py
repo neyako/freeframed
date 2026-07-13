@@ -490,18 +490,47 @@ def reply_to_comment(
     return _build_comment_response(reply, db, current_user_id=current_user.id)
 
 
+def _require_author_comment_context(
+    db: Session,
+    asset: Asset,
+    user: User,
+    share_token: Optional[str],
+    share_session: Optional[str],
+) -> None:
+    """Own-comment mutations need a live comment path to the asset: project
+    capability, or a valid comment-permission share link (logged-in viewers
+    on a guest link have no project access but may edit their own words)."""
+    if get_asset_access(db, asset, user).can_comment:
+        return
+    if share_token:
+        try:
+            link = validate_share_link_with_session(
+                db,
+                share_token,
+                share_session=share_session,
+                current_user=user,
+            )
+            if link.permission != SharePermission.view:
+                validate_asset_in_share(db, link, asset)
+                return
+        except HTTPException:
+            pass
+    raise HTTPException(status_code=403, detail="Comment permission required")
+
+
 @router.patch("/comments/{comment_id}", response_model=CommentResponse)
 def update_comment(
     comment_id: uuid.UUID,
     body: CommentUpdate,
+    share_token: Optional[str] = Query(None, alias="share_token"),
+    share_session: Optional[str] = Query(None, alias="share_session"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     comment, asset = _get_comment_context(db, comment_id)
-    # Authorship alone authorizes editing — a share-link viewer has no
-    # project access but must still be able to edit their own comment
     if comment.author_id != current_user.id:
         raise HTTPException(status_code=403, detail="Can only edit your own comments")
+    _require_author_comment_context(db, asset, current_user, share_token, share_session)
     comment.body = body.body
     comment.updated_at = datetime.now(timezone.utc)
     db.commit()
@@ -512,13 +541,15 @@ def update_comment(
 @router.delete("/comments/{comment_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_comment(
     comment_id: uuid.UUID,
+    share_token: Optional[str] = Query(None, alias="share_token"),
+    share_session: Optional[str] = Query(None, alias="share_session"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     comment, asset = _get_comment_context(db, comment_id)
-    # Authorship alone authorizes deletion — mirrors update_comment
     if comment.author_id != current_user.id:
         raise HTTPException(status_code=403, detail="Can only delete your own comments")
+    _require_author_comment_context(db, asset, current_user, share_token, share_session)
     comment.deleted_at = datetime.now(timezone.utc)
     db.commit()
 

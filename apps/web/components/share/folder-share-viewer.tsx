@@ -741,11 +741,18 @@ function ShareReviewInner({
   }, [isLoggedIn, authUser, fetchUser])
   const currentUserId = isLoggedIn ? authUser?.id : undefined
 
+  // Own-comment mutations carry the share context — the viewer has no project access
+  const mutationQuery = React.useMemo(() => {
+    const params = new URLSearchParams({ share_token: token })
+    if (shareSession) params.set('share_session', shareSession)
+    return params.toString()
+  }, [token, shareSession])
+
   const handleDeleteComment = React.useCallback(async (commentId: string) => {
     const { api } = await import('@/lib/api')
-    await api.delete(`/comments/${commentId}`)
+    await api.delete(`/comments/${commentId}?${mutationQuery}`)
     refetchComments().catch(() => {})
-  }, [refetchComments])
+  }, [mutationQuery, refetchComments])
 
   const submitComment = React.useCallback(async (body: string, timecodeStart?: number, timecodeEnd?: number, annotationData?: Record<string, unknown>) => {
     const payload: Record<string, unknown> = { body }
@@ -893,6 +900,7 @@ function ShareReviewInner({
                 <CommentPanel
                   comments={comments}
                   currentUserId={currentUserId}
+                  mutationQuery={mutationQuery}
                   onDelete={handleDeleteComment}
                   onAddReaction={() => {}}
                   onRemoveReaction={() => {}}
