@@ -137,7 +137,8 @@ describe('ProjectDetailPage folder-direct controls', () => {
 
     expect(screen.getByText('Reply')).toBeInTheDocument()
     expect(screen.getByTitle('Add reaction')).toBeInTheDocument()
-    expect(screen.getByTitle('Resolve')).toBeInTheDocument()
+    // Resolve is gated to creator/assignee/owner/editor — direct grants never see it
+    expect(screen.queryByTitle('Resolve')).not.toBeInTheDocument()
     const menuIcon = container.querySelector('svg.lucide-ellipsis')
     expect(menuIcon).not.toBeNull()
     if (menuIcon?.parentElement) fireEvent.click(menuIcon.parentElement)
