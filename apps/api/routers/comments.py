@@ -530,7 +530,24 @@ def resolve_comment(
     current_user: User = Depends(get_current_user),
 ):
     comment, asset = _get_comment_context(db, comment_id)
-    _require_can_comment(db, asset, current_user)
+    member = get_project_member(db, asset.project_id, current_user.id)
+    can_resolve = (
+        current_user.is_superadmin
+        or asset.created_by == current_user.id
+        or asset.assignee_id == current_user.id
+        or (
+            member is not None
+            and member.role in (ProjectRole.owner, ProjectRole.editor)
+        )
+    )
+    if not can_resolve:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "Only the asset creator, assignee, or project owners/editors "
+                "can resolve comments"
+            ),
+        )
     comment.resolved = not comment.resolved
     db.commit()
     db.refresh(comment)

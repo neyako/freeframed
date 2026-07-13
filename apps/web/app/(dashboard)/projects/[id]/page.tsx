@@ -111,7 +111,7 @@ export default function ProjectDetailPage() {
   const uploadInputRef = React.useRef<HTMLInputElement>(null);
 
   const { files: uploadFiles, startUpload, startVersionUpload } = useUploadStore();
-  const { user } = useAuthStore();
+  const { user, isSuperAdmin } = useAuthStore();
 
   const {
     tree,
@@ -295,6 +295,13 @@ export default function ProjectDetailPage() {
   const canComment = folderDirect
     ? selectedFolderPermission === "comment" || selectedFolderPermission === "approve"
     : currentRole !== "viewer";
+  const canResolve = Boolean(user && selectedAsset && (
+    isSuperAdmin
+    || selectedAsset.created_by === user.id
+    || selectedAsset.assignee_id === user.id
+    || currentRole === "owner"
+    || currentRole === "editor"
+  ));
 
   function openBulkShare(assetIds: string[], folderIds: string[]) {
     if (!canShare) return;
@@ -965,7 +972,7 @@ export default function ProjectDetailPage() {
                       <CommentPanel
                         comments={comments}
                         currentUserId={user?.id}
-                        onResolve={resolveComment}
+                        onResolve={canResolve ? resolveComment : undefined}
                         onDelete={deleteComment}
                         onAddReaction={addReaction}
                         onRemoveReaction={removeReaction}

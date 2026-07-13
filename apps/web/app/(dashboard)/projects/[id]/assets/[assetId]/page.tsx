@@ -50,7 +50,7 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
   const searchParams = useSearchParams()
   const { asset, versions, isLoading, error: reviewError, refetchComments, refetchVersions } = useReview()
   const { currentVersion, isDrawingMode, focusedCommentId, seekTo, setFocusedCommentId, setActiveAnnotation } = useReviewStore()
-  const { user } = useAuthStore()
+  const { user, isSuperAdmin } = useAuthStore()
   const startVersionUpload = useUploadStore((s) => s.startVersionUpload)
   const versionFileInputRef = useRef<HTMLInputElement>(null)
   const setExtraCrumbs = useBreadcrumbStore((s) => s.setExtraCrumbs)
@@ -137,6 +137,13 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
   const canApprove = folderDirect
     ? folderPermission === 'approve'
     : currentRole === 'owner' || currentRole === 'editor' || currentRole === 'reviewer'
+  const canResolve = Boolean(user && asset && (
+    isSuperAdmin
+    || asset.created_by === user.id
+    || asset.assignee_id === user.id
+    || currentRole === 'owner'
+    || currentRole === 'editor'
+  ))
 
   // Fetch all assets for navigation (1 of N)
   const { data: allAssets } = useSWR<AssetResponse[]>(
@@ -536,7 +543,7 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
                 ) : <CommentPanel
                   comments={comments as any}
                   currentUserId={user?.id}
-                  onResolve={resolveComment}
+                  onResolve={canResolve ? resolveComment : undefined}
                   onDelete={deleteComment}
                   onAddReaction={addReaction}
                   onRemoveReaction={removeReaction}

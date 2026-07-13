@@ -26,6 +26,7 @@ ACTORS = (
 )
 MUTATIONS = ("create", "reply", "resolve", "react", "attach", "edit", "delete")
 ALLOWED = {"owner", "editor", "reviewer", "direct_approve", "direct_comment"}
+RESOLVE_ALLOWED = {"owner", "editor"}
 SUCCESS = {
     "create": 201,
     "reply": 201,
@@ -39,14 +40,15 @@ SUCCESS = {
 
 @pytest.mark.parametrize("actor_name", ACTORS)
 @pytest.mark.parametrize("mutation", MUTATIONS)
-def test_mutation_matrix_uses_current_comment_capability(
+def test_mutation_matrix_uses_current_mutation_capability(
     comment_security,
     actor_name: str,
     mutation: str,
 ) -> None:
     response = dispatch_mutation(comment_security, actor_name, mutation)
 
-    expected = SUCCESS[mutation] if actor_name in ALLOWED else 403
+    allowed = RESOLVE_ALLOWED if mutation == "resolve" else ALLOWED
+    expected = SUCCESS[mutation] if actor_name in allowed else 403
     assert response.status_code == expected, response.text
 
 
@@ -178,13 +180,16 @@ def test_reaction_toggle_removes_only_with_current_capability(
 @pytest.mark.parametrize(
     ("actor_name", "expected"),
     (
-        ("reviewer", 200),
-        ("direct_comment", 200),
+        ("owner", 200),
+        ("editor", 200),
+        ("reviewer", 403),
+        ("direct_approve", 403),
+        ("direct_comment", 403),
         ("viewer", 403),
         ("direct_view", 403),
     ),
 )
-def test_resolve_toggle_unresolves_only_with_current_capability(
+def test_resolve_toggle_requires_owner_or_editor_role(
     comment_security,
     actor_name: str,
     expected: int,
@@ -198,3 +203,58 @@ def test_resolve_toggle_unresolves_only_with_current_capability(
     assert response.status_code == expected, response.text
     comment_security.db.refresh(comment)
     assert comment.resolved is (expected != 200)
+    if expected == 403:
+        assert response.json()["detail"] == (
+            "Only the asset creator, assignee, or project owners/editors can resolve comments"
+        )
+
+
+@pytest.mark.parametrize("asset_field", ("created_by", "assignee_id"))
+def test_resolve_toggle_allows_asset_creator_or_assignee(
+    comment_security,
+    asset_field: str,
+) -> None:
+    actor_name = "unrelated_private"
+    actor = comment_security.actors[actor_name]
+    comment = comment_security.private.own[actor_name]
+    setattr(comment_security.private.asset, asset_field, actor.id)
+    comment.resolved = True
+    comment_security.db.commit()
+
+    response = dispatch_mutation(comment_security, actor_name, "resolve")
+
+    assert response.status_code == 200, response.text
+    comment_security.db.refresh(comment)
+    assert comment.resolved is False
+
+
+def test_resolve_toggle_allows_superadmin(comment_security) -> None:
+    actor_name = "unrelated_private"
+    actor = comment_security.actors[actor_name]
+    comment = comment_security.private.own[actor_name]
+    actor.is_superadmin = True
+    comment.resolved = True
+    comment_security.db.commit()
+
+    response = dispatch_mutation(comment_security, actor_name, "resolve")
+
+    assert response.status_code == 200, response.text
+    comment_security.db.refresh(comment)
+    assert comment.resolved is False
+
+
+def test_resolve_toggle_rejects_soft_deleted_editor_membership(comment_security) -> None:
+    actor_name = "editor"
+    comment = comment_security.private.own[actor_name]
+    comment_security.members[actor_name].deleted_at = datetime.now(timezone.utc)
+    comment.resolved = True
+    comment_security.db.commit()
+
+    response = dispatch_mutation(comment_security, actor_name, "resolve")
+
+    assert response.status_code == 403, response.text
+    assert response.json()["detail"] == (
+        "Only the asset creator, assignee, or project owners/editors can resolve comments"
+    )
+    comment_security.db.refresh(comment)
+    assert comment.resolved is True
