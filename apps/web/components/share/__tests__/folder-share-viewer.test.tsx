@@ -45,6 +45,11 @@ vi.mock("@/stores/review-store", () => ({
 }));
 
 vi.mock("@/hooks/use-comments", () => ({ useComments: () => ({}) }));
+// Preset identity so the viewer doesn't fetch /auth/me through the fetch stub
+vi.mock("@/stores/auth-store", () => ({
+  useAuthStore: (selector: (s: { user: { id: string }; fetchUser: () => Promise<void> }) => unknown) =>
+    selector({ user: { id: "user-1" }, fetchUser: async () => {} }),
+}));
 vi.mock("@/components/review/video-player", () => ({ VideoPlayer: () => null }));
 vi.mock("@/components/review/image-viewer", () => ({
   ImageViewer: () => <div>Image viewer</div>,

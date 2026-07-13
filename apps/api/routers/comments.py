@@ -498,7 +498,8 @@ def update_comment(
     current_user: User = Depends(get_current_user),
 ):
     comment, asset = _get_comment_context(db, comment_id)
-    _require_can_comment(db, asset, current_user)
+    # Authorship alone authorizes editing — a share-link viewer has no
+    # project access but must still be able to edit their own comment
     if comment.author_id != current_user.id:
         raise HTTPException(status_code=403, detail="Can only edit your own comments")
     comment.body = body.body
@@ -515,7 +516,7 @@ def delete_comment(
     current_user: User = Depends(get_current_user),
 ):
     comment, asset = _get_comment_context(db, comment_id)
-    _require_can_comment(db, asset, current_user)
+    # Authorship alone authorizes deletion — mirrors update_comment
     if comment.author_id != current_user.id:
         raise HTTPException(status_code=403, detail="Can only delete your own comments")
     comment.deleted_at = datetime.now(timezone.utc)

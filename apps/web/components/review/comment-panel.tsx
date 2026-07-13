@@ -37,7 +37,8 @@ interface CommentPanelProps {
   comments: CommentWithReplies[];
   isLoading?: boolean;
   currentUserId?: string;
-  onResolve: (commentId: string) => Promise<void>;
+  /** Omit to hide resolve controls (e.g. share viewers can't resolve) */
+  onResolve?: (commentId: string) => Promise<void>;
   onDelete: (commentId: string) => Promise<void>;
   onAddReaction: (commentId: string, emoji: string) => Promise<void>;
   onRemoveReaction: (commentId: string, emoji: string) => Promise<void>;
@@ -348,7 +349,8 @@ interface CommentItemProps {
   currentUserId?: string;
   replyingTo?: string | null;
   isFocused?: boolean;
-  onResolve: (commentId: string) => Promise<void>;
+  /** Omit to hide resolve controls (e.g. share viewers can't resolve) */
+  onResolve?: (commentId: string) => Promise<void>;
   onDelete: (commentId: string) => Promise<void>;
   onAddReaction: (commentId: string, emoji: string) => Promise<void>;
   onRemoveReaction: (commentId: string, emoji: string) => Promise<void>;
@@ -413,6 +415,7 @@ function CommentItem({
   }, [comment.reactions, currentUserId]);
 
   async function handleResolve() {
+    if (!onResolve) return;
     setResolving(true);
     try {
       await onResolve(comment.id);
@@ -651,12 +654,12 @@ function CommentItem({
                 <button
                   className="h-6 w-6 flex items-center justify-center rounded-full bg-emerald-500 text-text-inverse hover:bg-emerald-600 transition-colors disabled:opacity-50"
                   onClick={handleResolve}
-                  disabled={resolving}
-                  title="Unresolve"
+                  disabled={resolving || !onResolve}
+                  title={onResolve ? "Unresolve" : "Resolved"}
                 >
                   <Check className="h-3 w-3" strokeWidth={3} />
                 </button>
-              ) : (
+              ) : onResolve ? (
                 <button
                   className="h-6 w-6 flex items-center justify-center rounded-full text-text-tertiary hover:text-emerald-400 hover:bg-bg-tertiary transition-colors disabled:opacity-50 opacity-0 group-hover/comment:opacity-100"
                   onClick={handleResolve}
@@ -665,7 +668,7 @@ function CommentItem({
                 >
                   <CheckCircle2 className="h-4 w-4" />
                 </button>
-              )}
+              ) : null}
             </div>
           </div>
 

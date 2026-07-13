@@ -14,13 +14,22 @@ function resolveTheme(theme: Theme): 'dark' | 'light' {
 }
 
 function getFaviconLink(): HTMLLinkElement {
-  const existing = document.querySelector<HTMLLinkElement>('link[rel="icon"]')
-  if (existing) return existing
+  // Next emits links for both app/favicon.ico and app/icon.png; browsers pick
+  // the hi-res icon.png, so rewriting just the first link never shows the
+  // custom favicon. Collapse to a single managed link.
+  const links = Array.from(document.querySelectorAll<HTMLLinkElement>('link[rel~="icon"]'))
+  const [link, ...duplicates] = links
+  if (link) {
+    for (const duplicate of duplicates) duplicate.remove()
+    link.removeAttribute('sizes')
+    link.removeAttribute('type')
+    return link
+  }
 
-  const link = document.createElement('link')
-  link.rel = 'icon'
-  document.head.appendChild(link)
-  return link
+  const created = document.createElement('link')
+  created.rel = 'icon'
+  document.head.appendChild(created)
+  return created
 }
 
 function selectLogo(theme: Theme, darkLogo: string | null, lightLogo: string | null): string | null {

@@ -19,6 +19,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { clearTokens } from '@/lib/auth'
+import { useAuthStore } from '@/stores/auth-store'
 import { useBrandingStore } from '@/stores/branding-store'
 import { VersionSwitcher } from '@/components/review/version-switcher'
 import { fetchShareStreamInfo, resolveStreamUrl } from './share-stream'
@@ -732,6 +733,20 @@ function ShareReviewInner({
   }, [])
   const isLoggedIn = Boolean(viewerName)
 
+  // Resolve viewer's user id so own comments get edit/delete controls
+  const authUser = useAuthStore((s) => s.user)
+  const fetchUser = useAuthStore((s) => s.fetchUser)
+  React.useEffect(() => {
+    if (isLoggedIn && !authUser) void fetchUser()
+  }, [isLoggedIn, authUser, fetchUser])
+  const currentUserId = isLoggedIn ? authUser?.id : undefined
+
+  const handleDeleteComment = React.useCallback(async (commentId: string) => {
+    const { api } = await import('@/lib/api')
+    await api.delete(`/comments/${commentId}`)
+    refetchComments().catch(() => {})
+  }, [refetchComments])
+
   const submitComment = React.useCallback(async (body: string, timecodeStart?: number, timecodeEnd?: number, annotationData?: Record<string, unknown>) => {
     const payload: Record<string, unknown> = { body }
     if (currentVersion?.id) payload.version_id = currentVersion.id
@@ -877,8 +892,8 @@ function ShareReviewInner({
               <>
                 <CommentPanel
                   comments={comments}
-                  onResolve={() => {}}
-                  onDelete={() => {}}
+                  currentUserId={currentUserId}
+                  onDelete={handleDeleteComment}
                   onAddReaction={() => {}}
                   onRemoveReaction={() => {}}
                   onReply={() => {}}

@@ -6,7 +6,13 @@ export function normalizeAssetName(raw: string): string {
     .toLowerCase()
     .trim()
     .replace(/\s+/g, ' ')
-    .replace(/(?:[\s_-]+(?:v\.?\s*)?\d+|\s*\(\s*(?:v\.?\s*)?\d+\s*\))$/i, '')
+    // Trailing version markers: "_2", "_v2", "(v2)", and glued word+digit
+    // forms like "_draft2" / "_final3". Keyword must be glued to the digits —
+    // "hero cut 2" strips only the " 2" so it still matches "Hero Cut".
+    .replace(
+      /(?:[\s_-]+(?:v\.?\s*|(?:draft|version|ver|rev|final)\.?)?\d+|\s*\(\s*(?:v\.?\s*)?\d+\s*\))$/i,
+      '',
+    )
     .trim()
 }
 

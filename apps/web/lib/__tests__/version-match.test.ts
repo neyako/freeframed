@@ -31,6 +31,17 @@ describe('normalizeAssetName', () => {
   it('keeps non-version words', () => {
     expect(normalizeAssetName('Hero Cut.mp4')).toBe('hero cut')
   })
+
+  it('strips glued word+digit version markers', () => {
+    expect(normalizeAssetName('unbox_sf60_draft2.mp4')).toBe('unbox_sf60')
+    expect(normalizeAssetName('unbox_sf60_draft1.mp4')).toBe('unbox_sf60')
+    expect(normalizeAssetName('hero_final3.mov')).toBe('hero')
+  })
+
+  it('does not strip plain word+digit tokens', () => {
+    expect(normalizeAssetName('unbox_sf60.mp4')).toBe('unbox_sf60')
+    expect(normalizeAssetName('hero cut 2.mp4')).toBe('hero cut')
+  })
 })
 
 describe('findVersionCandidate', () => {
