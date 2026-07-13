@@ -43,7 +43,9 @@ from ..schemas.approval import ApprovalCreate, ApprovalResponse
 from ..services.approval_service import get_active_version, upsert_approval
 from ..services.permissions import (
     _is_descendant_of as _is_active_descendant_of,
+    get_asset_access,
     get_project_member,
+    get_share_link_project_id,
     require_project_role,
     validate_asset_in_share,
     validate_share_link,
@@ -447,6 +449,27 @@ def list_share_links(
     return [_share_link_response(link) for link in links]
 
 
+def _internal_url_for_viewer(db: Session, link: ShareLink, user: Optional[User]) -> Optional[str]:
+    """Editor-viewport URL when the logged-in viewer already has internal access.
+
+    Never raises — any resolution failure means "no redirect", guest flow wins.
+    """
+    if user is None:
+        return None
+    try:
+        if link.asset_id is not None:
+            asset = db.query(Asset).filter(Asset.id == link.asset_id, Asset.deleted_at.is_(None)).first()
+            if asset is not None and get_asset_access(db, asset, user).can_read:
+                return f"/projects/{asset.project_id}/assets/{asset.id}"
+            return None
+        project_id = get_share_link_project_id(db, link)
+        if user.is_superadmin or get_project_member(db, project_id, user.id) is not None:
+            return f"/projects/{project_id}"
+    except HTTPException:
+        return None
+    return None
+
+
 @router.get("/share/{token}", response_model=ShareLinkValidateResponse, dependencies=[Depends(rate_limit("share_validate", 30, 60))])
 def validate_share_link_endpoint(
     token: str,
@@ -580,6 +603,7 @@ def validate_share_link_endpoint(
         asset=asset_data,
         branding=branding_data,
         share_session=session_id,
+        internal_url=_internal_url_for_viewer(db, link, current_user),
     )
 
 

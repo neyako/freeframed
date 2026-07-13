@@ -130,6 +130,7 @@ class ShareLinkValidateResponse(BaseModel):
     asset: Optional[dict] = None  # Full asset details for asset shares
     branding: Optional[dict] = None  # Project branding info
     share_session: Optional[str] = None  # Session token for password-protected links
+    internal_url: Optional[str] = None  # Editor-viewport path when viewer has internal access
 
 
 class ShareLinkUpdate(BaseModel):

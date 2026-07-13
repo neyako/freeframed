@@ -36,6 +36,7 @@ interface ShareValidateResponse {
   viewer_name?: string | null
   viewer_email?: string | null
   branding?: ProjectBranding | null
+  internal_url?: string | null
   error?: string
 }
 
@@ -212,6 +213,15 @@ export default function SharePage({
       }
       if (!data.permission) {
         setState({ stage: 'invalid' })
+        return
+      }
+
+      // Team members land in the editor viewport; ?as_guest=1 previews the guest view
+      if (
+        data.internal_url &&
+        new URLSearchParams(window.location.search).get('as_guest') !== '1'
+      ) {
+        window.location.replace(data.internal_url)
         return
       }
 
