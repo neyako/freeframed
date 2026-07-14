@@ -1,6 +1,7 @@
 import { getAccessToken, refreshAccessToken } from './auth'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+const AUTH_ENDPOINTS = new Set(['/auth/login', '/auth/refresh', '/auth/logout'])
 
 export class ApiError extends Error {
   status: number
@@ -48,7 +49,7 @@ async function request<T>(
   let response = await execute(token)
 
   // On 401, attempt a token refresh and retry once
-  if (response.status === 401) {
+  if (response.status === 401 && !AUTH_ENDPOINTS.has(path)) {
     const newToken = await refreshAccessToken()
     if (newToken) {
       response = await execute(newToken)
@@ -114,7 +115,7 @@ async function uploadRequest<T>(path: string, formData: FormData): Promise<T> {
   let token = getAccessToken()
   let response = await execute(token)
 
-  if (response.status === 401) {
+  if (response.status === 401 && !AUTH_ENDPOINTS.has(path)) {
     const newToken = await refreshAccessToken()
     if (newToken) response = await execute(newToken)
   }

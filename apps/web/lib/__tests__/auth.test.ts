@@ -70,4 +70,23 @@ describe('Token management', () => {
 
     expect(window.location.href).toBe('/login')
   })
+
+  it('clearTokens does not reload the login page', async () => {
+    // Given
+    const locationMock = {
+      href: 'http://localhost/login',
+      pathname: '/login',
+    }
+    Object.defineProperty(window, 'location', {
+      value: locationMock,
+      writable: true,
+    })
+
+    // When
+    clearTokens()
+    await Promise.resolve()
+
+    // Then
+    expect(window.location.href).toBe('http://localhost/login')
+  })
 })

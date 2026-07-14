@@ -20,12 +20,22 @@ function getGreeting(): string {
   return "Good evening";
 }
 
+// Time/locale-derived text must not be server-rendered: the container renders
+// in UTC while the client hydrates in the viewer's timezone, and any mismatch
+// breaks hydration (React #425) and crashes later SPA navigation.
+function useMounted(): boolean {
+  const [mounted, setMounted] = React.useState(false);
+  React.useEffect(() => setMounted(true), []);
+  return mounted;
+}
+
 interface AssetCardProps {
   asset: AssetResponse;
   onDelete: (asset: AssetResponse) => Promise<void>;
 }
 
 function AssetCard({ asset, onDelete }: AssetCardProps) {
+  const mounted = useMounted();
   const [imgError, setImgError] = React.useState(false);
   const [confirmOpen, setConfirmOpen] = React.useState(false);
   const [deleteError, setDeleteError] = React.useState<string | null>(null);
@@ -81,9 +91,9 @@ function AssetCard({ asset, onDelete }: AssetCardProps) {
             </p>
           </div>
           <p className="text-xs text-text-tertiary">
-            {formatRelativeTime(asset.updated_at)}
+            {mounted ? formatRelativeTime(asset.updated_at) : " "}
           </p>
-          {asset.due_date && (
+          {mounted && asset.due_date && (
             <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-text-secondary">
               Due {new Date(asset.due_date).toLocaleDateString()}
             </p>
@@ -178,6 +188,7 @@ function Section({
 }
 
 export default function HomePage() {
+  const mounted = useMounted();
   const { user } = useAuthStore();
 
   const {
@@ -212,7 +223,7 @@ export default function HomePage() {
       <div className="flex items-start justify-between gap-6">
         <div>
           <h1 className="text-xl font-semibold text-text-primary">
-            {getGreeting()},{" "}
+            {mounted ? getGreeting() : "Welcome"},{" "}
             <span className="text-accent">
               {user?.name?.split(" ")[0] ?? "there"}
             </span>

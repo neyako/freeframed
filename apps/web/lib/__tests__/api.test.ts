@@ -8,6 +8,8 @@ vi.mock('../auth', () => ({
 
 import { getAccessToken, refreshAccessToken } from '../auth'
 
+const AUTH_ENDPOINTS = ['/auth/login', '/auth/refresh', '/auth/logout'] as const
+
 describe('API client', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -108,6 +110,49 @@ describe('API client', () => {
         }),
       }),
     )
+  })
+
+  it.each(AUTH_ENDPOINTS)('does not refresh a JSON request after a 401 from %s', async (path) => {
+    // Given
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      statusText: 'Unauthorized',
+      headers: { get: () => 'application/json' },
+      json: () => Promise.resolve({ detail: 'Invalid credentials' }),
+    }))
+
+    // When
+    const request = api.post(path, {})
+
+    // Then
+    await expect(request).rejects.toMatchObject({
+      status: 401,
+      detail: 'Invalid credentials',
+    })
+    expect(refreshAccessToken).not.toHaveBeenCalled()
+    expect(fetch).toHaveBeenCalledTimes(1)
+  })
+
+  it.each(AUTH_ENDPOINTS)('does not refresh an upload request after a 401 from %s', async (path) => {
+    // Given
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      statusText: 'Unauthorized',
+      json: () => Promise.resolve({ detail: 'Invalid credentials' }),
+    }))
+
+    // When
+    const request = api.upload(path, new FormData())
+
+    // Then
+    await expect(request).rejects.toMatchObject({
+      status: 401,
+      detail: 'Invalid credentials',
+    })
+    expect(refreshAccessToken).not.toHaveBeenCalled()
+    expect(fetch).toHaveBeenCalledTimes(1)
   })
 
   it('returns undefined for 204 No Content responses', async () => {
