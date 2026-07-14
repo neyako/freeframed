@@ -13,23 +13,33 @@ function resolveTheme(theme: Theme): 'dark' | 'light' {
   return theme
 }
 
-function getFaviconLink(): HTMLLinkElement {
-  // Next emits links for both app/favicon.ico and app/icon.png; browsers pick
-  // the hi-res icon.png, so rewriting just the first link never shows the
-  // custom favicon. Collapse to a single managed link.
+// Next's <link rel="icon"> nodes are React-managed: removing them (or their
+// attributes) detaches nodes React still owns, and the next route transition
+// crashes in commitDeletion with "Cannot read properties of null (removeChild)".
+// Only ever mutate href — browsers may prefer the hi-res icon.png link, so
+// point every icon link at the custom logo instead of collapsing them.
+function getFaviconLinks(): HTMLLinkElement[] {
   const links = Array.from(document.querySelectorAll<HTMLLinkElement>('link[rel~="icon"]'))
-  const [link, ...duplicates] = links
-  if (link) {
-    for (const duplicate of duplicates) duplicate.remove()
-    link.removeAttribute('sizes')
-    link.removeAttribute('type')
-    return link
-  }
+  if (links.length > 0) return links
 
   const created = document.createElement('link')
   created.rel = 'icon'
   document.head.appendChild(created)
-  return created
+  return [created]
+}
+
+export function setFavicon(href: string | null): void {
+  for (const link of getFaviconLinks()) {
+    if (href !== null) {
+      if (link.dataset.ffOriginalHref === undefined) {
+        link.dataset.ffOriginalHref = link.getAttribute('href') ?? DEFAULT_FAVICON
+      }
+      link.href = href
+    } else if (link.dataset.ffOriginalHref !== undefined) {
+      link.href = link.dataset.ffOriginalHref
+      delete link.dataset.ffOriginalHref
+    }
+  }
 }
 
 function selectLogo(theme: Theme, darkLogo: string | null, lightLogo: string | null): string | null {
@@ -55,13 +65,13 @@ export function BrandingInitializer() {
       }
 
       if (activeLogo) {
-        getFaviconLink().href = activeLogo
+        setFavicon(activeLogo)
         appliedCustomFavicon = true
         return
       }
 
       if (appliedCustomFavicon) {
-        getFaviconLink().href = DEFAULT_FAVICON
+        setFavicon(null)
         appliedCustomFavicon = false
       }
     }
