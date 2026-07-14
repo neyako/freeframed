@@ -164,6 +164,27 @@ def get_asset_access(db: Session, asset: Asset, user: User) -> AssetAccess:
     )
 
 
+def get_asset_scoped_project_assets(
+    db: Session,
+    project_id: uuid.UUID,
+    user: User,
+) -> list[Asset]:
+    directly_shared_asset_ids = select(AssetShare.asset_id).where(
+        AssetShare.shared_with_user_id == user.id,
+        AssetShare.asset_id.is_not(None),
+        AssetShare.deleted_at.is_(None),
+    )
+    candidates = db.query(Asset).filter(
+        Asset.project_id == project_id,
+        Asset.deleted_at.is_(None),
+        or_(
+            Asset.assignee_id == user.id,
+            Asset.id.in_(directly_shared_asset_ids),
+        ),
+    ).all()
+    return [asset for asset in candidates if get_asset_access(db, asset, user).can_read]
+
+
 def can_access_asset(db: Session, asset: Asset, user: User) -> bool:
     return get_asset_access(db, asset, user).can_read
 

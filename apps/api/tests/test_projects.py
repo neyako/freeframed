@@ -11,8 +11,11 @@ from unittest.mock import MagicMock
 import pytest
 from sqlalchemy.exc import IntegrityError
 
+from apps.api.models.asset import Asset
 from apps.api.models.project import Project, ProjectMember, ProjectType, ProjectRole
+from apps.api.routers import projects as projects_router
 from apps.api.routers.projects import get_or_create_quick_share_project
+from apps.api.services import permissions
 
 
 def _mock_project(
@@ -197,6 +200,129 @@ def test_get_project_not_member(client, auth_headers, mock_db, test_user):
     mock_db.first.side_effect = _first_side_effect
 
     resp = client.get(f"/projects/{proj.id}", headers=auth_headers)
+    assert resp.status_code == 403
+
+
+def test_asset_scoped_project_assets_reuse_asset_access(
+    mock_db,
+    test_user,
+    monkeypatch,
+):
+    # Given
+    project_id = uuid.uuid4()
+    assigned = MagicMock(spec=Asset)
+    assigned.id = uuid.uuid4()
+    shared = MagicMock(spec=Asset)
+    shared.id = uuid.uuid4()
+    denied = MagicMock(spec=Asset)
+    denied.id = uuid.uuid4()
+    mock_db.all.return_value = [assigned, shared, denied]
+    access_by_id = {
+        assigned.id: permissions.AssetAccess(True, True, True, False, None),
+        shared.id: permissions.AssetAccess(True, True, False, False, None),
+        denied.id: permissions.AssetAccess(False, False, False, False, None),
+    }
+    monkeypatch.setattr(
+        permissions,
+        "get_asset_access",
+        lambda _db, asset, _user: access_by_id[asset.id],
+    )
+
+    # When
+    assets = permissions.get_asset_scoped_project_assets(mock_db, project_id, test_user)
+
+    # Then
+    assert assets == [assigned, shared]
+
+
+def test_get_project_asset_scope_returns_minimal_envelope(
+    client,
+    auth_headers,
+    mock_db,
+    test_user,
+    monkeypatch,
+):
+    # Given
+    proj = _mock_project(uuid.uuid4(), uuid.uuid4(), "Private Quick Share")
+    accessible_assets = [MagicMock(id=uuid.uuid4()), MagicMock(id=uuid.uuid4())]
+    mock_db.first.side_effect = [proj, None]
+    mock_db.outerjoin.return_value = mock_db
+    mock_db.one.return_value = (2, 456)
+    monkeypatch.setattr(projects_router, "resolve_folder_access", lambda *_args: None)
+    monkeypatch.setattr(
+        projects_router,
+        "get_asset_scoped_project_assets",
+        lambda *_args: accessible_assets,
+        raising=False,
+    )
+
+    # When
+    resp = client.get(f"/projects/{proj.id}", headers=auth_headers)
+
+    # Then
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "id": str(proj.id),
+        "name": "Private Quick Share",
+        "asset_count": 2,
+        "storage_bytes": 456,
+        "member_count": 0,
+        "role": None,
+        "folder_access": {
+            "kind": "folder_direct",
+            "accessible_root_ids": [],
+            "grants": [],
+        },
+    }
+
+
+def test_get_project_superadmin_bypasses_membership_checks(
+    client,
+    auth_headers,
+    mock_db,
+    test_user,
+    monkeypatch,
+):
+    # Given
+    proj = _mock_project(uuid.uuid4(), uuid.uuid4())
+    test_user.is_superadmin = True
+    mock_db.first.side_effect = [proj, None]
+    mock_db.scalar.return_value = 0
+    resolve_folder_access = MagicMock(return_value=None)
+    monkeypatch.setattr(projects_router, "resolve_folder_access", resolve_folder_access)
+
+    # When
+    resp = client.get(f"/projects/{proj.id}", headers=auth_headers)
+
+    # Then
+    assert resp.status_code == 200
+    assert resp.json()["role"] == "owner"
+    assert resp.json()["folder_access"] is None
+    resolve_folder_access.assert_not_called()
+
+
+def test_get_project_rejects_unrelated_private_user_after_asset_scope_check(
+    client,
+    auth_headers,
+    mock_db,
+    test_user,
+    monkeypatch,
+):
+    # Given
+    proj = _mock_project(uuid.uuid4(), uuid.uuid4())
+    mock_db.first.side_effect = [proj, None]
+    monkeypatch.setattr(projects_router, "resolve_folder_access", lambda *_args: None)
+    monkeypatch.setattr(
+        projects_router,
+        "get_asset_scoped_project_assets",
+        lambda *_args: [],
+        raising=False,
+    )
+
+    # When
+    resp = client.get(f"/projects/{proj.id}", headers=auth_headers)
+
+    # Then
     assert resp.status_code == 403
 
 

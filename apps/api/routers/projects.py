@@ -18,6 +18,7 @@ from ..services.s3_service import put_object, generate_presigned_get_url, delete
 from ..services.workspace_service import get_workspace_name
 from ..config import settings
 from ..services.folder_access import folder_scope_select, resolve_folder_access
+from ..services.permissions import get_asset_scoped_project_assets
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -211,11 +212,25 @@ def get_project(
         ProjectMember.deleted_at.is_(None),
     ).first()
     folder_access = None
-    if not member and not project.is_public:
+    asset_scoped_assets: list[Asset] = []
+    if not member and not project.is_public and not current_user.is_superadmin:
         folder_access = resolve_folder_access(db, project_id, current_user.id)
         if folder_access is None:
-            raise HTTPException(status_code=403, detail="Not a project member")
-    if folder_access is not None:
+            asset_scoped_assets = get_asset_scoped_project_assets(
+                db,
+                project_id,
+                current_user,
+            )
+            if not asset_scoped_assets:
+                raise HTTPException(status_code=403, detail="Not a project member")
+    if folder_access is not None or asset_scoped_assets:
+        asset_scope_filter = (
+            Asset.folder_id.in_(
+                folder_scope_select(project_id, folder_access.accessible_root_ids)
+            )
+            if folder_access is not None
+            else Asset.id.in_([asset.id for asset in asset_scoped_assets])
+        )
         scoped_asset_count, scoped_storage_bytes = (
             db.query(
                 func.count(func.distinct(Asset.id)),
@@ -231,19 +246,13 @@ def get_project(
             .outerjoin(MediaFile, MediaFile.version_id == AssetVersion.id)
             .filter(
                 Asset.project_id == project_id,
-                Asset.folder_id.in_(
-                    folder_scope_select(project_id, folder_access.accessible_root_ids)
-                ),
+                asset_scope_filter,
                 Asset.deleted_at.is_(None),
             )
             .one()
         )
-        scoped = FolderDirectProjectResponse(
-            id=project.id,
-            name=project.name,
-            asset_count=int(scoped_asset_count),
-            storage_bytes=int(scoped_storage_bytes),
-            folder_access=FolderAccessResponse(
+        scoped_folder_access = (
+            FolderAccessResponse(
                 accessible_root_ids=list(folder_access.accessible_root_ids),
                 grants=[
                     FolderAccessGrantResponse(
@@ -252,13 +261,24 @@ def get_project(
                     )
                     for grant in folder_access.grants
                 ],
-            ),
+            )
+            if folder_access is not None
+            else FolderAccessResponse(accessible_root_ids=[], grants=[])
+        )
+        scoped = FolderDirectProjectResponse(
+            id=project.id,
+            name=project.name,
+            asset_count=int(scoped_asset_count),
+            storage_bytes=int(scoped_storage_bytes),
+            folder_access=scoped_folder_access,
         )
         return scoped
     resp = _project_to_response(project)
     resp.poster_url = _resolve_poster_url(project)
     if member:
         resp.role = member.role
+    elif current_user.is_superadmin:
+        resp.role = ProjectRole.owner
     # Calculate storage, asset count, member count
     resp.asset_count = db.query(func.count(Asset.id)).filter(
         Asset.project_id == project_id, Asset.deleted_at.is_(None),
