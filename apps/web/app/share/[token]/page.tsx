@@ -190,6 +190,7 @@ export default function SharePage({
   const [state, setState] = React.useState<PageState>({ stage: 'loading' })
   const [shareSession, setShareSession] = React.useState<string | null>(null)
   const openLogged = React.useRef(false)
+  const refreshTried = React.useRef(false)
 
   async function validate(password?: string) {
     if (password) {
@@ -198,7 +199,27 @@ export default function SharePage({
     try {
       const shouldLogOpen = !password && !openLogged.current
       if (shouldLogOpen) openLogged.current = true
-      const data = await fetchShareInfo(token, password, shouldLogOpen)
+      let data = await fetchShareInfo(token, password, shouldLogOpen)
+
+      // The httpOnly access cookie may have expired while the refresh cookie is
+      // still valid. The dashboard refreshes on 401, but this public endpoint
+      // answers 200 with a guest view instead — so a logged-in team member would
+      // silently land in the guest player. Refresh once and re-validate before
+      // treating the viewer as a guest; for real guests the refresh just 401s.
+      if (
+        !password &&
+        !refreshTried.current &&
+        !data.requires_password &&
+        !data.expired &&
+        (data.requires_auth || (data.permission && !data.internal_url))
+      ) {
+        refreshTried.current = true
+        const refreshed = await fetch(`${API_URL}/auth/refresh`, {
+          method: 'POST',
+          credentials: 'include',
+        }).catch(() => null)
+        if (refreshed?.ok) data = await fetchShareInfo(token)
+      }
       if (data.requires_auth) {
         setState({ stage: 'auth_required', title: data.title })
         return
