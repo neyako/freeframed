@@ -13,10 +13,11 @@ import { CommentPanel } from '@/components/review/comment-panel'
 import { CommentInput } from '@/components/review/comment-input'
 import { ApprovalBar } from '@/components/review/approval-bar'
 import { VersionSwitcher } from '@/components/review/version-switcher'
+import { Linkified } from '@/components/review/linkified'
 import { ShareDialog } from '@/components/review/share-dialog'
 import { useReviewStore } from '@/stores/review-store'
 import { useAuthStore } from '@/stores/auth-store'
-import { useComments } from '@/hooks/use-comments'
+import { useComments, uploadCommentAttachments } from '@/hooks/use-comments'
 import { api } from '@/lib/api'
 import { isFolderDirectProject, resolveFolderPermission } from '@/lib/project-access'
 import { useUploadStore } from '@/stores/upload-store'
@@ -201,11 +202,10 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
   }
 
   const handleBack = () => {
-    if (window.history.length > 1) {
-      router.back()
-    } else {
-      router.push(`/projects/${asset?.project_id ?? projectId}`)
-    }
+    // Deterministic "up" navigation — history-back is unreliable when this page
+    // was reached via the share-link redirect (location.replace) or a fresh tab
+    const base = `/projects/${asset?.project_id ?? projectId}`
+    router.push(asset?.folder_id ? `${base}?folder=${asset.folder_id}` : base)
   }
 
   // Keyboard navigation for prev/next asset
@@ -255,8 +255,9 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
     parentId?: string,
     visibility?: string,
     mentionUserIds?: string[],
+    attachments?: File[],
   ) => {
-    await createComment(
+    const created = await createComment(
       body,
       timecodeStart,
       timecodeEnd,
@@ -265,6 +266,9 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
       visibility,
       mentionUserIds,
     )
+    if (attachments?.length) {
+      await uploadCommentAttachments(created.id, attachments)
+    }
     setAnnotationData(null)
     refetchComments()
   }
@@ -333,7 +337,6 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
             assetId={asset.id}
             comments={comments}
             className="flex-1 min-h-0"
-            onDownload={folderDirect ? undefined : handleDownload}
             overlay={
               <>
                 <AnnotationOverlay key={focusedCommentId ?? 'none'} />
@@ -536,7 +539,7 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
                         <p className="text-xs font-medium text-text-secondary">
                           {comment.author?.name ?? comment.guest_author?.name ?? 'Reviewer'}
                         </p>
-                        <p className="mt-1 text-sm text-text-primary whitespace-pre-wrap">{comment.body}</p>
+                        <p className="mt-1 text-sm text-text-primary whitespace-pre-wrap"><Linkified text={comment.body} /></p>
                       </div>
                     ))}
                   </div>
