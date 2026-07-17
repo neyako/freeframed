@@ -29,6 +29,8 @@ import {
 } from "lucide-react";
 import { cn, formatTime, formatRelativeTime } from "@/lib/utils";
 import { useReviewStore } from "@/stores/review-store";
+import { Linkified } from "@/components/review/linkified";
+import { CommentAttachment } from "@/components/review/comment-attachment";
 import type { CommentWithReplies } from "@/hooks/use-comments";
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -585,8 +587,20 @@ function CommentItem({
             </div>
           ) : (
             <p className="mt-1 text-[13px] text-text-secondary leading-relaxed break-words">
-              {comment.body}
+              <Linkified text={comment.body} />
             </p>
+          )}
+
+          {/* Attachments */}
+          {(comment.attachments?.length ?? 0) > 0 && (
+            <div
+              className="mt-2 space-y-2"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {comment.attachments!.map((a) => (
+                <CommentAttachment key={a.id} attachment={a} />
+              ))}
+            </div>
           )}
 
           {/* Reactions row */}

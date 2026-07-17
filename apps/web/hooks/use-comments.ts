@@ -6,10 +6,21 @@ import type { Comment, Annotation, CommentReaction } from '@/types'
 
 // ─── Extended comment type with nested data ───────────────────────────────────
 
+/** Attachment as returned by the API (`AttachmentResponse`) */
+export interface CommentAttachmentInfo {
+  id: string
+  file_name: string
+  file_size: number
+  content_type: string
+  /** presigned S3 GET URL, generated at response time */
+  url: string
+}
+
 export interface CommentWithReplies extends Comment {
   replies: CommentWithReplies[]
   annotation: Annotation | null
   reactions: CommentReaction[]
+  attachments?: CommentAttachmentInfo[]
   author: {
     id: string
     name: string
@@ -33,6 +44,22 @@ interface CreateCommentPayload {
   }
   parent_id?: string
   visibility?: string
+}
+
+/** Presign + upload comment attachments (sequential — these are small files). */
+export async function uploadCommentAttachments(commentId: string, files: File[]): Promise<void> {
+  for (const file of files) {
+    const presign = await api.post<{ upload_url: string; attachment_id: string }>(
+      `/comments/${commentId}/attachments`,
+      { file_name: file.name, content_type: file.type, file_size: file.size },
+    )
+    const res = await fetch(presign.upload_url, {
+      method: 'PUT',
+      headers: { 'Content-Type': file.type },
+      body: file,
+    })
+    if (!res.ok) throw new Error(`Failed to upload ${file.name}`)
+  }
 }
 
 function buildSWRKey(assetId: string | null, versionId: string | null): string | null {

@@ -47,6 +47,7 @@ interface CommentInputProps {
     parentId?: string,
     visibility?: CommentVisibility,
     mentionUserIds?: string[],
+    attachments?: File[],
   ) => Promise<void>;
   onCancelReply?: () => void;
   onPauseVideo?: () => void;
@@ -178,6 +179,20 @@ function MentionDropdown({
   );
 }
 
+// ─── Pending attachment thumbnail ────────────────────────────────────────────
+
+function AttachmentThumb({ file }: { file: File }) {
+  const [src, setSrc] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    const url = URL.createObjectURL(file);
+    setSrc(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+  if (!src) return null;
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={src} alt={file.name} className="h-full w-full object-cover" />;
+}
+
 // ─── Comment input component (Frame.io style) ───────────────────────────────
 
 export function CommentInput({
@@ -236,6 +251,16 @@ export function CommentInput({
   const [mentionStart, setMentionStart] = React.useState<number>(0);
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
 
+  // Pending image attachments (guests can't upload — the endpoint needs auth)
+  const canAttach = !visibilityLocked;
+  const [pendingFiles, setPendingFiles] = React.useState<File[]>([]);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  function addFiles(files: FileList | File[]) {
+    const images = Array.from(files).filter((f) => f.type.startsWith("image/"));
+    if (images.length) setPendingFiles((prev) => [...prev, ...images]);
+  }
+
   React.useEffect(() => {
     if (visibilityLocked) {
       setCommentVisibility("public");
@@ -275,6 +300,25 @@ export function CommentInput({
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, [visDropdownOpen, emojiOpen]);
+
+  // Ctrl/Cmd+Z undoes the last stroke while annotating (text fields keep native undo)
+  React.useEffect(() => {
+    if (!isDrawingMode) return;
+    function handleUndoKey(e: KeyboardEvent) {
+      if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.key.toLowerCase() !== "z") return;
+      const target = e.target as HTMLElement;
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target.isContentEditable
+      )
+        return;
+      e.preventDefault();
+      undo();
+    }
+    document.addEventListener("keydown", handleUndoKey);
+    return () => document.removeEventListener("keydown", handleUndoKey);
+  }, [isDrawingMode, undo]);
 
   const canAnnotate = assetType !== "audio";
   const hasTimecode = assetType === "video" || assetType === "audio";
@@ -422,9 +466,11 @@ export function CommentInput({
         replyToId ?? undefined,
         commentVisibility,
         mentionUserIds.length > 0 ? mentionUserIds : undefined,
+        pendingFiles.length > 0 ? pendingFiles : undefined,
       );
 
       setBody("");
+      setPendingFiles([]);
       clearRange();
       setMentionUserIds([]);
       setPendingAnnotation(null);
@@ -513,6 +559,12 @@ export function CommentInput({
               value={body}
               onChange={handleTextChange}
               onKeyDown={handleKeyDown}
+              onPaste={(e) => {
+                if (canAttach && e.clipboardData.files.length > 0) {
+                  e.preventDefault();
+                  addFiles(e.clipboardData.files);
+                }
+              }}
               onClick={() => {
                 pauseVideo();
                 onPauseVideo?.();
@@ -535,6 +587,29 @@ export function CommentInput({
         </div>
 
         {error && <p className="mt-1.5 text-xs text-red-400">{error}</p>}
+
+        {/* Pending attachment previews */}
+        {pendingFiles.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-2">
+            {pendingFiles.map((file, i) => (
+              <div
+                key={`${file.name}-${i}`}
+                className="relative h-14 w-14 rounded-md border border-border overflow-hidden group/att"
+              >
+                <AttachmentThumb file={file} />
+                <button
+                  onClick={() =>
+                    setPendingFiles((prev) => prev.filter((_, j) => j !== i))
+                  }
+                  className="absolute top-0.5 right-0.5 h-4 w-4 flex items-center justify-center rounded-full bg-black/60 text-white opacity-0 group-hover/att:opacity-100 transition-opacity"
+                  title="Remove"
+                >
+                  <X className="h-2.5 w-2.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Bottom toolbar */}
@@ -674,6 +749,30 @@ export function CommentInput({
                   </div>
                 )}
               </div>
+
+              {/* Attach image */}
+              {canAttach && (
+                <>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => {
+                      if (e.target.files) addFiles(e.target.files);
+                      e.target.value = "";
+                    }}
+                  />
+                  <button
+                    className="h-7 w-7 flex items-center justify-center rounded-md text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary transition-colors"
+                    title="Attach image"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Paperclip className="h-4 w-4" />
+                  </button>
+                </>
+              )}
             </div>
 
             <div className="flex items-center gap-2">

@@ -64,7 +64,7 @@ describe("CommentInput range comments", () => {
     await typeAndSend("point note");
     await waitFor(() =>
       expect(onSubmit).toHaveBeenCalledWith(
-        "point note", 12, undefined, undefined, undefined, "internal", undefined,
+        "point note", 12, undefined, undefined, undefined, "internal", undefined, undefined,
       ),
     );
   });
@@ -77,7 +77,7 @@ describe("CommentInput range comments", () => {
     await typeAndSend("cut this section");
     await waitFor(() =>
       expect(onSubmit).toHaveBeenCalledWith(
-        "cut this section", 12, 18, undefined, undefined, "internal", undefined,
+        "cut this section", 12, 18, undefined, undefined, "internal", undefined, undefined,
       ),
     );
     // range resets after submit — chip back in point mode
@@ -94,7 +94,7 @@ describe("CommentInput range comments", () => {
     await typeAndSend("cut this");
     await waitFor(() =>
       expect(onSubmit).toHaveBeenCalledWith(
-        "cut this", 12, 18, undefined, undefined, "internal", undefined,
+        "cut this", 12, 18, undefined, undefined, "internal", undefined, undefined,
       ),
     );
   });
@@ -106,7 +106,7 @@ describe("CommentInput range comments", () => {
     await typeAndSend("same spot");
     await waitFor(() =>
       expect(onSubmit).toHaveBeenCalledWith(
-        "same spot", 12, undefined, undefined, undefined, "internal", undefined,
+        "same spot", 12, undefined, undefined, undefined, "internal", undefined, undefined,
       ),
     );
   });
@@ -120,7 +120,7 @@ describe("CommentInput range comments", () => {
     await typeAndSend("just here");
     await waitFor(() =>
       expect(onSubmit).toHaveBeenCalledWith(
-        "just here", 18, undefined, undefined, undefined, "internal", undefined,
+        "just here", 18, undefined, undefined, undefined, "internal", undefined, undefined,
       ),
     );
   });
@@ -136,7 +136,7 @@ describe("CommentInput range comments", () => {
     await typeAndSend("frozen out");
     await waitFor(() =>
       expect(onSubmit).toHaveBeenCalledWith(
-        "frozen out", 12, 18, undefined, undefined, "internal", undefined,
+        "frozen out", 12, 18, undefined, undefined, "internal", undefined, undefined,
       ),
     );
   });
@@ -151,7 +151,7 @@ describe("CommentInput range comments", () => {
     await typeAndSend("o first");
     await waitFor(() =>
       expect(onSubmit).toHaveBeenCalledWith(
-        "o first", 8, 20, undefined, undefined, "internal", undefined,
+        "o first", 8, 20, undefined, undefined, "internal", undefined, undefined,
       ),
     );
   });
@@ -164,7 +164,7 @@ describe("CommentInput range comments", () => {
     await typeAndSend("no time");
     await waitFor(() =>
       expect(onSubmit).toHaveBeenCalledWith(
-        "no time", undefined, undefined, undefined, undefined, "internal", undefined,
+        "no time", undefined, undefined, undefined, undefined, "internal", undefined, undefined,
       ),
     );
   });
@@ -180,7 +180,7 @@ describe("CommentInput range comments", () => {
     await typeAndSend("team note");
     await waitFor(() =>
       expect(onSubmit).toHaveBeenCalledWith(
-        "team note", undefined, undefined, undefined, undefined, "internal", undefined,
+        "team note", undefined, undefined, undefined, undefined, "internal", undefined, undefined,
       ),
     );
   });
