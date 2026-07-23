@@ -439,7 +439,7 @@ export function VideoPlayer({
         {/* Error state */}
         {error && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/60">
-            <p className="text-red-400 text-sm">{error}</p>
+            <p className="text-status-error text-sm">{error}</p>
           </div>
         )}
 

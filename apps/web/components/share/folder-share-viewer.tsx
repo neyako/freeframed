@@ -672,7 +672,6 @@ function ShareReviewInner({
   const { asset, versions, isLoading, comments, refetchComments, addComment } = useReviewHook()
   const { currentVersion, isDrawingMode, focusedCommentId } = useReviewStoreHook()
   const [sidebarOpen, setSidebarOpen] = React.useState(false)
-  const [activeTab, setActiveTab] = React.useState<'comments' | 'fields'>('comments')
   const [AnnotationOverlay, setAnnotationOverlay] = React.useState<any>(null)
   const [AnnotationCanvas, setAnnotationCanvas] = React.useState<any>(null)
   const autoOpenedRef = React.useRef(false)
@@ -809,7 +808,7 @@ function ShareReviewInner({
           <span className="text-[13px] font-medium text-text-primary truncate">{assetName}</span>
         </div>
         <div className="flex items-center gap-2">
-          {versions.length > 1 && (
+          {versions.length > 0 && (
             <VersionSwitcher versions={versions} />
           )}
           {allowDownload && (
@@ -880,23 +879,12 @@ function ShareReviewInner({
           <div className="w-full h-[55vh] md:h-auto md:w-[360px] flex flex-col border-t md:border-t-0 border-l-0 md:border-l border-border bg-bg-secondary shrink-0 animate-in slide-in-from-bottom-2 md:slide-in-from-right-2 duration-150">
             <button
               onClick={() => setSidebarOpen(false)}
-              className="md:hidden flex items-center justify-center gap-1.5 w-full py-2 text-xs text-text-tertiary border-b border-border"
+              className="md:hidden flex items-center justify-center w-full py-2 border-b border-border"
+              aria-label="Hide comments"
             >
-              <ChevronDown className="h-4 w-4" />
-              Hide comments
+              <span className="h-1 w-8 rounded-full bg-border-strong" />
             </button>
-            <div className="px-4 pt-3 pb-2 shrink-0">
-              <div className="flex items-center bg-bg-tertiary rounded-lg p-0.5">
-                <button onClick={() => setActiveTab('comments')} className={`flex-1 py-1.5 text-[13px] font-medium rounded-md transition-all ${activeTab === 'comments' ? 'bg-bg-hover text-text-primary shadow-sm' : 'text-text-tertiary'}`}>
-                  Comments
-                </button>
-                <button onClick={() => setActiveTab('fields')} className={`flex-1 py-1.5 text-[13px] font-medium rounded-md transition-all ${activeTab === 'fields' ? 'bg-bg-hover text-text-primary shadow-sm' : 'text-text-tertiary'}`}>
-                  Fields
-                </button>
-              </div>
-            </div>
-
-            {activeTab === 'comments' && CommentPanel && (
+            {CommentPanel && (
               <>
                 <CommentPanel
                   comments={comments}

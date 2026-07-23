@@ -28,6 +28,7 @@ import {
   Lock,
 } from "lucide-react";
 import { cn, formatTime, formatRelativeTime } from "@/lib/utils";
+import { avatarGray, getInitials } from "@/lib/avatar";
 import { useReviewStore } from "@/stores/review-store";
 import { Linkified } from "@/components/review/linkified";
 import { CommentAttachment } from "@/components/review/comment-attachment";
@@ -75,31 +76,6 @@ const REPLY_EMOJIS = [
 ];
 
 // ─── Avatar colors ───────────────────────────────────────────────────────────
-
-const AVATAR_COLORS = [
-  "bg-orange-500",
-  "bg-blue-500",
-  "bg-emerald-500",
-  "bg-purple-500",
-  "bg-rose-500",
-  "bg-amber-500",
-  "bg-cyan-500",
-  "bg-pink-500",
-];
-
-function getAvatarColor(name: string): string {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
-}
-
-function getInitials(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
-  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
-}
 
 // ─── useClickOutside ─────────────────────────────────────────────────────────
 
@@ -402,7 +378,7 @@ function CommentItem({
   const authorName =
     comment.author?.name ?? comment.guest_author?.name ?? "Unknown";
   const isOwn = !!(currentUserId && comment.author_id === currentUserId);
-  const avatarColor = getAvatarColor(authorName);
+  const avatarUrl = comment.author?.avatar_url ?? null;
   const isReplyingHere = replyingTo === comment.id && depth === 0;
 
   // Group reactions by emoji
@@ -471,15 +447,22 @@ function CommentItem({
       }}
     >
       <div className="flex gap-2.5 py-3">
-        {/* Colored avatar */}
-        <div
-          className={cn(
-            "h-8 w-8 rounded-full flex items-center justify-center text-[11px] font-bold text-text-inverse shrink-0 mt-0.5",
-            avatarColor,
-          )}
-        >
-          {getInitials(authorName)}
-        </div>
+        {/* Avatar — reviewer photo when available, mono initials otherwise */}
+        {avatarUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={avatarUrl}
+            alt={authorName}
+            className="h-8 w-8 rounded-full object-cover shrink-0 mt-0.5"
+          />
+        ) : (
+          <div
+            className="h-8 w-8 rounded-full flex items-center justify-center text-[11px] font-bold text-white shrink-0 mt-0.5"
+            style={{ backgroundColor: avatarGray(authorName) }}
+          >
+            {getInitials(authorName)}
+          </div>
+        )}
 
         <div className="flex-1 min-w-0">
           {/* Header row */}

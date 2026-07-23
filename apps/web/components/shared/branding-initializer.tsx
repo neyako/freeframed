@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
+import { usePathname } from 'next/navigation'
 import { useBrandingStore } from '@/stores/branding-store'
 import { useThemeStore, type Theme } from '@/stores/theme-store'
 
@@ -49,33 +50,34 @@ function selectLogo(theme: Theme, darkLogo: string | null, lightLogo: string | n
 }
 
 export function BrandingInitializer() {
-  useEffect(() => {
-    let appliedCustomFavicon = false
-    let lastWrittenTitle: string | null = null
+  const pathname = usePathname()
+  const appliedCustomFavicon = useRef(false)
+  const lastWrittenTitle = useRef<string | null>(null)
 
-    function syncDocumentBranding() {
-      const { orgName, orgLogoDark, orgLogoLight } = useBrandingStore.getState()
-      const { theme } = useThemeStore.getState()
-      const activeLogo = selectLogo(theme, orgLogoDark, orgLogoLight)
+  const syncDocumentBranding = useCallback(() => {
+    const { orgName, orgLogoDark, orgLogoLight } = useBrandingStore.getState()
+    const { theme } = useThemeStore.getState()
+    const activeLogo = selectLogo(theme, orgLogoDark, orgLogoLight)
 
-      // Only replace titles we own — pages like the share viewer set their own
-      if (document.title === 'FreeFrame' || document.title === lastWrittenTitle) {
-        document.title = orgName
-        lastWrittenTitle = orgName
-      }
-
-      if (activeLogo) {
-        setFavicon(activeLogo)
-        appliedCustomFavicon = true
-        return
-      }
-
-      if (appliedCustomFavicon) {
-        setFavicon(null)
-        appliedCustomFavicon = false
-      }
+    // Only replace titles we own — pages like the share viewer set their own
+    if (document.title === 'FreeFrame' || document.title === lastWrittenTitle.current) {
+      document.title = orgName
+      lastWrittenTitle.current = orgName
     }
 
+    if (activeLogo) {
+      setFavicon(activeLogo)
+      appliedCustomFavicon.current = true
+      return
+    }
+
+    if (appliedCustomFavicon.current) {
+      setFavicon(null)
+      appliedCustomFavicon.current = false
+    }
+  }, [])
+
+  useEffect(() => {
     const unsubscribeBranding = useBrandingStore.subscribe(syncDocumentBranding)
     const unsubscribeTheme = useThemeStore.subscribe(syncDocumentBranding)
     const media = window.matchMedia('(prefers-color-scheme: dark)')
@@ -89,7 +91,14 @@ export function BrandingInitializer() {
       unsubscribeTheme()
       media.removeEventListener('change', syncDocumentBranding)
     }
-  }, [])
+  }, [syncDocumentBranding])
+
+  // Next re-renders its metadata <link rel="icon"> back to /icon.png on every
+  // client-side navigation, clobbering the custom favicon. Re-assert after each
+  // route change (runs post-commit, so it wins over React's head reconciliation).
+  useEffect(() => {
+    syncDocumentBranding()
+  }, [pathname, syncDocumentBranding])
 
   return null
 }

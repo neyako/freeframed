@@ -511,7 +511,15 @@ export function CommentInput({
           <div className="flex items-start gap-0 rounded-lg border border-border bg-bg-tertiary focus-within:border-accent/50 focus-within:ring-1 focus-within:ring-accent/20">
             {/* Inline timecode badge — show when timecode attached (normal mode) or in drawing mode */}
             {hasTimecode && (timecodeAttached || isDrawingMode) && (
-              <span className="shrink-0 ml-2.5 mt-2.5 flex items-center gap-1 whitespace-nowrap rounded bg-accent-muted border border-accent-line px-1.5 py-0 font-mono text-[11px] text-accent leading-[19.5px] select-none">
+              <span
+                className={cn(
+                  "shrink-0 ml-2.5 mt-2.5 flex items-center gap-1 whitespace-nowrap rounded border px-1.5 py-0 font-mono text-[11px] leading-[19.5px] select-none",
+                  // Red only when a range is actively marked; quiet mono at rest
+                  rangeStart !== null || rangeEnd !== null
+                    ? "bg-accent-muted border-accent-line text-accent"
+                    : "bg-bg-secondary border-border text-text-secondary",
+                )}
+              >
                 {rangeStart !== null || rangeEnd !== null ? (
                   // Range mode — compact m:ss so the chip never crowds the textarea
                   <>
@@ -541,7 +549,7 @@ export function CommentInput({
                     {displayTime(playheadTime)}
                     <button
                       onClick={() => setRangeStart(playheadTime)}
-                      className="ml-0.5 text-accent/60 hover:text-accent transition-colors"
+                      className="ml-0.5 text-text-tertiary hover:text-text-primary transition-colors"
                       title="Set range start (I)"
                     >
                       <Plus className="h-3 w-3" />

@@ -4,29 +4,9 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import Hls from 'hls.js'
 import { cn, formatTimecode } from '@/lib/utils'
+import { avatarGray, getInitials } from '@/lib/avatar'
 import { useReviewStore } from '@/stores/review-store'
 import type { Comment } from '@/types'
-
-// ─── Avatar helpers ───────────────────────────────────────────────────────────
-
-const AVATAR_COLORS = [
-  '#E67E22', '#E74C3C', '#9B59B6', '#3498DB', '#1ABC9C',
-  '#2ECC71', '#F39C12', '#D35400', '#8E44AD', '#2980B9',
-]
-
-function getAvatarColor(name: string): string {
-  let hash = 0
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash)
-  }
-  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length]
-}
-
-function getInitials(name: string): string {
-  const parts = name.trim().split(/\s+/)
-  if (parts.length === 1) return parts[0].charAt(0).toUpperCase()
-  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase()
-}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -148,11 +128,10 @@ function useFramePreview(streamUrl: string | null | undefined) {
 
 interface CommentMarkerProps {
   comment: Comment
-  index: number
   leftPercent: number
   authorName: string
-  initials: string
-  color: string
+  avatarUrl: string | null
+  extraCount: number
   isHovered: boolean
   isFocused: boolean
   onHover: () => void
@@ -162,17 +141,17 @@ interface CommentMarkerProps {
 
 function CommentMarker({
   comment,
-  index,
   leftPercent,
   authorName,
-  initials,
-  color,
+  avatarUrl,
+  extraCount,
   isHovered,
   isFocused,
   onHover,
   onLeave,
   onSeek,
 }: CommentMarkerProps) {
+  const initials = getInitials(authorName)
   const markerRef = useRef<HTMLDivElement>(null)
   const setFocusedCommentId = useReviewStore((s) => s.setFocusedCommentId)
   const setActiveAnnotation = useReviewStore((s) => s.setActiveAnnotation)
@@ -214,15 +193,25 @@ function CommentMarker({
       onMouseLeave={onLeave}
       onClick={handleClick}
     >
-      {/* Avatar dot */}
+      {/* Avatar dot — reviewer photo when available, mono initials otherwise */}
       <div
         className={cn(
-          'w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white shadow-md border-2 transition-transform hover:scale-110',
+          'relative w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white border-2 transition-transform hover:scale-110',
           isFocused ? 'border-accent scale-125 ring-2 ring-accent/40' : 'border-bg-primary',
         )}
-        style={{ backgroundColor: color }}
+        style={avatarUrl ? undefined : { backgroundColor: avatarGray(authorName) }}
       >
-        {initials}
+        {avatarUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={avatarUrl} alt={authorName} className="w-full h-full rounded-full object-cover" />
+        ) : (
+          initials
+        )}
+        {extraCount > 0 && (
+          <span className="absolute -top-1.5 -right-1.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-bg-elevated border border-border px-0.5 text-[8px] font-bold text-text-primary">
+            +{extraCount}
+          </span>
+        )}
       </div>
 
       {/* Tooltip — portaled to document.body to escape all overflow */}
@@ -240,13 +229,22 @@ function CommentMarker({
         >
           <div className="bg-bg-elevated border border-border rounded-lg p-3">
             <div className="flex items-center gap-2 mb-1.5">
-              <div
-                className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0"
-                style={{ backgroundColor: color }}
-              >
-                {initials}
-              </div>
-              <span className="text-xs font-medium text-white truncate">{authorName}</span>
+              {avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={avatarUrl}
+                  alt={authorName}
+                  className="w-5 h-5 rounded-full object-cover shrink-0"
+                />
+              ) : (
+                <div
+                  className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white shrink-0"
+                  style={{ backgroundColor: avatarGray(authorName) }}
+                >
+                  {initials}
+                </div>
+              )}
+              <span className="text-xs font-medium text-text-primary truncate">{authorName}</span>
               {comment.timecode_start !== null && (
                 <span className="ml-auto text-[10px] font-dot font-bold text-accent bg-accent-muted px-1.5 py-0.5 rounded whitespace-nowrap">
                   {formatTimecode(comment.timecode_start)}
@@ -376,6 +374,19 @@ export function ProgressBar({
     (c) => c.timecode_start !== null && c.timecode_end !== null && !c.resolved,
   )
 
+  // Cluster markers that sit within a few percent of each other so the avatar
+  // row doesn't overlap on narrow/mobile widths — lead avatar carries a +N badge.
+  const CLUSTER_PCT = 4
+  const markerBuckets: { lead: Comment; left: number; extra: number }[] = []
+  for (const c of [...pointMarkers].sort(
+    (a, b) => (a.timecode_start ?? 0) - (b.timecode_start ?? 0),
+  )) {
+    const left = timeToPercent(c.timecode_start ?? 0)
+    const last = markerBuckets[markerBuckets.length - 1]
+    if (last && left - last.left < CLUSTER_PCT) last.extra += 1
+    else markerBuckets.push({ lead: c, left, extra: 0 })
+  }
+
   const playPercent = timeToPercent(currentTime)
   const bufferedPercent = timeToPercent(buffered)
 
@@ -452,34 +463,27 @@ export function ProgressBar({
 
         {/* Playhead thumb */}
         <div
-          className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-accent shadow-lg opacity-0 group-hover/progress:opacity-100 transition-opacity pointer-events-none z-10"
+          className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-accent opacity-0 group-hover/progress:opacity-100 transition-opacity pointer-events-none z-10"
           style={{ left: `${playPercent}%`, transform: 'translateX(-50%) translateY(-50%)' }}
         />
       </div>
 
       {/* Comment markers row — below the progress bar */}
-      {pointMarkers.length > 0 && (
+      {markerBuckets.length > 0 && (
         <div className="relative w-full h-6 mt-0.5">
-          {pointMarkers.map((c, idx) => {
-            if (c.timecode_start === null) return null
-            const left = timeToPercent(c.timecode_start)
-            const authorName = c.author?.name ?? c.guest_author?.name ?? 'Unknown'
-            const initials = getInitials(authorName)
-            const color = getAvatarColor(authorName)
-            const isHovered = hoveredCommentId === c.id
-
+          {markerBuckets.map(({ lead, left, extra }) => {
+            const authorName = lead.author?.name ?? lead.guest_author?.name ?? 'Unknown'
             return (
               <CommentMarker
-                key={c.id}
-                comment={c}
-                index={idx}
+                key={lead.id}
+                comment={lead}
                 leftPercent={left}
                 authorName={authorName}
-                initials={initials}
-                color={color}
-                isHovered={isHovered}
-                isFocused={focusedCommentId === c.id}
-                onHover={() => setHoveredCommentId(c.id)}
+                avatarUrl={lead.author?.avatar_url ?? null}
+                extraCount={extra}
+                isHovered={hoveredCommentId === lead.id}
+                isFocused={focusedCommentId === lead.id}
+                onHover={() => setHoveredCommentId(lead.id)}
                 onLeave={() => setHoveredCommentId(null)}
                 onSeek={onSeek}
               />
@@ -503,7 +507,7 @@ export function ProgressBar({
           )}
           {/* Time label */}
           <div className="flex justify-center">
-            <span className="bg-black/90 text-white text-[11px] font-dot font-bold px-2 py-0.5 rounded-md">
+            <span className="bg-bg-elevated border border-border text-text-primary text-[11px] font-dot font-bold px-2 py-0.5 rounded-md">
               {formatTimecode(hoverTime)}
             </span>
           </div>

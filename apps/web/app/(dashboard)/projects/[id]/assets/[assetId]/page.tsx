@@ -204,6 +204,12 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
   const handleBack = () => {
     // Deterministic "up" navigation — history-back is unreliable when this page
     // was reached via the share-link redirect (location.replace) or a fresh tab
+    // Quick-share assets live in a system container project that isn't meant to
+    // be browsed — send the viewer to the dashboard rather than into it.
+    if (project && 'is_quick_share' in project && project.is_quick_share) {
+      router.push('/')
+      return
+    }
     const base = `/projects/${asset?.project_id ?? projectId}`
     router.push(asset?.folder_id ? `${base}?folder=${asset.folder_id}` : base)
   }
@@ -519,12 +525,12 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
             <button
               onClick={() => setSidebarOpen(false)}
               className={cn(
-                'md:hidden flex items-center justify-center gap-1.5 w-full py-2 text-xs text-text-tertiary border-b border-border',
+                'md:hidden flex items-center justify-center w-full py-2 border-b border-border',
                 isDrawingMode && 'hidden',
               )}
+              aria-label="Hide comments"
             >
-              <ChevronDown className="h-4 w-4" />
-              Hide comments
+              <span className="h-1 w-8 rounded-full bg-border-strong" />
             </button>
 
             {/* Content */}
