@@ -858,6 +858,35 @@ Run against FreeFrame HEAD `c6eb4db` and projmgmt HEAD `1905a0b`.
   dependencies. Executable right now.
 - **Nothing rejected or blocked.** No stale IN PROGRESS rows. No findings retired.
 
+## Round 11 — upstream feature adoption (added 2026-07-21, planned at `da5e1f9`)
+
+Maintainer-requested `plan` run (no audit): adopt upstream FreeFrame's
+"Export comments to your NLE" (upstream PRs #150 metadata persistence,
+#151 export API, #152 review-panel UI; closes upstream #84).
+
+| Plan | Title | Priority | Effort | Depends on | Status |
+|------|-------|----------|--------|------------|--------|
+| 085 | NLE comment export — EDL/FCPXML/Premiere XML/CSV download from review panel (3 phases: persist transcode metadata + backfill; export endpoint; gated panel UI) | P2 | M–L | — | DONE ✓ 07-25 — committed on `advisor/085-nle-comment-export` (`260e62b`→`7aee16d`→`40f8b40`), not merged; py_compile clean, `tsc --noEmit` 0, `pnpm test` 260/260, `pnpm build` 0; maintainer must run the one-off backfill post-deploy |
+
+### Dependency notes (round 11)
+
+- 085 is self-contained but internally ordered: Phase A (MediaFile
+  fps/duration persistence — the fork's columns exist but were never
+  written) must land before the export endpoint is useful on real assets;
+  the plan sequences this.
+- Fork-specific adaptations baked into the plan: `showExport` prop gates the
+  button OUT of the guest share viewer (`CommentPanel` is shared there,
+  upstream's isn't); CORS `expose_headers=["Content-Disposition"]`;
+  internal-visibility comments included (members-only endpoint).
+- Maintainer decision: export is members-only permanently (no guest/share
+  export path, ever); guest-authored comments are included in members'
+  exports.
+- Post-deploy operational step: run
+  `python -m apps.api.scripts.backfill_media_metadata` once (see plan's
+  maintenance notes) or pre-existing videos will prompt for fps on export.
+- Overlap noted, not a conflict: `tools/resolve` "Sync Comments" (plan 007)
+  remains the scripted Resolve path; 085 adds the file-based universal path.
+
 ## Reconcile log — 2026-06-29 (run 2)
 
 Run against FreeFrame HEAD `9d79a92` (was `c6eb4db` last run; `9d79a92` adds 008) and projmgmt HEAD
