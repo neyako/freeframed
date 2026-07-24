@@ -477,14 +477,13 @@ export function VideoPlayer({
 
           <button
             onClick={togglePlay}
-            className="flex h-[34px] w-[34px] items-center justify-center rounded-md border border-border bg-bg-tertiary text-text-primary hover:border-border-strong transition-colors"
+            className="flex h-[34px] w-[34px] items-center justify-center rounded-md border border-border bg-bg-tertiary text-text-primary hover:border-border-strong transition-[transform,border-color,background-color] active:scale-90"
             aria-label={isPlaying ? "Pause" : "Play"}
           >
-            {isPlaying ? (
-              <Pause className="h-4 w-4" />
-            ) : (
-              <Play className="h-4 w-4" />
-            )}
+            <span className="t-icon-swap" data-state={isPlaying ? "b" : "a"}>
+              <Play className="t-icon h-4 w-4" data-icon="a" />
+              <Pause className="t-icon h-4 w-4" data-icon="b" />
+            </span>
           </button>
 
           <button
@@ -521,11 +520,13 @@ export function VideoPlayer({
             className="hidden md:flex h-7 w-7 items-center justify-center rounded text-text-tertiary hover:text-text-primary transition-colors"
             aria-label={isMuted ? "Unmute" : "Mute"}
           >
-            {isMuted || volume === 0 ? (
-              <VolumeX className="h-4 w-4" />
-            ) : (
-              <Volume2 className="h-4 w-4" />
-            )}
+            <span
+              className="t-icon-swap"
+              data-state={isMuted || volume === 0 ? "b" : "a"}
+            >
+              <Volume2 className="t-icon h-4 w-4" data-icon="a" />
+              <VolumeX className="t-icon h-4 w-4" data-icon="b" />
+            </span>
           </button>
         </div>
 

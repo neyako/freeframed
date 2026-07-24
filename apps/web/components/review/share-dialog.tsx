@@ -4,7 +4,6 @@ import * as React from "react";
 import { ChevronDown, Share2, Users } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { useDelayedUnmount } from "@/hooks/use-delayed-unmount";
 import { Button } from "@/components/ui/button";
 import { DirectTab } from "./share-direct-panel";
 import { SingleLinkSection } from "./share-link-section";
@@ -103,8 +102,6 @@ export function ShareDialog({
     return () => document.removeEventListener("keydown", handleKey);
   }, [dropdownOpen]);
 
-  const { mounted, state } = useDelayedUnmount(dropdownOpen);
-
   return (
     <div className="relative" ref={dropdownRef}>
       <Button
@@ -117,20 +114,28 @@ export function ShareDialog({
         Share
       </Button>
 
-      {mounted && (
+      {/* Always mounted, opacity-only — same as the header's shared scrim.
+          Mounting/unmounting around a keyframe animation needs a JS timer in
+          lockstep with the CSS, and any drift tears the element out mid-fade. */}
+      <div
+        aria-hidden
+        className={cn(
+          "fixed inset-x-0 bottom-0 top-14 z-40 bg-black/40 transition-opacity duration-150",
+          dropdownOpen ? "opacity-100" : "opacity-0 pointer-events-none",
+        )}
+        onClick={() => setDropdownOpen(false)}
+      />
+
+      {dropdownOpen && (
         <>
-          <div
-            data-state={state}
-            className="fixed inset-x-0 bottom-0 top-14 z-40 bg-black/40 duration-150 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0"
-            onClick={() => setDropdownOpen(false)}
-          />
+        {/* Unmounts on close with an enter-only animation, matching the
+            notification drawer — no exit keyframes means no unmount race. */}
         <div
-          data-state={state}
           className={cn(
-            "fixed left-2 right-2 top-16 z-50 w-auto sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-1.5 sm:w-[460px]",
+            "fixed left-2 right-2 top-16 z-50 w-auto sm:left-auto sm:right-2 sm:w-[460px]",
             "max-h-[calc(100dvh-4.5rem)] sm:max-h-[min(calc(100dvh-8rem),42rem)] overflow-y-auto overscroll-contain",
             "rounded-xl border border-border bg-bg-elevated shadow-xl overflow-x-hidden",
-            "duration-150 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95",
+            "animate-scale-in",
           )}
         >
           <div className="flex items-center justify-between gap-3 border-b border-border bg-bg-tertiary px-5 py-3.5">

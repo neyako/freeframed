@@ -3,6 +3,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 from ..models.approval import ApprovalStatus
+from .comment import AuthorInfo
 
 class ApprovalCreate(BaseModel):
     version_id: uuid.UUID
@@ -16,4 +17,5 @@ class ApprovalResponse(BaseModel):
     status: ApprovalStatus
     note: Optional[str]
     created_at: datetime
+    user: Optional[AuthorInfo] = None
     model_config = {"from_attributes": True}

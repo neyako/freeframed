@@ -118,7 +118,7 @@ export default function NotificationsPage() {
           description="New activity on your account will show here."
         />
       ) : (
-        <div className="space-y-0.5">
+        <div className="ff-stagger space-y-0.5">
           {notifications.map((notification) => (
             <NotificationItem
               key={notification.id}

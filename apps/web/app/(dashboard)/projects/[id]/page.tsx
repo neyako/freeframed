@@ -536,7 +536,7 @@ export default function ProjectDetailPage() {
         onClick={() => setSelectedAsset(null)}
       >
         {isDraggingFiles && (
-          <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center rounded-lg border-2 border-dashed border-accent bg-bg-primary/80 backdrop-blur-sm">
+          <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center rounded-lg border-2 border-dashed border-accent bg-bg-primary/90">
             <div className="flex flex-col items-center gap-3 text-center">
               <UploadCloud className="h-10 w-10 text-accent" />
               <p className="text-sm font-medium text-text-primary">
@@ -877,7 +877,7 @@ export default function ProjectDetailPage() {
           {/* Upload dialog */}
           <Dialog.Root open={uploadOpen} onOpenChange={setUploadOpen}>
             <Dialog.Portal>
-              <Dialog.Overlay className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+              <Dialog.Overlay className="fixed inset-0 z-40 bg-black/50 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
               <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-bg-secondary p-6 shadow-xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95">
                 <Dialog.Close className="absolute right-4 top-4 text-text-tertiary hover:text-text-primary transition-colors">
                   <X className="h-4 w-4" />
@@ -982,7 +982,7 @@ export default function ProjectDetailPage() {
                         }}
                       />
                     ) : comments.length > 0 ? (
-                      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                      <div className="ff-stagger flex-1 overflow-y-auto p-4 space-y-3">
                         {comments.map((comment) => (
                           <div key={comment.id} className="rounded border border-border bg-bg-primary p-3">
                             <p className="text-xs font-medium text-text-secondary">
@@ -1163,7 +1163,7 @@ export default function ProjectDetailPage() {
         }}
       >
         <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+          <Dialog.Overlay className="fixed inset-0 z-40 bg-black/50 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
           <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-full max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-bg-secondary p-5 shadow-xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95">
             <Dialog.Close className="absolute right-4 top-4 text-text-tertiary hover:text-text-primary transition-colors">
               <X className="h-4 w-4" />
@@ -1226,7 +1226,7 @@ export default function ProjectDetailPage() {
         }}
       >
         <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+          <Dialog.Overlay className="fixed inset-0 z-40 bg-black/50 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
           <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-bg-secondary p-5 shadow-xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95">
             <Dialog.Close className="absolute right-4 top-4 text-text-tertiary hover:text-text-primary transition-colors">
               <X className="h-4 w-4" />

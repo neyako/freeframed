@@ -286,10 +286,13 @@ export function AudioPlayer({ asset, version, comments = [], className }: AudioP
           <button
             onClick={handlePlayPause}
             disabled={!isReady}
-            className="flex h-7 w-7 items-center justify-center rounded text-text-primary hover:bg-bg-hover transition-colors disabled:opacity-40"
+            className="flex h-7 w-7 items-center justify-center rounded text-text-primary hover:bg-bg-hover transition-[background-color,transform] active:scale-90 disabled:opacity-40"
             title={isPlaying ? 'Pause (Space)' : 'Play (Space)'}
           >
-            {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+            <span className="t-icon-swap" data-state={isPlaying ? 'b' : 'a'}>
+              <Play className="t-icon h-4 w-4" data-icon="a" />
+              <Pause className="t-icon h-4 w-4" data-icon="b" />
+            </span>
           </button>
 
           <button
@@ -321,7 +324,10 @@ export function AudioPlayer({ asset, version, comments = [], className }: AudioP
             className="flex h-7 w-7 items-center justify-center rounded text-text-tertiary hover:text-text-secondary hover:bg-bg-hover transition-colors"
             title={muted ? 'Unmute' : 'Mute'}
           >
-            {muted || volume === 0 ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+            <span className="t-icon-swap" data-state={muted || volume === 0 ? 'b' : 'a'}>
+              <Volume2 className="t-icon h-4 w-4" data-icon="a" />
+              <VolumeX className="t-icon h-4 w-4" data-icon="b" />
+            </span>
           </button>
         </div>
 

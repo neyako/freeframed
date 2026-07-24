@@ -320,7 +320,7 @@ function AssetGridCard({ asset, allowDownload, token, shareSession, isSelected, 
 
         {/* Comment count badge — bottom left */}
         {asset.comment_count > 0 && (
-          <div className="absolute bottom-2 left-2 flex items-center gap-1 bg-bg-primary/80 backdrop-blur-sm rounded-md px-1.5 py-0.5">
+          <div className="absolute bottom-2 left-2 flex items-center gap-1 bg-bg-primary/90 rounded-md px-1.5 py-0.5">
             <MessageSquare className="h-3 w-3 text-text-primary" />
             <span className="text-[10px] font-medium text-text-primary">{asset.comment_count}</span>
           </div>
@@ -328,7 +328,7 @@ function AssetGridCard({ asset, allowDownload, token, shareSession, isSelected, 
 
         {/* Duration badge — bottom right (video/audio) */}
         {asset.duration_seconds != null && asset.duration_seconds > 0 && (
-          <div className="absolute bottom-2 right-2 bg-bg-primary/80 backdrop-blur-sm rounded-md px-1.5 py-0.5">
+          <div className="absolute bottom-2 right-2 bg-bg-primary/90 rounded-md px-1.5 py-0.5">
             <span className="text-[10px] font-medium text-text-primary tabular-nums">
               {formatDuration(asset.duration_seconds)}
             </span>
@@ -338,7 +338,7 @@ function AssetGridCard({ asset, allowDownload, token, shareSession, isSelected, 
         {/* Download button overlay */}
         {allowDownload && (
           <button
-            className="absolute top-2 right-2 flex items-center justify-center h-6 w-6 rounded-md bg-bg-primary/70 hover:bg-bg-primary/90 text-text-primary backdrop-blur-sm opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
+            className="absolute top-2 right-2 flex items-center justify-center h-6 w-6 rounded-md bg-bg-primary/85 hover:bg-bg-primary text-text-primary opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
             onClick={(e) => {
               e.stopPropagation()
               handleDownload(token, asset.id, shareSession)
@@ -937,7 +937,7 @@ function GuestIdentityPrompt({ onSave, onCancel }: { onSave: (name: string, emai
   const [email, setEmail] = React.useState('')
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
       <div className="w-full max-w-sm rounded border border-border bg-bg-elevated p-5">
         <h3 className="text-sm font-semibold text-text-primary mb-1">Leave a comment</h3>
         <p className="text-xs text-text-tertiary mb-4">Enter your name and email to comment on this shared asset.</p>

@@ -275,7 +275,7 @@ export function AssetGrid({
               {folders!.length} {folders!.length === 1 ? 'Folder' : 'Folders'}
             </span>
           </div>
-          <div className={cn('grid gap-3', gridColsMap[cardSize])}>
+          <div className={cn('ff-stagger ff-focus grid gap-3', gridColsMap[cardSize])}>
             {folders!.map((folder) => {
               const isFolderSelected = selectedFolderIds.has(folder.id)
               return (
@@ -347,7 +347,7 @@ export function AssetGrid({
           />
         </div>
       ) : layout === 'grid' && filtered.length > 0 ? (
-        <div className={cn('grid gap-3', gridColsMap[cardSize])}>
+        <div className={cn('ff-stagger ff-focus grid gap-3', gridColsMap[cardSize])}>
           {filtered.map((asset) => (
             <div
               key={asset.id}

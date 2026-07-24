@@ -189,6 +189,56 @@
   .text-balance {
     text-wrap: balance;
   }
+
+  /* Staggered entrance for grid/list children. Add `ff-stagger` to the
+     container; direct children fade+rise in sequence. Delay caps at the 8th
+     item so long lists don't crawl. React keys items by id, so revalidation
+     reuses DOM nodes and the animation plays once per mount, not per refetch.
+     Global reduced-motion guard above zeroes the duration. */
+  /* `backwards`, not `both`: a forwards fill pins opacity/transform above
+     normal author styles for good, which would dead-lock the `ff-focus` hover
+     dim below. The animation already ends on the resting values, so dropping
+     the forwards fill is visually identical. */
+  .ff-stagger > * {
+    animation: ff-rise 0.42s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  }
+  .ff-stagger > *:nth-child(2) { animation-delay: 35ms; }
+  .ff-stagger > *:nth-child(3) { animation-delay: 70ms; }
+  .ff-stagger > *:nth-child(4) { animation-delay: 105ms; }
+  .ff-stagger > *:nth-child(5) { animation-delay: 140ms; }
+  .ff-stagger > *:nth-child(6) { animation-delay: 175ms; }
+  .ff-stagger > *:nth-child(7) { animation-delay: 210ms; }
+  .ff-stagger > *:nth-child(n + 8) { animation-delay: 245ms; }
+
+  /* Hover-focus falloff, ported from Amicro's FocusBlur as plain CSS (their
+     version imports `motion` but drives the effect from inline styles, so the
+     dep buys nothing). Add `ff-focus` to a container; hovering any direct
+     child recedes its siblings. Gated to real pointers so a touch tap can't
+     strand the grid dimmed — `:hover` sticks after tap on touch. Global
+     reduced-motion guard zeroes the transition; the dim itself stays, which
+     is the point of the affordance.
+     ponytail: blurs every sibling — on grids of many hundreds of cards, drop
+     the `filter` and keep the opacity dim if it costs frames. */
+  @media (hover: hover) {
+    .ff-focus > * {
+      transition: opacity 300ms ease, filter 300ms ease;
+    }
+    .ff-focus:has(> *:hover) > *:not(:hover) {
+      opacity: 0.45;
+      filter: blur(2px);
+    }
+  }
+}
+
+@keyframes ff-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 /* Respect users who ask for less motion — neutralizes the tailwindcss-animate
@@ -221,4 +271,101 @@
   transform: translateY(var(--shift, 0px)) scale(var(--scale-active, 1));
   transition: transform var(--avatar-dur) var(--avatar-ease-in);
   will-change: transform;
+}
+
+/* transitions.dev notification badge. Wrapper slides in diagonally, dot pops
+   independently so the trigger icon never moves. Toggle data-open on .t-badge;
+   the count stays mounted at scale 0 so the close animation can play. */
+:root {
+  --badge-slide-dur: 260ms;
+  --badge-pop-dur: 500ms;
+  --badge-pop-close-dur: 180ms;
+  --badge-fade-dur: 400ms;
+  --badge-fade-close-dur: 180ms;
+  --badge-blur: 2px;
+  --badge-offset-x: -8.2px;
+  --badge-offset-y: 12.4px;
+  --badge-slide-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --badge-pop-ease: cubic-bezier(0.34, 1.36, 0.64, 1);
+  --badge-close-ease: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes t-badge-slide-in {
+  from { transform: translate(var(--badge-offset-x), var(--badge-offset-y)); }
+  to   { transform: translate(0, 0); }
+}
+
+/* top/right anchor the badge on our 34px square icon buttons. */
+.t-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  pointer-events: none;
+  will-change: transform;
+}
+.t-badge[data-open="true"] {
+  animation: t-badge-slide-in var(--badge-slide-dur) var(--badge-slide-ease);
+}
+
+.t-badge-dot {
+  display: block;
+  transform-origin: center;
+  transform: scale(1);
+  opacity: 1;
+  filter: blur(0);
+  transition:
+    transform var(--badge-pop-dur)  var(--badge-pop-ease),
+    opacity   var(--badge-fade-dur) var(--badge-pop-ease),
+    filter    var(--badge-pop-dur)  var(--badge-pop-ease);
+  will-change: transform, opacity, filter;
+}
+.t-badge[data-open="false"] .t-badge-dot {
+  transform: scale(0);
+  opacity: 0;
+  filter: blur(var(--badge-blur));
+  transition:
+    transform var(--badge-pop-close-dur)  var(--badge-close-ease),
+    opacity   var(--badge-fade-close-dur) var(--badge-close-ease),
+    filter    var(--badge-pop-close-dur)  var(--badge-close-ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-badge, .t-badge-dot { animation: none !important; transition: none !important; }
+}
+
+/* transitions.dev icon swap. Both icons stay mounted in one grid cell and
+   cross-fade with blur + scale; set data-state="a" | "b" on the wrapper. */
+:root {
+  --icon-swap-dur: 200ms;
+  --icon-swap-blur: 2px;
+  --icon-swap-start-scale: 0.25;
+  --icon-swap-ease: ease-in-out;
+}
+.t-icon-swap {
+  position: relative;
+  display: inline-grid;
+}
+.t-icon-swap .t-icon {
+  grid-area: 1 / 1;
+  transition:
+    opacity   var(--icon-swap-dur) var(--icon-swap-ease),
+    filter    var(--icon-swap-dur) var(--icon-swap-ease),
+    transform var(--icon-swap-dur) var(--icon-swap-ease);
+  will-change: opacity, filter, transform;
+}
+.t-icon-swap[data-state="a"] .t-icon[data-icon="a"],
+.t-icon-swap[data-state="b"] .t-icon[data-icon="b"] {
+  opacity: 1;
+  filter: blur(0);
+  transform: scale(1);
+}
+.t-icon-swap[data-state="a"] .t-icon[data-icon="b"],
+.t-icon-swap[data-state="b"] .t-icon[data-icon="a"] {
+  opacity: 0;
+  filter: blur(var(--icon-swap-blur));
+  transform: scale(var(--icon-swap-start-scale));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-icon-swap .t-icon { transition: none !important; }
 }

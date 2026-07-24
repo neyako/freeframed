@@ -187,7 +187,7 @@ function CommentMarker({
   return (
     <div
       ref={markerRef}
-      className="absolute top-0 -translate-x-1/2 cursor-pointer"
+      className="absolute top-0 -translate-x-1/2 cursor-pointer animate-in zoom-in-50 fade-in duration-300 ease-out"
       style={{ left: `${leftPercent}%` }}
       onMouseEnter={onHover}
       onMouseLeave={onLeave}

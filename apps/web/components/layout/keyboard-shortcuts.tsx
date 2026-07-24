@@ -120,7 +120,7 @@ export function KeyboardShortcuts({
   return (
     <Dialog.Root open={isOpen} onOpenChange={setOpen}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm data-[state=open]:animate-fade-in" />
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/60 data-[state=open]:animate-fade-in" />
         <Dialog.Content
           className={cn(
             'fixed left-1/2 top-1/2 z-50 w-full max-w-2xl -translate-x-1/2 -translate-y-1/2',
