@@ -40,6 +40,7 @@ import {
   type ExportFormat,
 } from "@/lib/export-comments";
 import { FpsPromptDialog } from "@/components/review/fps-prompt-dialog";
+import { useToast } from "@/components/shared/toast";
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -798,6 +799,7 @@ export function CommentPanel({
   const [exportOpen, setExportOpen] = React.useState(false);
   const [fpsPromptFormat, setFpsPromptFormat] =
     React.useState<ExportFormat | null>(null);
+  const toast = useToast();
 
   const searchRef = React.useRef<HTMLInputElement>(null);
 
@@ -911,7 +913,7 @@ export function CommentPanel({
       if (err instanceof FpsRequiredError) {
         setFpsPromptFormat(format);
       } else {
-        console.error(err);
+        toast.error(err instanceof Error ? err.message : "Export failed");
       }
     }
   }
@@ -1147,10 +1149,10 @@ export function CommentPanel({
             <div className="relative">
               <button
                 className={cn(
-                  "h-7 w-7 flex items-center justify-center rounded-md transition-colors",
+                  "h-[26px] w-[26px] flex items-center justify-center rounded-none transition-colors",
                   exportOpen
-                    ? "text-accent bg-accent/10"
-                    : "text-text-tertiary hover:text-text-secondary hover:bg-bg-tertiary",
+                    ? "text-accent"
+                    : "text-text-tertiary hover:text-text-primary",
                 )}
                 title="Export comments"
                 onClick={() => {

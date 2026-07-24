@@ -1,4 +1,4 @@
-import { getAccessToken } from './auth'
+import { refreshAccessToken } from './auth'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -29,9 +29,17 @@ export async function exportComments(opts: {
   if (opts.fps) params.set('fps', String(opts.fps))
   if (opts.includeResolved === false) params.set('include_resolved', 'false')
 
-  const res = await fetch(`${API_URL}/assets/${opts.assetId}/comments/export?${params}`, {
-    headers: { Authorization: `Bearer ${getAccessToken()}` },
-  })
+  // Auth is httpOnly-cookie based in this fork (getAccessToken() is a no-op stub
+  // that always returns null), so credentials:'include' is what authenticates —
+  // an Authorization header here would only ever send "Bearer null".
+  const endpoint = `${API_URL}/assets/${opts.assetId}/comments/export?${params}`
+  const execute = () => fetch(endpoint, { credentials: 'include' })
+
+  // Mirror lib/api.ts: on 401 refresh once (which re-mints the cookie) and retry.
+  let res = await execute()
+  if (res.status === 401 && (await refreshAccessToken())) {
+    res = await execute()
+  }
 
   if (res.status === 422) {
     const body = await res.json().catch(() => null)

@@ -1,7 +1,13 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render as rtlRender, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { ToastProvider } from '@/components/shared/toast'
 import ProjectDetailPage from '../page'
+
+// CommentPanel surfaces export failures via useToast, which requires the
+// provider the root layout always mounts.
+const render = (ui: React.ReactElement) =>
+  rtlRender(<ToastProvider>{ui}</ToastProvider>)
 
 const mocks = vi.hoisted(() => ({
   permission: 'view' as 'view' | 'comment' | 'approve',

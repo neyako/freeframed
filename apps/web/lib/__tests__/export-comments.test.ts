@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../auth', () => ({ getAccessToken: () => 'tok-123' }))
+vi.mock('../auth', () => ({ refreshAccessToken: vi.fn(async () => null) }))
 
 import { exportComments, FpsRequiredError } from '../export-comments'
 
@@ -58,7 +58,7 @@ describe('exportComments', () => {
     vi.restoreAllMocks()
   })
 
-  it('calls the export endpoint with auth and params', async () => {
+  it('calls the export endpoint with cookie credentials and params', async () => {
     const fetchFn = mockFetch(200, null, {
       'content-disposition': 'attachment; filename="a_v2_comments.edl"',
     })
@@ -67,7 +67,9 @@ describe('exportComments', () => {
     expect(url).toContain('/assets/a1/comments/export?')
     expect(url).toContain('format=edl')
     expect(url).toContain('version_id=v1')
-    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer tok-123')
+    // Auth in this fork is the httpOnly cookie, not a Bearer header — see lib/auth.ts.
+    expect(init.credentials).toBe('include')
+    expect(init.headers).toBeUndefined()
   })
 
   it('passes fps and include_resolved when provided', async () => {
