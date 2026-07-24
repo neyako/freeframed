@@ -19,6 +19,7 @@ import { useReviewStore } from '@/stores/review-store'
 import { useAuthStore } from '@/stores/auth-store'
 import { useComments, uploadCommentAttachments } from '@/hooks/use-comments'
 import { api } from '@/lib/api'
+import { canGoBackInApp } from '@/lib/navigation'
 import { isFolderDirectProject, resolveFolderPermission } from '@/lib/project-access'
 import { useUploadStore } from '@/stores/upload-store'
 import { useBreadcrumbStore } from '@/stores/breadcrumb-store'
@@ -202,16 +203,19 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
   }
 
   const handleBack = () => {
-    // Deterministic "up" navigation — history-back is unreliable when this page
-    // was reached via the share-link redirect (location.replace) or a fresh tab
-    // Quick-share assets live in a system container project that isn't meant to
-    // be browsed — send the viewer to the dashboard rather than into it.
-    if (project && 'is_quick_share' in project && project.is_quick_share) {
-      router.push('/')
+    // Return the viewer to wherever they opened the asset from — dashboard,
+    // command palette, notifications — instead of a project they may never
+    // have visited. History also restores the exact folder query, which
+    // reconstructing the URL by hand did not.
+    if (canGoBackInApp(window.history, document.referrer, window.location.origin)) {
+      router.back()
       return
     }
-    const base = `/projects/${asset?.project_id ?? projectId}`
-    router.push(asset?.folder_id ? `${base}?folder=${asset.folder_id}` : base)
+    // Share-link redirects (location.replace), fresh tabs and pasted URLs have
+    // no in-app entry to return to. The dashboard is the safe landing spot —
+    // notably for quick-share assets, whose container project is a system
+    // record that isn't meant to be browsed.
+    router.push('/')
   }
 
   // Keyboard navigation for prev/next asset

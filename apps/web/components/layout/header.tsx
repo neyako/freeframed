@@ -13,7 +13,6 @@ import { useNotificationStore } from '@/stores/notification-store'
 import { useBrandingStore } from '@/stores/branding-store'
 import { useThemeStore } from '@/stores/theme-store'
 import { Avatar } from '@/components/shared/avatar'
-import { useDelayedUnmount } from '@/hooks/use-delayed-unmount'
 import { NotificationDrawer } from './notification-drawer'
 
 interface HeaderProps {
@@ -71,10 +70,13 @@ export function Header({ onSearchOpen }: HeaderProps) {
   const { orgName, orgLogoDark, orgLogoLight } = useBrandingStore()
   const { theme, setTheme } = useThemeStore()
   const [notifOpen, setNotifOpen] = React.useState(false)
-  // One shared scrim for both header popovers: stays mounted while either is
-  // open, so switching between them keeps the dim steady instead of two
-  // per-panel scrims cross-fading (which flickered the background).
-  const { mounted: scrimMounted, state: scrimState } = useDelayedUnmount(notifOpen || panelOpen)
+  // Controlled so the account menu can drive the shared scrim below; Radix
+  // still owns open/close, we only mirror its state.
+  const [accountOpen, setAccountOpen] = React.useState(false)
+  // One shared scrim for every header popover, so switching between them keeps
+  // the dim steady instead of per-panel scrims cross-fading (which flickered
+  // the background).
+  const anyPopupOpen = notifOpen || panelOpen || accountOpen
   const [resolvedTheme, setResolvedTheme] = React.useState<'dark' | 'light'>(
     theme === 'light' ? 'light' : 'dark',
   )
@@ -109,7 +111,7 @@ export function Header({ onSearchOpen }: HeaderProps) {
   return (
     <>
       <header className={cn(
-        'sticky top-0 z-20 h-14 items-center justify-between border-b border-border bg-bg-primary/90 backdrop-blur-sm px-4 sm:px-6',
+        'sticky top-0 z-20 h-14 items-center justify-between border-b border-border bg-bg-primary px-4 sm:px-6',
         isProjectLibrary ? 'hidden lg:flex' : 'flex',
       )}>
         {/* Left: logo + breadcrumbs */}
@@ -165,7 +167,8 @@ export function Header({ onSearchOpen }: HeaderProps) {
         <div className="flex items-center gap-1.5 shrink-0">
           {/* Notifications bell */}
           <button
-            onClick={() => { setPanelOpen(false); setNotifOpen((v) => !v) }}
+            data-popup-trigger
+            onClick={() => { setPanelOpen(false); setAccountOpen(false); setNotifOpen((v) => !v) }}
             className={cn(
               'relative flex h-[34px] w-[34px] items-center justify-center rounded border transition-colors',
               notifOpen
@@ -175,16 +178,19 @@ export function Header({ onSearchOpen }: HeaderProps) {
             title="Notifications"
           >
             <Bell className="h-4 w-4" strokeWidth={notifOpen ? 2 : 1.5} />
-            {unreadCount > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-accent px-0.5 font-dot text-[9px] font-bold text-white">
-                {unreadCount}
+            <span className="t-badge" data-open={unreadCount > 0}>
+              <span className="t-badge-dot">
+                <span className="flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-accent px-0.5 font-dot text-[9px] font-bold text-white">
+                  {unreadCount}
+                </span>
               </span>
-            )}
+            </span>
           </button>
 
           {/* Uploads button */}
           <button
-            onClick={() => { setNotifOpen(false); togglePanel() }}
+            data-popup-trigger
+            onClick={() => { setNotifOpen(false); setAccountOpen(false); togglePanel() }}
             className={cn(
               'relative hidden lg:flex h-[34px] w-[34px] items-center justify-center rounded border transition-colors',
               panelOpen
@@ -194,11 +200,13 @@ export function Header({ onSearchOpen }: HeaderProps) {
             title="Uploads"
           >
             <Upload className="h-4 w-4" strokeWidth={panelOpen ? 2 : 1.5} />
-            {activeUploads > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-text-primary px-0.5 font-dot text-[9px] font-bold text-bg-primary">
-                {activeUploads}
+            <span className="t-badge" data-open={activeUploads > 0}>
+              <span className="t-badge-dot">
+                <span className="flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-text-primary px-0.5 font-dot text-[9px] font-bold text-bg-primary">
+                  {activeUploads}
+                </span>
               </span>
-            )}
+            </span>
           </button>
 
           {/* Search trigger */}
@@ -229,7 +237,22 @@ export function Header({ onSearchOpen }: HeaderProps) {
           </button>
 
           {/* User dropdown */}
-          <DropdownMenu.Root>
+          <DropdownMenu.Root
+            open={accountOpen}
+            // Non-modal: a modal menu puts `pointer-events: none` on the body,
+            // so clicking the bell while this was open got swallowed as a
+            // dismiss and needed a second click. That split the swap across two
+            // ticks, letting the shared scrim's condition dip false and replay
+            // its fade — the dim "double-darkening". Non-modal lets one click
+            // dismiss this and open the next popup in a single batched update.
+            modal={false}
+            onOpenChange={(open) => {
+              // All three header popups share one corner and one scrim, so they
+              // must be mutually exclusive or they stack on top of each other.
+              if (open) { setNotifOpen(false); setPanelOpen(false) }
+              setAccountOpen(open)
+            }}
+          >
             <DropdownMenu.Trigger asChild>
               <button
                 className="flex h-7 w-7 items-center justify-center rounded-md text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
@@ -248,8 +271,30 @@ export function Header({ onSearchOpen }: HeaderProps) {
               <DropdownMenu.Content
                 side="bottom"
                 align="end"
-                sideOffset={8}
-                className="z-50 min-w-[180px] rounded border border-border bg-bg-elevated shadow-xl p-1 animate-slide-up"
+                onInteractOutside={(e) => {
+                  // Radix dismisses on `pointerdown`, but the bell/uploads
+                  // buttons only swap popups on `click`. Dismissing here would
+                  // leave every popup closed for the gap between the two, so
+                  // the shared scrim would start fading out and then reverse —
+                  // a visible dip in the dim. Let the trigger's own click
+                  // handler close this menu instead, so both state updates land
+                  // in one batched render and the scrim never moves.
+                  const target = (e.detail as { originalEvent?: Event } | undefined)
+                    ?.originalEvent?.target
+                  if (target instanceof Element && target.closest('[data-popup-trigger]')) {
+                    e.preventDefault()
+                  }
+                }}
+                // Lands the menu on the same corner as the notification drawer
+                // and uploads panel (`fixed right-2 top-16`): the 28px trigger
+                // ends 42px down the 56px header, so 42+22 = top-16, and -16
+                // pushes the right edge out from the header's px-6 to right-2.
+                sideOffset={22}
+                alignOffset={-16}
+                className="z-50 min-w-[180px] rounded border border-border bg-bg-elevated shadow-xl p-1
+                  data-[state=open]:animate-in data-[state=closed]:animate-out
+                  data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0
+                  data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
               >
                 <DropdownMenu.Item asChild>
                   <Link
@@ -283,13 +328,19 @@ export function Header({ onSearchOpen }: HeaderProps) {
         </div>
       </header>
 
-      {scrimMounted && (
-        <div
-          data-state={scrimState}
-          onClick={() => { setNotifOpen(false); setPanelOpen(false) }}
-          className="fixed inset-x-0 bottom-0 top-14 z-40 bg-black/40 duration-150 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0"
-        />
-      )}
+      {/* Always mounted; only its opacity changes. Mounting/unmounting it around
+          a keyframe animation meant a JS timer had to stay in lockstep with a
+          CSS animation, and any drift tore the element out mid-fade. A plain
+          opacity transition has no presence to synchronise, so it cannot flash
+          however fast the popups are opened, closed, or swapped. */}
+      <div
+        aria-hidden
+        onClick={() => { setNotifOpen(false); setPanelOpen(false); setAccountOpen(false) }}
+        className={cn(
+          'fixed inset-x-0 bottom-0 top-14 z-40 bg-black/40 transition-opacity duration-150',
+          anyPopupOpen ? 'opacity-100' : 'opacity-0 pointer-events-none',
+        )}
+      />
 
       <NotificationDrawer open={notifOpen} onClose={() => setNotifOpen(false)} />
     </>

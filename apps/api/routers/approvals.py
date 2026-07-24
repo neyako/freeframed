@@ -11,6 +11,7 @@ from ..models.asset import Asset
 from ..models.approval import Approval, ApprovalStatus
 from ..models.activity import ActivityLog, ActivityAction, Notification, NotificationType
 from ..schemas.approval import ApprovalCreate, ApprovalResponse
+from ..schemas.comment import AuthorInfo
 from ..services.approval_service import get_active_version, upsert_approval
 from ..services.permissions import get_asset_access, require_asset_access
 from ..services.workspace_service import get_workspace_name
@@ -129,8 +130,23 @@ def list_approvals(
     asset = _get_asset(db, asset_id)
     require_asset_access(db, asset, current_user)
     get_active_version(db, asset, version_id)
-    return db.query(Approval).filter(
+    approvals = db.query(Approval).filter(
         Approval.asset_id == asset_id,
         Approval.version_id == version_id,
         Approval.deleted_at.is_(None),
     ).all()
+
+    user_ids = {a.user_id for a in approvals}
+    users = (
+        {u.id: u for u in db.query(User).filter(User.id.in_(user_ids)).all()}
+        if user_ids
+        else {}
+    )
+    result = []
+    for a in approvals:
+        resp = ApprovalResponse.model_validate(a)
+        u = users.get(a.user_id)
+        if u:
+            resp.user = AuthorInfo(id=u.id, name=u.name, avatar_url=u.avatar_url)
+        result.append(resp)
+    return result
