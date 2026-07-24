@@ -1,9 +1,12 @@
 import json
+import logging
 import os
 import shutil
 import subprocess
 import tempfile
 from pathlib import Path
+
+log = logging.getLogger(__name__)
 
 
 def process_image(s3_client, bucket: str, input_s3_key: str, output_prefix: str) -> dict:
@@ -49,6 +52,18 @@ def process_audio(s3_client, bucket: str, input_s3_key: str, output_prefix: str)
     result = {}
     try:
         s3_client.download_file(bucket, input_s3_key, tmp_input)
+
+        # Probe duration before processing (#124 upstream)
+        duration_seconds = None
+        try:
+            probe = subprocess.run(
+                ["ffprobe", "-v", "error", "-print_format", "json", "-show_format", tmp_input],
+                check=True, capture_output=True, text=True, timeout=120,
+            )
+            duration_seconds = float(json.loads(probe.stdout).get("format", {}).get("duration") or 0) or None
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, ValueError, json.JSONDecodeError, OSError, AttributeError) as exc:
+            log.warning("audio duration probe failed for %s: %s", input_s3_key, exc)  # a failed probe must not fail audio processing
+        result["duration_seconds"] = duration_seconds
 
         # Normalize and convert to MP3
         mp3_path = os.path.join(work_dir, "processed.mp3")
