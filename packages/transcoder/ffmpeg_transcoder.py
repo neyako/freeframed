@@ -5,7 +5,7 @@ import subprocess
 import tempfile
 import threading
 from pathlib import Path
-from typing import Callable, TypedDict
+from typing import Callable, Optional, TypedDict
 
 from .base import BaseTranscoder, TranscodeJob, TranscodeResult, VideoMetadata
 from .hwaccel import build_hls_command, resolve_backend
@@ -55,6 +55,37 @@ def _reset_hls_dir(hls_dir: Path, qualities: list[str]) -> None:
 
     for quality in qualities:
         (hls_dir / quality).mkdir(exist_ok=True)
+
+
+def parse_probe_metadata(data: dict) -> Optional[VideoMetadata]:
+    """Parse ffprobe JSON (-show_streams -show_format) into VideoMetadata.
+
+    Returns None when there is no video stream. Guards r_frame_rate "0/0"
+    (fps stays 0.0 — never fabricate a rate) and falls back to format-level
+    duration when the stream lacks one (common for MKV/WebM).
+    """
+    streams = data.get("streams") or []
+    if not streams:
+        return None
+    stream = streams[0]
+    fps = 0.0
+    raw_rate = stream.get("r_frame_rate") or ""
+    if "/" in raw_rate:
+        num, _, den = raw_rate.partition("/")
+        try:
+            if float(den) != 0:
+                fps = float(num) / float(den)
+        except ValueError:
+            fps = 0.0
+    duration = float(stream.get("duration") or 0)
+    if not duration:
+        duration = float((data.get("format") or {}).get("duration") or 0)
+    return VideoMetadata(
+        duration_seconds=duration,
+        width=int(stream.get("width") or 0),
+        height=int(stream.get("height") or 0),
+        fps=fps,
+    )
 
 
 class FFmpegTranscoder(BaseTranscoder):
@@ -143,13 +174,16 @@ class FFmpegTranscoder(BaseTranscoder):
             ]
             probe = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
             duration = 0.0
+            meta = None
             try:
                 probe_data = json.loads(probe.stdout)
                 duration = float(probe_data.get("streams", [{}])[0].get("duration", 0) or 0)
                 if not duration:
                     duration = float(probe_data.get("format", {}).get("duration", 0) or 0)
+                meta = parse_probe_metadata(probe_data)
             except (ValueError, TypeError, IndexError, json.JSONDecodeError):
                 duration = 0.0
+                meta = None
 
             # 3. Build quality ladder based on available qualities
             QUALITY_MAP = {
@@ -244,6 +278,10 @@ class FFmpegTranscoder(BaseTranscoder):
                 success=True,
                 hls_prefix=job.output_s3_prefix,
                 thumbnail_keys=[thumbnail_key],
+                duration_seconds=(meta.duration_seconds or None) if meta else None,
+                width=(meta.width or None) if meta else None,
+                height=(meta.height or None) if meta else None,
+                fps=(meta.fps or None) if meta else None,
             )
 
         except Exception as e:  # noqa  # noqa: BROAD_EXCEPT_OK - boundary converts failure to result.

@@ -562,6 +562,7 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
                   onRemoveReaction={removeReaction}
                   onReply={() => {}}
                   onSubmitReply={handleSubmitReply}
+                  showExport
                 />}
               </div>
               {canComment && (
