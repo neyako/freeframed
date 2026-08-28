@@ -73,7 +73,7 @@ describe("ShareDialog", () => {
 
     await user.click(screen.getByRole("button", { name: /share/i }));
 
-    expect(screen.getByText("Share", { selector: "span" })).toBeInTheDocument();
+    expect(screen.getByText("Share", { selector: "button span" })).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /new share link/i }),
     ).not.toBeInTheDocument();
