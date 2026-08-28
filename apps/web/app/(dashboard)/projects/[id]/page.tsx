@@ -193,6 +193,10 @@ export default function ProjectDetailPage() {
     );
   }, [currentFolderId, tree, projectId, setExtraCrumbs]);
 
+  // Same ghost-crumb guard as the asset review page: folder crumbs must not
+  // outlive the library route.
+  React.useEffect(() => () => setExtraCrumbs([]), [setExtraCrumbs]);
+
   const folderParam = currentFolderId
     ? `folder_id=${currentFolderId}`
     : "folder_id=root";
