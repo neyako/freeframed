@@ -72,14 +72,6 @@ Full stack: `docker compose -f docker-compose.dev.yml up --build`
   counts) in `.github/workflows/ci.yml`. If you intentionally delete/rename a
   listed file, update the tripwire in the same commit.
 
-## Plans workflow
-
-`plans/README.md` is the index of audit findings and implementation plans
-(improve-skill lane). Before starting work: read your plan file fully, honor
-its STOP conditions, and update your status row when done. Plans 034–040 are
-a pending visual retheme (monochrome design system) — don't restyle
-components ad hoc; that territory is claimed.
-
 ## Gotchas
 
 - Share links: guest access flows through `routers/share.py` +
