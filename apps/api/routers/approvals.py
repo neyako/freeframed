@@ -13,6 +13,7 @@ from ..models.activity import ActivityLog, ActivityAction, Notification, Notific
 from ..schemas.approval import ApprovalCreate, ApprovalResponse
 from ..schemas.comment import AuthorInfo
 from ..services.approval_service import get_active_version, upsert_approval
+from ..services import avatar_service
 from ..services.permissions import get_asset_access, require_asset_access
 from ..services.workspace_service import get_workspace_name
 from ..tasks.email_tasks import send_approval_email
@@ -147,6 +148,10 @@ def list_approvals(
         resp = ApprovalResponse.model_validate(a)
         u = users.get(a.user_id)
         if u:
-            resp.user = AuthorInfo(id=u.id, name=u.name, avatar_url=u.avatar_url)
+            resp.user = AuthorInfo(
+                id=u.id,
+                name=u.name,
+                avatar_url=avatar_service.effective_avatar_url(u),
+            )
         result.append(resp)
     return result
