@@ -237,7 +237,7 @@ def to_fcpxml(markers: list[Marker], spec: FpsSpec, asset_name: str, total_durat
                   frameDuration=f"{spec.frame_dur_num}/{spec.frame_dur_den}s",
                   width="1920", height="1080")
     library = ET.SubElement(root, "library")
-    event = ET.SubElement(library, "event", name="FreeFrame Comments")
+    event = ET.SubElement(library, "event", name="freeframed Comments")
     project = ET.SubElement(event, "project", name=f"{asset_name} — comments")
     sequence = ET.SubElement(project, "sequence", format="r1",
                              duration=_rational(gap_frames, spec),

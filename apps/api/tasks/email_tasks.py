@@ -46,7 +46,7 @@ def send_invite_email(
     invite_link: str,
     team_name: Optional[str] = None,
     expiry_days: int = 7,
-    workspace_name: str = "FreeFrame",
+    workspace_name: str = "freeframed",
 ):
     """Send organization/team invite email - high priority."""
     try:
@@ -77,7 +77,7 @@ def send_password_reset_email(
     to_email: str,
     reset_link: str,
     expiry_minutes: int = 60,
-    workspace_name: str = "FreeFrame",
+    workspace_name: str = "freeframed",
 ):
     try:
         subject = f"Reset your {workspace_name} password"
@@ -115,7 +115,7 @@ def send_mention_email(
     asset_name: str,
     comment_preview: str,
     asset_link: str,
-    workspace_name: str = "FreeFrame",
+    workspace_name: str = "freeframed",
 ):
     """Send mention notification email."""
     try:
@@ -147,7 +147,7 @@ def send_comment_email(
     asset_name: str,
     comment_preview: str,
     asset_link: str,
-    workspace_name: str = "FreeFrame",
+    workspace_name: str = "freeframed",
 ):
     """Send new comment notification email."""
     try:
@@ -180,7 +180,7 @@ def send_assignment_email(
     asset_link: str,
     due_date: Optional[str] = None,
     project_name: Optional[str] = None,
-    workspace_name: str = "FreeFrame",
+    workspace_name: str = "freeframed",
 ):
     """Send assignment notification email."""
     try:
@@ -215,7 +215,7 @@ def send_share_email(
     asset_link: str,
     permission: Optional[str] = None,
     message: Optional[str] = None,
-    workspace_name: str = "FreeFrame",
+    workspace_name: str = "freeframed",
 ):
     """Send asset shared notification email."""
     try:
@@ -249,7 +249,7 @@ def send_approval_email(
     status: str,  # "approved" or "rejected"
     asset_link: str,
     note: Optional[str] = None,
-    workspace_name: str = "FreeFrame",
+    workspace_name: str = "freeframed",
 ):
     """Send approval/rejection notification email."""
     try:
@@ -284,7 +284,7 @@ def send_project_added_email(
     project_link: str,
     org_name: Optional[str] = None,
     role: Optional[str] = None,
-    workspace_name: str = "FreeFrame",
+    workspace_name: str = "freeframed",
 ):
     """Send project added notification email."""
     try:

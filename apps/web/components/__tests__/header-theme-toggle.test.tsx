@@ -42,7 +42,7 @@ vi.mock('@/stores/notification-store', () => ({
 
 vi.mock('@/stores/branding-store', () => ({
   useBrandingStore: () => ({
-    orgName: 'FreeFrame',
+    orgName: 'freeframed',
     orgLogoDark: null,
     orgLogoLight: null,
   }),

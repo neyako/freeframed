@@ -7,7 +7,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const SERVER_API_URL =
   process.env.API_INTERNAL_URL ||
   (API_URL.startsWith("/") ? "http://localhost:8000" : API_URL);
-const SITE_NAME = process.env.NEXT_PUBLIC_SITE_NAME || "FreeFrame";
+const SITE_NAME = process.env.NEXT_PUBLIC_SITE_NAME || "freeframed";
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
 
 interface SharePreviewInfo {

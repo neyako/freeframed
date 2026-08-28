@@ -347,6 +347,8 @@ interface CommentItemProps {
   currentUserId?: string;
   replyingTo?: string | null;
   isFocused?: boolean;
+  /** Id of a just-posted own comment to flash-highlight (scroll companion) */
+  flashCommentId?: string | null;
   /** Omit to hide resolve controls (e.g. share viewers can't resolve) */
   onResolve?: (commentId: string) => Promise<void>;
   onDelete: (commentId: string) => Promise<void>;
@@ -368,6 +370,7 @@ function CommentItem({
   currentUserId,
   replyingTo,
   isFocused,
+  flashCommentId,
   onResolve,
   onDelete,
   onAddReaction,
@@ -442,12 +445,14 @@ function CommentItem({
     else await onAddReaction(comment.id, emoji);
   }
 
+  const flash = flashCommentId === comment.id;
   return (
     <div
       ref={itemRef}
       data-comment-id={comment.id}
       className={cn(
         "group/comment relative transition-colors cursor-pointer",
+        flash && "animate-comment-flash",
         depth > 0
           ? "ml-8 pl-3 border-l-2 border-border"
           : cn(
@@ -737,6 +742,7 @@ function CommentItem({
                   depth={depth + 1}
                   currentUserId={currentUserId}
                   replyingTo={replyingTo}
+                  flashCommentId={flashCommentId}
                   onResolve={onResolve}
                   onDelete={onDelete}
                   onAddReaction={onAddReaction}
@@ -815,10 +821,22 @@ export function CommentPanel({
   const [exportOpen, setExportOpen] = React.useState(false);
 
   // Jump to a newly-posted own comment once it renders (mobile: it lands
-  // below the fold of the scrollable list). First render is baseline —
-  // loading a thread must not scroll anywhere.
+  // below the fold of the scrollable list) and flash-highlight it. First
+  // render is baseline — loading a thread must not scroll anywhere.
   const listRef = React.useRef<HTMLDivElement>(null);
   const seenCommentIdsRef = React.useRef<Set<string> | null>(null);
+  const [flashCommentId, setFlashCommentId] = React.useState<string | null>(
+    null,
+  );
+  const flashTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  React.useEffect(
+    () => () => {
+      if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+    },
+    [],
+  );
   React.useEffect(() => {
     const previous = seenCommentIdsRef.current;
     seenCommentIdsRef.current = new Set(
@@ -837,6 +855,9 @@ export function CommentPanel({
         ?.querySelector(`[data-comment-id="${target.id}"]`)
         ?.scrollIntoView({ behavior: "smooth", block: "nearest" });
     });
+    setFlashCommentId(target.id);
+    if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+    flashTimerRef.current = setTimeout(() => setFlashCommentId(null), 1700);
   }, [comments, currentUserId, ownGuestCommentIds]);
   const [fpsPromptFormat, setFpsPromptFormat] =
     React.useState<ExportFormat | null>(null);
@@ -1331,6 +1352,7 @@ export function CommentPanel({
                 currentUserId={currentUserId}
                 replyingTo={replyingTo}
                 isFocused={focusedCommentId === comment.id}
+                flashCommentId={flashCommentId}
                 onResolve={onResolve}
                 onDelete={onDelete}
                 onAddReaction={onAddReaction}

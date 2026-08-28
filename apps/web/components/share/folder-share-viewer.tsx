@@ -1042,7 +1042,7 @@ export function FolderShareViewer({
   const orgName = useBrandingStore((s) => s.orgName)
   React.useEffect(() => {
     document.title = title ? `${title} – ${orgName}` : orgName
-    return () => { document.title = 'FreeFrame' }
+    return () => { document.title = 'freeframed' }
   }, [title, orgName])
   React.useEffect(() => {
     setIsTouch(window.matchMedia('(hover: none)').matches)

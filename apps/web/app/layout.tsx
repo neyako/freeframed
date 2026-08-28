@@ -28,7 +28,7 @@ const doto = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "FreeFrame",
+  title: "freeframed",
   description: "Collaborative media review and approval platform",
 };
 

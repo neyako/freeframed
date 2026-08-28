@@ -63,7 +63,7 @@ class SetupGuardMiddleware(BaseHTTPMiddleware):
         return JSONResponse(
             status_code=503,
             content={
-                "detail": "FreeFrame is not set up yet. Please complete initial setup.",
+                "detail": "freeframed is not set up yet. Please complete initial setup.",
                 "needs_setup": True,
             },
         )
