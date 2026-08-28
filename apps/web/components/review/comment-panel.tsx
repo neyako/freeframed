@@ -445,6 +445,7 @@ function CommentItem({
   return (
     <div
       ref={itemRef}
+      data-comment-id={comment.id}
       className={cn(
         "group/comment relative transition-colors cursor-pointer",
         depth > 0
@@ -812,6 +813,31 @@ export function CommentPanel({
   const [filters, setFilters] = React.useState<FilterState>(EMPTY_FILTERS);
   const [replyingTo, setReplyingTo] = React.useState<string | null>(null);
   const [exportOpen, setExportOpen] = React.useState(false);
+
+  // Jump to a newly-posted own comment once it renders (mobile: it lands
+  // below the fold of the scrollable list). First render is baseline —
+  // loading a thread must not scroll anywhere.
+  const listRef = React.useRef<HTMLDivElement>(null);
+  const seenCommentIdsRef = React.useRef<Set<string> | null>(null);
+  React.useEffect(() => {
+    const previous = seenCommentIdsRef.current;
+    seenCommentIdsRef.current = new Set(
+      comments.flatMap((c) => [c.id, ...c.replies.map((r) => r.id)]),
+    );
+    if (previous === null) return;
+    const target = comments
+      .flatMap((c) => [c, ...c.replies])
+      .find((c) => !previous.has(c.id) && (
+        (!!currentUserId && c.author_id === currentUserId) ||
+        (!!c.guest_author_id && !!ownGuestCommentIds?.includes(c.id))
+      ));
+    if (!target) return;
+    requestAnimationFrame(() => {
+      listRef.current
+        ?.querySelector(`[data-comment-id="${target.id}"]`)
+        ?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    });
+  }, [comments, currentUserId, ownGuestCommentIds]);
   const [fpsPromptFormat, setFpsPromptFormat] =
     React.useState<ExportFormat | null>(null);
   const toast = useToast();
@@ -1275,7 +1301,7 @@ export function CommentPanel({
       )}
 
       {/* ─── Comment list ─────────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto">
+      <div ref={listRef} className="flex-1 overflow-y-auto">
         {isLoading && (
           <div className="flex items-center justify-center py-12">
             <div className="h-5 w-5 animate-spin rounded-full border-2 border-border border-t-accent" />
