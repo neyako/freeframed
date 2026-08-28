@@ -34,6 +34,7 @@ from ..schemas.comment import (
     ReactionResponse,
 )
 from ..services import comment_export, s3_service
+from ..services import avatar_service
 from ..services.permissions import (
     get_asset_access,
     get_project_member,
@@ -278,7 +279,11 @@ def _assemble_comment_response(
     author_info = None
     author = data["users"].get(comment.author_id) if comment.author_id else None
     if author:
-        author_info = AuthorInfo(id=author.id, name=author.name, avatar_url=author.avatar_url)
+        author_info = AuthorInfo(
+            id=author.id,
+            name=author.name,
+            avatar_url=avatar_service.effective_avatar_url(author),
+        )
     guest_author_info = None
     guest = data["guests"].get(comment.guest_author_id) if comment.guest_author_id else None
     if guest:
@@ -938,6 +943,49 @@ def list_share_comments(
         public_only=True,
     )
     return [_assemble_comment_response(comment, data) for comment in top_level]
+
+
+@router.delete("/share/{token}/comments/{comment_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_share_comment(
+    token: str,
+    comment_id: uuid.UUID,
+    guest_email: Optional[str] = Query(None, alias="guest_email"),
+    share_session: Optional[str] = Query(None, alias="share_session"),
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user),
+):
+    """Public endpoint — a viewer deletes their own comment on a shared asset.
+
+    Logged-in viewers fall back to the authenticated ownership check; guests
+    must prove authorship by knowing the email they commented with (it is
+    never exposed in public comment payloads).
+    """
+    link = validate_share_link_with_session(
+        db,
+        token,
+        share_session=share_session,
+        current_user=current_user,
+    )
+    if link.permission == SharePermission.view:
+        raise HTTPException(status_code=403, detail="This share link does not allow commenting")
+
+    comment, asset = _get_comment_context(db, comment_id)
+    validate_asset_in_share(db, link, asset)
+
+    if current_user:
+        if comment.author_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Can only delete your own comments")
+    else:
+        guest = (
+            db.get(GuestUser, comment.guest_author_id)
+            if comment.guest_author_id
+            else None
+        )
+        if not guest or not guest_email or guest.email != guest_email.strip().lower():
+            raise HTTPException(status_code=403, detail="Can only delete your own comments")
+
+    comment.deleted_at = datetime.now(timezone.utc)
+    db.commit()
 
 
 @router.post("/share/{token}/comment", response_model=CommentResponse, status_code=status.HTTP_201_CREATED)

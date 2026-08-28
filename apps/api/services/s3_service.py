@@ -48,6 +48,11 @@ def get_s3_client():
         )
 
 
+# Presign clients are expensive to build (botocore service model loading) and
+# comment/asset responses presign per attachment — cache one per endpoint+creds.
+_presign_clients: dict[tuple, "object"] = {}
+
+
 def _get_presign_client():
     """
     Client for generating presigned URLs. Uses s3_public_endpoint if set,
@@ -57,6 +62,15 @@ def _get_presign_client():
     endpoint = settings.s3_public_endpoint or (
         None if _is_aws_s3() else settings.s3_endpoint
     )
+    cache_key = (
+        endpoint,
+        settings.s3_access_key,
+        settings.s3_secret_key,
+        settings.s3_region,
+    )
+    cached = _presign_clients.get(cache_key)
+    if cached is not None:
+        return cached
     kwargs = {
         "aws_access_key_id": settings.s3_access_key,
         "aws_secret_access_key": settings.s3_secret_key,
@@ -68,7 +82,9 @@ def _get_presign_client():
         # without wildcard DNS — e.g. the all-in-one image serves them on the
         # app origin itself via an nginx route for the bucket path.
         kwargs["config"] = Config(s3={"addressing_style": "path"})
-    return boto3.client("s3", **kwargs)
+    client = boto3.client("s3", **kwargs)
+    _presign_clients[cache_key] = client
+    return client
 
 
 def ensure_bucket_exists():

@@ -2,6 +2,7 @@ import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from .config import get_cors_origins, settings, validate_runtime_settings
 from .routers import (
     auth,
@@ -59,6 +60,9 @@ app.add_middleware(
     expose_headers=["Content-Disposition"],
 )
 app.add_middleware(GlobalRateLimitMiddleware)
+# Compress JSON responses — comment lists and asset grids are large and remote
+# (WAN) reviewers feel the difference directly.
+app.add_middleware(GZipMiddleware, minimum_size=1024)
 app.add_middleware(SetupGuardMiddleware)
 
 app.include_router(auth.router)

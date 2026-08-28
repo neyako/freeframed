@@ -57,6 +57,8 @@ interface CommentPanelProps {
   onSubmitReply?: (parentId: string, body: string) => Promise<void>;
   /** Query string appended to own-comment mutations (share-link auth context) */
   mutationQuery?: string;
+  /** Guest-authored comment IDs posted from this browser (share viewer own-comment detection) */
+  ownGuestCommentIds?: string[];
   className?: string;
   /** Show the export-to-NLE menu. Members-only — the guest share viewer must
    * leave this off (the export endpoint 401s for unauthenticated guests). */
@@ -143,12 +145,15 @@ function Dropdown({
 
 function CommentMenu({
   isOwn,
+  canEdit,
   commentId,
   assetId,
   onEdit,
   onDelete,
 }: {
   isOwn: boolean;
+  /** Guest-authored comments can be deleted but not edited (no API support) */
+  canEdit: boolean;
   commentId: string;
   assetId?: string;
   onEdit: () => void;
@@ -173,13 +178,15 @@ function CommentMenu({
         align="right"
         className="w-44"
       >
-        <button
-          className="flex w-full items-center gap-2.5 px-3 py-2 text-[13px] text-text-secondary hover:bg-bg-tertiary transition-colors"
-          onClick={() => { onEdit(); setOpen(false) }}
-        >
-          <Pencil className="h-3.5 w-3.5" />
-          Edit
-        </button>
+        {canEdit && (
+          <button
+            className="flex w-full items-center gap-2.5 px-3 py-2 text-[13px] text-text-secondary hover:bg-bg-tertiary transition-colors"
+            onClick={() => { onEdit(); setOpen(false) }}
+          >
+            <Pencil className="h-3.5 w-3.5" />
+            Edit
+          </button>
+        )}
         <button
           className="flex w-full items-center gap-2.5 px-3 py-2 text-[13px] text-text-secondary hover:bg-bg-tertiary transition-colors"
           onClick={() => {
@@ -350,6 +357,8 @@ interface CommentItemProps {
   onSubmitReply?: (parentId: string, body: string) => Promise<void>;
   /** Query string appended to own-comment mutations (share-link auth context) */
   mutationQuery?: string;
+  /** Guest-authored comment IDs posted from this browser (share viewer own-comment detection) */
+  ownGuestCommentIds?: string[];
 }
 
 function CommentItem({
@@ -367,6 +376,7 @@ function CommentItem({
   onCancelReply,
   onSubmitReply,
   mutationQuery,
+  ownGuestCommentIds,
 }: CommentItemProps) {
   const seekTo = useReviewStore((s) => s.seekTo);
   const setActiveAnnotation = useReviewStore((s) => s.setActiveAnnotation);
@@ -388,7 +398,9 @@ function CommentItem({
 
   const authorName =
     comment.author?.name ?? comment.guest_author?.name ?? "Unknown";
-  const isOwn = !!(currentUserId && comment.author_id === currentUserId);
+  const isOwn =
+    !!(currentUserId && comment.author_id === currentUserId) ||
+    (!!comment.guest_author_id && !!ownGuestCommentIds?.includes(comment.id));
   const avatarUrl = comment.author?.avatar_url ?? null;
   const isReplyingHere = replyingTo === comment.id && depth === 0;
 
@@ -654,10 +666,11 @@ function CommentItem({
                 )}
               </div>
 
-              {/* Context menu — hover only */}
-              <div className="opacity-0 group-hover/comment:opacity-100 transition-opacity">
+              {/* Context menu — hover on pointer devices, always visible on touch */}
+              <div className="opacity-0 group-hover/comment:opacity-100 pointer-coarse:opacity-100 transition-opacity">
                 <CommentMenu
                   isOwn={isOwn}
+                  canEdit={!!currentUserId && comment.author_id === currentUserId}
                   commentId={comment.id}
                   assetId={comment.asset_id}
                   onEdit={() => { setEditing(true); setEditBody(comment.body); }}
@@ -731,6 +744,7 @@ function CommentItem({
                   onCancelReply={onCancelReply}
                   onSubmitReply={onSubmitReply}
                   mutationQuery={mutationQuery}
+                  ownGuestCommentIds={ownGuestCommentIds}
                 />
               ))}
             </div>
@@ -777,6 +791,7 @@ export function CommentPanel({
   onReply,
   onSubmitReply,
   mutationQuery,
+  ownGuestCommentIds,
   className,
   showExport,
 }: CommentPanelProps) {
@@ -1298,6 +1313,7 @@ export function CommentPanel({
                 onCancelReply={() => setReplyingTo(null)}
                 onSubmitReply={onSubmitReply}
                 mutationQuery={mutationQuery}
+                ownGuestCommentIds={ownGuestCommentIds}
               />
             </div>
           ))}
