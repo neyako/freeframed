@@ -49,7 +49,7 @@ export function LoginForm() {
   return (
     <div className="animate-slide-up">
       <div className="mb-8">
-        <h1 className="text-xl font-medium tracking-[-0.02em] text-text-primary mb-1">Sign in to FreeFrame</h1>
+        <h1 className="text-xl font-medium tracking-[-0.02em] text-text-primary mb-1">Sign in to freeframed</h1>
         <p className="text-sm text-text-secondary">Enter your email and password.</p>
       </div>
 

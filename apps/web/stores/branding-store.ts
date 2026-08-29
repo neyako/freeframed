@@ -39,7 +39,7 @@ function toBrandingState(branding: WorkspaceBrandingResponse) {
 export const useBrandingStore = create<BrandingState>()(
   persist(
     (set) => ({
-      orgName: 'FreeFrame',
+      orgName: 'freeframed',
       orgLogoDark: null,
       orgLogoLight: null,
       setOrgName: (name) => set({ orgName: name }),
@@ -57,13 +57,13 @@ export const useBrandingStore = create<BrandingState>()(
         const branding = await api.put<WorkspaceBrandingResponse>('/admin/workspace', patch)
         set(toBrandingState(branding))
       },
-      resetAll: () => set({ orgName: 'FreeFrame', orgLogoDark: null, orgLogoLight: null }),
+      resetAll: () => set({ orgName: 'freeframed', orgLogoDark: null, orgLogoLight: null }),
     }),
     {
       name: 'ff-branding',
       version: 2,
       migrate: () => ({
-        orgName: 'FreeFrame',
+        orgName: 'freeframed',
         orgLogoDark: null,
         orgLogoLight: null,
       }),

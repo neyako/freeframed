@@ -70,10 +70,10 @@ export default function BrandingPage() {
   async function handleReset() {
     const previous = { orgName, orgLogoDark, orgLogoLight }
     resetAll()
-    setNameValue('FreeFrame')
+    setNameValue('freeframed')
     setBrandingError(null)
     try {
-      await saveToServer({ name: 'FreeFrame', logo_dark: null, logo_light: null })
+      await saveToServer({ name: 'freeframed', logo_dark: null, logo_light: null })
     } catch (error) {
       setOrgName(previous.orgName)
       setOrgLogoDark(previous.orgLogoDark)
@@ -84,7 +84,11 @@ export default function BrandingPage() {
   }
 
   const isAdmin = user?.is_superadmin
-  const hasCustomBranding = orgName !== 'FreeFrame' || orgLogoDark !== null || orgLogoLight !== null
+  // 'FreeFrame' = orgName persisted by pre-rename builds — still the default
+  const hasCustomBranding =
+    (orgName !== 'freeframed' && orgName !== 'FreeFrame') ||
+    orgLogoDark !== null ||
+    orgLogoLight !== null
 
   // Which logo is active right now
   const activeLogo = theme === 'light' ? (orgLogoLight ?? orgLogoDark) : (orgLogoDark ?? orgLogoLight)
@@ -134,7 +138,7 @@ export default function BrandingPage() {
             <p className="text-sm text-text-secondary">{orgName}</p>
           )}
           <p className="text-xs text-text-tertiary">
-            Shown in the sidebar. Defaults to &ldquo;FreeFrame&rdquo;.
+            Shown in the sidebar. Defaults to &ldquo;freeframed&rdquo;.
           </p>
         </div>
       </section>
@@ -191,9 +195,9 @@ export default function BrandingPage() {
             ) : (
               <>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/logo-icon.png" alt="FreeFrame" className="h-6 w-6 object-contain logo-dark" />
+                <img src="/logo-icon.png" alt="freeframed" className="h-6 w-6 object-contain logo-dark" />
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/logo-icon-dark.png" alt="FreeFrame" className="h-6 w-6 object-contain logo-light" />
+                <img src="/logo-icon-dark.png" alt="freeframed" className="h-6 w-6 object-contain logo-light" />
               </>
             )}
           </div>

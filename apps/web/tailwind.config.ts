@@ -91,6 +91,7 @@ const config: Config = {
         'indeterminate-slide': 'indeterminate-slide 1.3s ease-in-out infinite',
         'shake': 'shake 280ms linear',
         'check-pop': 'check-pop 450ms cubic-bezier(0.34,1.35,0.64,1)',
+        'comment-flash': 'comment-flash 1.6s ease-out forwards',
       },
       keyframes: {
         'fade-in': {
@@ -141,6 +142,22 @@ const config: Config = {
           '57.14%': { transform: 'translateX(-6px)', animationTimingFunction: 'cubic-bezier(0.22,1,0.36,1)' },
           '78.57%': { transform: 'translateX(4px)', animationTimingFunction: 'cubic-bezier(0.22,1,0.36,1)' },
           '100%': { transform: 'translateX(0)' },
+        },
+        // One-shot accent ring + tint on a just-posted own comment; opacity/
+        // shadow only (no motion), so it is safe without motion-reduce gating.
+        'comment-flash': {
+          '0%': {
+            boxShadow: '0 0 0 2px rgb(var(--accent-rgb) / 0.45)',
+            backgroundColor: 'rgb(var(--accent-rgb) / 0.1)',
+          },
+          '60%': {
+            boxShadow: '0 0 0 2px rgb(var(--accent-rgb) / 0.2)',
+            backgroundColor: 'rgb(var(--accent-rgb) / 0.05)',
+          },
+          '100%': {
+            boxShadow: '0 0 0 2px rgb(var(--accent-rgb) / 0)',
+            backgroundColor: 'transparent',
+          },
         },
         // Right-sized success-check: rotate-in + settle overshoot on the
         // confirmation icon (transitions.dev success-check, minus the SVG

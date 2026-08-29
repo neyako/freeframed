@@ -18,7 +18,7 @@ class FreeFrameError(RuntimeError):
 def load_config(path: Path = CONFIG_PATH) -> Dict[str, Any]:
     if not path.exists():
         raise FreeFrameError(
-            "FreeFrame config not found at %s. Copy tools/resolve/config.example.json "
+            "freeframed config not found at %s. Copy tools/resolve/config.example.json "
             "to %s and fill in api_url, api_key, project_id." % (path, path)
         )
     try:
@@ -126,7 +126,7 @@ def push_review(
         detail = exc.read().decode("utf-8", "replace")
         raise FreeFrameError("review-ingest failed: HTTP %s %s" % (exc.code, detail)) from exc
     except urllib.error.URLError as exc:
-        raise FreeFrameError("Could not reach FreeFrame at %s: %s" % (url, exc.reason)) from exc
+        raise FreeFrameError("Could not reach freeframed at %s: %s" % (url, exc.reason)) from exc
     finally:
         body.close()
 
@@ -148,7 +148,7 @@ def fetch_comments(
         detail = exc.read().decode("utf-8", "replace")
         raise FreeFrameError("fetch comments failed: HTTP %s %s" % (exc.code, detail)) from exc
     except urllib.error.URLError as exc:
-        raise FreeFrameError("Could not reach FreeFrame at %s: %s" % (url, exc.reason)) from exc
+        raise FreeFrameError("Could not reach freeframed at %s: %s" % (url, exc.reason)) from exc
     if not isinstance(data, list):
         raise FreeFrameError("Unexpected comments response (expected a JSON list).")
     return data
@@ -207,7 +207,7 @@ def comment_to_marker(
     fps: float,
     mark_in_frame: int = 0,
 ) -> Dict[str, Any]:
-    """Map one FreeFrame comment to Resolve AddMarker arguments."""
+    """Map one freeframed comment to Resolve AddMarker arguments."""
     seconds = float(comment["timecode_start"])
     frame_id = int(mark_in_frame) + int(round(seconds * float(fps)))
     if frame_id < 0:

@@ -60,7 +60,13 @@ export function BrandingInitializer() {
     const activeLogo = selectLogo(theme, orgLogoDark, orgLogoLight)
 
     // Only replace titles we own — pages like the share viewer set their own
-    if (document.title === 'FreeFrame' || document.title === lastWrittenTitle.current) {
+    // 'FreeFrame' = orgName persisted in localStorage by builds before the
+    // freeframed rename — keep treating it as ours so titles keep syncing.
+    if (
+      document.title === 'freeframed' ||
+      document.title === 'FreeFrame' ||
+      document.title === lastWrittenTitle.current
+    ) {
       document.title = orgName
       lastWrittenTitle.current = orgName
     }

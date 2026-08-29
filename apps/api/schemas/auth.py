@@ -1,6 +1,8 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, model_validator
+from typing import Any
 import uuid
 from ..models.user import UserStatus
+from ..services.avatar_service import effective_avatar_url
 
 class RegisterRequest(BaseModel):
     email: EmailStr
@@ -30,6 +32,18 @@ class UserResponse(BaseModel):
     preferences: dict = {}
 
     model_config = {"from_attributes": True}
+
+    @model_validator(mode="before")
+    @classmethod
+    def _resolve_s3_avatar(cls, data: Any) -> Any:
+        """Swap a stored avatar s3 key for a browser-ready presigned URL."""
+        key = getattr(data, "avatar_s3_key", None)
+        if isinstance(key, str) and key:
+            return {
+                **{field: getattr(data, field) for field in cls.model_fields},
+                "avatar_url": effective_avatar_url(data),
+            }
+        return data
 
 class AdminUserResponse(UserResponse):
     invite_token: str | None = None

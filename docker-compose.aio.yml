@@ -1,5 +1,5 @@
 # ============================================================
-# FreeFrame — All-in-one (single container, homelab-friendly)
+# freeframed — All-in-one (single container, homelab-friendly)
 # ============================================================
 # Everything (web, API, workers, Postgres, Redis, MinIO) runs in
 # one container. All state lives in a bind mount you choose.

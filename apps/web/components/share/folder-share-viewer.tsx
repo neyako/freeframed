@@ -24,6 +24,7 @@ import { useBrandingStore } from '@/stores/branding-store'
 import { VersionSwitcher } from '@/components/review/version-switcher'
 import { Linkified } from '@/components/review/linkified'
 import { fetchShareStreamInfo, resolveStreamUrl } from './share-stream'
+import type { CommentWithReplies } from '@/hooks/use-comments'
 import type {
   SharePermission,
   ShareLinkAppearance,
@@ -748,11 +749,51 @@ function ShareReviewInner({
     return params.toString()
   }, [token, shareSession])
 
+  // Guest-authored comment ids from this browser — drives own-comment delete controls.
+  // Guest emails are never exposed in comment payloads, so posted ids are the marker.
+  const guestMineKey = `ff_guest_mine:${token}`
+  const [ownGuestCommentIds, setOwnGuestCommentIds] = React.useState<string[]>([])
+  React.useEffect(() => {
+    try {
+      const stored = localStorage.getItem(guestMineKey)
+      if (stored) setOwnGuestCommentIds(JSON.parse(stored))
+    } catch {}
+  }, [guestMineKey])
+  const rememberOwnGuestComment = React.useCallback((commentId: string) => {
+    setOwnGuestCommentIds((prev) => {
+      if (prev.includes(commentId)) return prev
+      const next = [...prev, commentId]
+      try { localStorage.setItem(guestMineKey, JSON.stringify(next)) } catch {}
+      return next
+    })
+  }, [guestMineKey])
+
+  const findComment = React.useCallback((id: string): CommentWithReplies | null => {
+    for (const c of comments as CommentWithReplies[]) {
+      if (c.id === id) return c
+      const reply = c.replies.find((r) => r.id === id)
+      if (reply) return reply
+    }
+    return null
+  }, [comments])
+
   const handleDeleteComment = React.useCallback(async (commentId: string) => {
     const { api } = await import('@/lib/api')
-    await api.delete(`/comments/${commentId}?${mutationQuery}`)
+    const target = findComment(commentId)
+    if (target?.guest_author_id) {
+      const email = guestIdentity?.email ?? ''
+      const params = new URLSearchParams({ guest_email: email })
+      if (shareSession) params.set('share_session', shareSession)
+      const res = await fetch(`${API_URL}/share/${token}/comments/${commentId}?${params.toString()}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      })
+      if (!res.ok) throw new Error('Failed to delete comment')
+    } else {
+      await api.delete(`/comments/${commentId}?${mutationQuery}`)
+    }
     refetchComments().catch(() => {})
-  }, [mutationQuery, refetchComments])
+  }, [findComment, guestIdentity, mutationQuery, refetchComments, shareSession, token])
 
   const submitComment = React.useCallback(async (body: string, timecodeStart?: number, timecodeEnd?: number, annotationData?: Record<string, unknown>) => {
     const payload: Record<string, unknown> = { body }
@@ -760,22 +801,11 @@ function ShareReviewInner({
     if (timecodeStart != null) payload.timecode_start = timecodeStart
     if (timecodeEnd != null) payload.timecode_end = timecodeEnd
     if (annotationData) payload.annotation = { drawing_data: annotationData }
-    if (isLoggedIn) {
-      const shareSessionParam = shareSession
-        ? `?share_session=${encodeURIComponent(shareSession)}`
-        : ''
-      const response = await fetch(`${API_URL}/share/${token}/comment${shareSessionParam}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...payload, asset_id: assetId }),
-        credentials: 'include',
-      })
-      if (!response.ok) throw new Error('Failed to post comment')
-    } else {
-      await addComment(payload)
-    }
-    refetchComments().catch(() => {})
-  }, [addComment, assetId, currentVersion, isLoggedIn, refetchComments, shareSession, token])
+    // addComment posts to the share endpoint and appends the returned comment
+    // locally — no refetch needed, which matters on slow (remote) connections.
+    const comment = await addComment(payload)
+    if (!isLoggedIn) rememberOwnGuestComment(comment.id)
+  }, [addComment, currentVersion, isLoggedIn, rememberOwnGuestComment])
 
   const handleGuestIdentitySave = React.useCallback(async (name: string, email: string) => {
     const identity = { name, email }
@@ -890,6 +920,7 @@ function ShareReviewInner({
                   comments={comments}
                   currentUserId={currentUserId}
                   mutationQuery={mutationQuery}
+                  ownGuestCommentIds={ownGuestCommentIds}
                   onDelete={handleDeleteComment}
                   onAddReaction={() => {}}
                   onRemoveReaction={() => {}}
@@ -1011,7 +1042,7 @@ export function FolderShareViewer({
   const orgName = useBrandingStore((s) => s.orgName)
   React.useEffect(() => {
     document.title = title ? `${title} – ${orgName}` : orgName
-    return () => { document.title = 'FreeFrame' }
+    return () => { document.title = 'freeframed' }
   }, [title, orgName])
   React.useEffect(() => {
     setIsTouch(window.matchMedia('(hover: none)').matches)

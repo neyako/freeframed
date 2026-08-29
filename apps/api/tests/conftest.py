@@ -1,5 +1,5 @@
 """
-Test configuration for FreeFrame API.
+Test configuration for freeframed API.
 
 Uses a mock-based database approach because the models use PostgreSQL-specific
 UUID types that are incompatible with SQLite. All DB interactions are mocked

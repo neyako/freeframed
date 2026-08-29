@@ -14,7 +14,7 @@ describe('Branding store', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     useBrandingStore.setState({
-      orgName: 'FreeFrame',
+      orgName: 'freeframed',
       orgLogoDark: null,
       orgLogoLight: null,
     })

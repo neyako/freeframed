@@ -96,7 +96,8 @@ describe("ShareReviewScreen identity", () => {
     });
   });
 
-  it("submits directly without guest fields when viewerName is set", async () => {
+  it("submits through the share endpoint without guest fields when viewerName is set", async () => {
+    mocks.addComment.mockResolvedValue({ id: "comment-1" });
     render(
       <ShareReviewScreen
         token="token"
@@ -112,18 +113,14 @@ describe("ShareReviewScreen identity", () => {
     expect(submitButton).toHaveAttribute("data-visibility-locked", "true");
     fireEvent.click(submitButton);
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
+    await waitFor(() => expect(mocks.addComment).toHaveBeenCalledOnce());
     expect(screen.queryByText("Leave a comment")).not.toBeInTheDocument();
-    expect(mocks.addComment).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
 
-    const request = fetchMock.mock.calls[0];
-    expect(request?.[0]).toBe("http://localhost:8000/share/token/comment");
-    const body = request?.[1]?.body;
-    expect(typeof body).toBe("string");
-    if (typeof body !== "string") throw new Error("Expected JSON body");
-    expect(body).toContain('"asset_id":"asset-1"');
-    expect(body).not.toContain("guest_name");
-    expect(body).not.toContain("guest_email");
+    const payload = mocks.addComment.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(payload).toMatchObject({ body: "Looks good", version_id: "version-1" });
+    expect(payload).not.toHaveProperty("guest_name");
+    expect(payload).not.toHaveProperty("guest_email");
   });
 
   it("keeps the guest identity prompt for anonymous viewers", async () => {

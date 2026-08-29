@@ -8,7 +8,7 @@ def test_get_workspace_returns_defaults_when_no_row(client, mock_db):
 
     assert resp.status_code == 200
     assert resp.json() == {
-        "name": "FreeFrame",
+        "name": "freeframed",
         "logo_dark": None,
         "logo_light": None,
     }
@@ -29,7 +29,7 @@ def test_put_admin_workspace_rejects_non_admin(client, auth_headers, mock_db):
 
 def test_put_admin_workspace_updates_name(client, auth_headers, mock_db, test_user):
     test_user.is_superadmin = True
-    workspace = WorkspaceSettings(id=1, name="FreeFrame")
+    workspace = WorkspaceSettings(id=1, name="freeframed")
     mock_db.first.return_value = workspace
 
     resp = client.put(

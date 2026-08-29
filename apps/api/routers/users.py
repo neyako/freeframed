@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 import uuid
 import secrets
+from botocore.exceptions import ClientError
 from datetime import datetime, timezone, timedelta
 from ..database import get_db
 from ..schemas.auth import AdminUserResponse, UserResponse, InviteRequest, UpdateProfileRequest
@@ -9,6 +11,7 @@ from ..models.project import ProjectMember
 from ..models.share import AssetShare
 from ..models.user import User, UserStatus
 from ..middleware.auth import get_current_user
+from ..services import s3_service
 from ..services.auth_service import hash_password, get_user_by_email, revoke_user_refresh_tokens
 from ..tasks.email_tasks import send_invite_email
 from ..tasks.celery_app import send_task_safe
@@ -53,6 +56,77 @@ def require_admin(current_user: User = Depends(get_current_user)) -> User:
     if not current_user.is_superadmin:
         raise HTTPException(status_code=403, detail="Admin access required")
     return current_user
+
+
+# ── Avatar upload ─────────────────────────────────────────────────────────
+
+AVATAR_CONTENT_TYPES = {
+    "image/png": "png",
+    "image/jpeg": "jpg",
+    "image/webp": "webp",
+}
+
+
+class AvatarUploadRequest(BaseModel):
+    content_type: str
+
+
+class AvatarSetRequest(BaseModel):
+    key: str
+
+
+@router.post("/avatar-upload", status_code=status.HTTP_201_CREATED)
+def create_avatar_upload_url(
+    body: AvatarUploadRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get a presigned PUT URL for a small avatar image (png/jpeg/webp)."""
+    ext = AVATAR_CONTENT_TYPES.get(body.content_type.lower())
+    if not ext:
+        raise HTTPException(status_code=422, detail="Avatar must be a PNG, JPEG, or WebP image")
+    key = f"avatars/{current_user.id}/{uuid.uuid4()}.{ext}"
+    # Presign with the public endpoint so the browser can reach it (same as
+    # thumbnails — in the all-in-one image that's the app origin itself).
+    upload_url = s3_service._get_presign_client().generate_presigned_url(
+        "put_object",
+        Params={
+            "Bucket": settings.s3_bucket,
+            "Key": key,
+            "ContentType": body.content_type.lower(),
+        },
+        ExpiresIn=3600,
+    )
+    return {"upload_url": upload_url, "key": key}
+
+
+@router.put("/avatar", response_model=UserResponse)
+def set_avatar(
+    body: AvatarSetRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Point the profile avatar at an object uploaded via /avatar-upload."""
+    if not body.key.startswith(f"avatars/{current_user.id}/"):
+        raise HTTPException(status_code=422, detail="Invalid avatar key")
+    s3 = s3_service.get_s3_client()
+    try:
+        s3.head_object(Bucket=settings.s3_bucket, Key=body.key)
+    except ClientError:
+        raise HTTPException(status_code=404, detail="Avatar upload not found — upload the file first")
+    current_user.avatar_s3_key = body.key
+    db.commit()
+    db.refresh(current_user)
+    return current_user
+
+
+@router.delete("/avatar", status_code=status.HTTP_204_NO_CONTENT)
+def remove_avatar(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    current_user.avatar_s3_key = None
+    db.commit()
 
 @router.post("/invite", response_model=AdminUserResponse, status_code=status.HTTP_201_CREATED)
 def invite_user(body: InviteRequest, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):

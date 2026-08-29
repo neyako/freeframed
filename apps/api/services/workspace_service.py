@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from ..models.branding import WorkspaceSettings
 
 
-DEFAULT_WORKSPACE_NAME = "FreeFrame"
+DEFAULT_WORKSPACE_NAME = "freeframed"
 WORKSPACE_SETTINGS_ID = 1
 
 

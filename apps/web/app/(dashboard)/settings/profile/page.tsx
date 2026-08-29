@@ -7,6 +7,7 @@ import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Avatar } from '@/components/shared/avatar'
+import { Camera, Loader2, X } from 'lucide-react'
 
 export default function ProfilePage() {
   const { user, fetchUser } = useAuthStore()
@@ -15,6 +16,65 @@ export default function ProfilePage() {
   const [isSavingProfile, setIsSavingProfile] = React.useState(false)
   const [profileError, setProfileError] = React.useState('')
   const [profileSuccess, setProfileSuccess] = React.useState(false)
+
+  // Avatar upload state
+  const avatarInputRef = React.useRef<HTMLInputElement>(null)
+  const [avatarUrl, setAvatarUrl] = React.useState(user?.avatar_url ?? null)
+  const [isUploadingAvatar, setIsUploadingAvatar] = React.useState(false)
+  React.useEffect(() => {
+    setAvatarUrl(user?.avatar_url ?? null)
+  }, [user?.avatar_url])
+
+  async function handleAvatarFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setProfileError('')
+    if (!file.type.startsWith('image/')) {
+      setProfileError('Avatar must be an image (PNG, JPEG, or WebP)')
+      return
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setProfileError('Avatar must be under 5 MB')
+      return
+    }
+    setIsUploadingAvatar(true)
+    try {
+      const { upload_url, key } = await api.post<{ upload_url: string; key: string }>(
+        '/users/avatar-upload',
+        { content_type: file.type },
+      )
+      const res = await fetch(upload_url, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type },
+        body: file,
+      })
+      if (!res.ok) throw new Error('Failed to upload avatar')
+      const updated = await api.put<{ avatar_url: string | null }>('/users/avatar', { key })
+      setAvatarUrl(updated.avatar_url)
+      await fetchUser()
+      setProfileSuccess(true)
+      setTimeout(() => setProfileSuccess(false), 3000)
+    } catch (err: unknown) {
+      setProfileError(err instanceof Error ? err.message : 'Failed to upload avatar')
+    } finally {
+      setIsUploadingAvatar(false)
+    }
+  }
+
+  async function handleAvatarRemove() {
+    setProfileError('')
+    setIsUploadingAvatar(true)
+    try {
+      await api.delete<void>('/users/avatar')
+      setAvatarUrl(null)
+      await fetchUser()
+    } catch (err: unknown) {
+      setProfileError(err instanceof Error ? err.message : 'Failed to remove avatar')
+    } finally {
+      setIsUploadingAvatar(false)
+    }
+  }
 
   const [currentPassword, setCurrentPassword] = React.useState('')
   const [newPassword, setNewPassword] = React.useState('')
@@ -108,12 +168,53 @@ export default function ProfilePage() {
         </h2>
 
         <div className="flex items-center gap-4">
-          <Avatar src={user?.avatar_url} name={user?.name} size="lg" />
+          <div className="relative">
+            <Avatar src={avatarUrl} name={user?.name} size="lg" />
+            <button
+              type="button"
+              aria-label="Upload avatar"
+              onClick={() => avatarInputRef.current?.click()}
+              disabled={isUploadingAvatar}
+              className="absolute -bottom-0.5 -right-0.5 flex h-6 w-6 items-center justify-center rounded-full border border-border bg-bg-elevated text-text-secondary hover:text-text-primary transition-colors disabled:opacity-50"
+            >
+              {isUploadingAvatar
+                ? <Loader2 className="h-3 w-3 animate-spin" />
+                : <Camera className="h-3 w-3" />}
+            </button>
+            <input
+              ref={avatarInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              className="hidden"
+              onChange={handleAvatarFile}
+            />
+          </div>
           <div>
             <p className="text-sm font-medium text-text-primary">
               {user?.name ?? 'Loading...'}
             </p>
             <p className="text-xs text-text-tertiary">{user?.email ?? ''}</p>
+            <div className="mt-1 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => avatarInputRef.current?.click()}
+                disabled={isUploadingAvatar}
+                className="text-2xs text-accent hover:underline disabled:opacity-50"
+              >
+                Upload avatar
+              </button>
+              {avatarUrl && (
+                <button
+                  type="button"
+                  onClick={handleAvatarRemove}
+                  disabled={isUploadingAvatar}
+                  className="inline-flex items-center gap-0.5 text-2xs text-text-tertiary hover:text-text-primary disabled:opacity-50"
+                >
+                  <X className="h-2.5 w-2.5" />
+                  Remove
+                </button>
+              )}
+            </div>
           </div>
         </div>
 

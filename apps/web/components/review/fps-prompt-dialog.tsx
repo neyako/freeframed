@@ -29,7 +29,7 @@ export function FpsPromptDialog({
             Frame rate needed
           </Dialog.Title>
           <Dialog.Description className="mt-1 text-xs text-text-tertiary">
-            This video was uploaded before FreeFrame started capturing frame
+            This video was uploaded before freeframed started capturing frame
             rates automatically, so its fps isn&apos;t on file. Pick the
             video&apos;s original frame rate so exported markers land on the
             correct frames. (Newly uploaded videos won&apos;t ask this.)

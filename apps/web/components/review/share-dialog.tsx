@@ -109,9 +109,10 @@ export function ShareDialog({
         size="sm"
         onClick={() => setDropdownOpen(!dropdownOpen)}
         className={cn(dropdownOpen && "bg-bg-hover")}
+        title="Share"
       >
         <Share2 className="h-4 w-4" />
-        Share
+        <span className="hidden sm:inline">Share</span>
       </Button>
 
       {/* Always mounted, opacity-only — same as the header's shared scrim.

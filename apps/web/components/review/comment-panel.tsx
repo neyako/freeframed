@@ -57,6 +57,8 @@ interface CommentPanelProps {
   onSubmitReply?: (parentId: string, body: string) => Promise<void>;
   /** Query string appended to own-comment mutations (share-link auth context) */
   mutationQuery?: string;
+  /** Guest-authored comment IDs posted from this browser (share viewer own-comment detection) */
+  ownGuestCommentIds?: string[];
   className?: string;
   /** Show the export-to-NLE menu. Members-only — the guest share viewer must
    * leave this off (the export endpoint 401s for unauthenticated guests). */
@@ -143,12 +145,15 @@ function Dropdown({
 
 function CommentMenu({
   isOwn,
+  canEdit,
   commentId,
   assetId,
   onEdit,
   onDelete,
 }: {
   isOwn: boolean;
+  /** Guest-authored comments can be deleted but not edited (no API support) */
+  canEdit: boolean;
   commentId: string;
   assetId?: string;
   onEdit: () => void;
@@ -173,13 +178,15 @@ function CommentMenu({
         align="right"
         className="w-44"
       >
-        <button
-          className="flex w-full items-center gap-2.5 px-3 py-2 text-[13px] text-text-secondary hover:bg-bg-tertiary transition-colors"
-          onClick={() => { onEdit(); setOpen(false) }}
-        >
-          <Pencil className="h-3.5 w-3.5" />
-          Edit
-        </button>
+        {canEdit && (
+          <button
+            className="flex w-full items-center gap-2.5 px-3 py-2 text-[13px] text-text-secondary hover:bg-bg-tertiary transition-colors"
+            onClick={() => { onEdit(); setOpen(false) }}
+          >
+            <Pencil className="h-3.5 w-3.5" />
+            Edit
+          </button>
+        )}
         <button
           className="flex w-full items-center gap-2.5 px-3 py-2 text-[13px] text-text-secondary hover:bg-bg-tertiary transition-colors"
           onClick={() => {
@@ -340,6 +347,8 @@ interface CommentItemProps {
   currentUserId?: string;
   replyingTo?: string | null;
   isFocused?: boolean;
+  /** Id of a just-posted own comment to flash-highlight (scroll companion) */
+  flashCommentId?: string | null;
   /** Omit to hide resolve controls (e.g. share viewers can't resolve) */
   onResolve?: (commentId: string) => Promise<void>;
   onDelete: (commentId: string) => Promise<void>;
@@ -350,6 +359,8 @@ interface CommentItemProps {
   onSubmitReply?: (parentId: string, body: string) => Promise<void>;
   /** Query string appended to own-comment mutations (share-link auth context) */
   mutationQuery?: string;
+  /** Guest-authored comment IDs posted from this browser (share viewer own-comment detection) */
+  ownGuestCommentIds?: string[];
 }
 
 function CommentItem({
@@ -359,6 +370,7 @@ function CommentItem({
   currentUserId,
   replyingTo,
   isFocused,
+  flashCommentId,
   onResolve,
   onDelete,
   onAddReaction,
@@ -367,6 +379,7 @@ function CommentItem({
   onCancelReply,
   onSubmitReply,
   mutationQuery,
+  ownGuestCommentIds,
 }: CommentItemProps) {
   const seekTo = useReviewStore((s) => s.seekTo);
   const setActiveAnnotation = useReviewStore((s) => s.setActiveAnnotation);
@@ -388,7 +401,9 @@ function CommentItem({
 
   const authorName =
     comment.author?.name ?? comment.guest_author?.name ?? "Unknown";
-  const isOwn = !!(currentUserId && comment.author_id === currentUserId);
+  const isOwn =
+    !!(currentUserId && comment.author_id === currentUserId) ||
+    (!!comment.guest_author_id && !!ownGuestCommentIds?.includes(comment.id));
   const avatarUrl = comment.author?.avatar_url ?? null;
   const isReplyingHere = replyingTo === comment.id && depth === 0;
 
@@ -430,11 +445,14 @@ function CommentItem({
     else await onAddReaction(comment.id, emoji);
   }
 
+  const flash = flashCommentId === comment.id;
   return (
     <div
       ref={itemRef}
+      data-comment-id={comment.id}
       className={cn(
         "group/comment relative transition-colors cursor-pointer",
+        flash && "animate-comment-flash",
         depth > 0
           ? "ml-8 pl-3 border-l-2 border-border"
           : cn(
@@ -654,10 +672,11 @@ function CommentItem({
                 )}
               </div>
 
-              {/* Context menu — hover only */}
-              <div className="opacity-0 group-hover/comment:opacity-100 transition-opacity">
+              {/* Context menu — hover on pointer devices, always visible on touch */}
+              <div className="opacity-0 group-hover/comment:opacity-100 pointer-coarse:opacity-100 transition-opacity">
                 <CommentMenu
                   isOwn={isOwn}
+                  canEdit={!!currentUserId && comment.author_id === currentUserId}
                   commentId={comment.id}
                   assetId={comment.asset_id}
                   onEdit={() => { setEditing(true); setEditBody(comment.body); }}
@@ -723,6 +742,7 @@ function CommentItem({
                   depth={depth + 1}
                   currentUserId={currentUserId}
                   replyingTo={replyingTo}
+                  flashCommentId={flashCommentId}
                   onResolve={onResolve}
                   onDelete={onDelete}
                   onAddReaction={onAddReaction}
@@ -731,6 +751,7 @@ function CommentItem({
                   onCancelReply={onCancelReply}
                   onSubmitReply={onSubmitReply}
                   mutationQuery={mutationQuery}
+                  ownGuestCommentIds={ownGuestCommentIds}
                 />
               ))}
             </div>
@@ -777,6 +798,7 @@ export function CommentPanel({
   onReply,
   onSubmitReply,
   mutationQuery,
+  ownGuestCommentIds,
   className,
   showExport,
 }: CommentPanelProps) {
@@ -797,6 +819,46 @@ export function CommentPanel({
   const [filters, setFilters] = React.useState<FilterState>(EMPTY_FILTERS);
   const [replyingTo, setReplyingTo] = React.useState<string | null>(null);
   const [exportOpen, setExportOpen] = React.useState(false);
+
+  // Jump to a newly-posted own comment once it renders (mobile: it lands
+  // below the fold of the scrollable list) and flash-highlight it. First
+  // render is baseline — loading a thread must not scroll anywhere.
+  const listRef = React.useRef<HTMLDivElement>(null);
+  const seenCommentIdsRef = React.useRef<Set<string> | null>(null);
+  const [flashCommentId, setFlashCommentId] = React.useState<string | null>(
+    null,
+  );
+  const flashTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  React.useEffect(
+    () => () => {
+      if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+    },
+    [],
+  );
+  React.useEffect(() => {
+    const previous = seenCommentIdsRef.current;
+    seenCommentIdsRef.current = new Set(
+      comments.flatMap((c) => [c.id, ...c.replies.map((r) => r.id)]),
+    );
+    if (previous === null) return;
+    const target = comments
+      .flatMap((c) => [c, ...c.replies])
+      .find((c) => !previous.has(c.id) && (
+        (!!currentUserId && c.author_id === currentUserId) ||
+        (!!c.guest_author_id && !!ownGuestCommentIds?.includes(c.id))
+      ));
+    if (!target) return;
+    requestAnimationFrame(() => {
+      listRef.current
+        ?.querySelector(`[data-comment-id="${target.id}"]`)
+        ?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    });
+    setFlashCommentId(target.id);
+    if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+    flashTimerRef.current = setTimeout(() => setFlashCommentId(null), 1700);
+  }, [comments, currentUserId, ownGuestCommentIds]);
   const [fpsPromptFormat, setFpsPromptFormat] =
     React.useState<ExportFormat | null>(null);
   const toast = useToast();
@@ -1260,7 +1322,7 @@ export function CommentPanel({
       )}
 
       {/* ─── Comment list ─────────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto">
+      <div ref={listRef} className="flex-1 overflow-y-auto">
         {isLoading && (
           <div className="flex items-center justify-center py-12">
             <div className="h-5 w-5 animate-spin rounded-full border-2 border-border border-t-accent" />
@@ -1290,6 +1352,7 @@ export function CommentPanel({
                 currentUserId={currentUserId}
                 replyingTo={replyingTo}
                 isFocused={focusedCommentId === comment.id}
+                flashCommentId={flashCommentId}
                 onResolve={onResolve}
                 onDelete={onDelete}
                 onAddReaction={onAddReaction}
@@ -1298,6 +1361,7 @@ export function CommentPanel({
                 onCancelReply={() => setReplyingTo(null)}
                 onSubmitReply={onSubmitReply}
                 mutationQuery={mutationQuery}
+                ownGuestCommentIds={ownGuestCommentIds}
               />
             </div>
           ))}

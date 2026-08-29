@@ -126,6 +126,11 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
     ])
   }, [asset?.id, asset?.name, asset?.folder_id, folderTree, setExtraCrumbs])
 
+  // Leaving the review screen must drop its folder/asset crumbs — the header
+  // renders extraCrumbs on every route, so stale crumbs would otherwise ghost
+  // on pages with no URL crumbs (e.g. the dashboard after clicking Back).
+  useEffect(() => () => setExtraCrumbs([]), [setExtraCrumbs])
+
   useEffect(() => {
     if (project?.name) setLabel(projectId, project.name)
   }, [project?.name, projectId, setLabel])
@@ -473,9 +478,7 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
             {downloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
             <span className="hidden sm:inline">Download</span>
           </button>}
-          {!folderDirect && <div className="hidden md:block">
-            <ShareDialog assetId={asset.id} assetName={asset.name} projectId={projectId} asset={asset} />
-          </div>}
+          {!folderDirect && <ShareDialog assetId={asset.id} assetName={asset.name} projectId={projectId} asset={asset} />}
           <button
             onClick={() => setSidebarOpen((p) => !p)}
             className={cn(

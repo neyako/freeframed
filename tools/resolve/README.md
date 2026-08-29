@@ -1,7 +1,7 @@
-# FreeFrame Resolve Review Push
+# freeframed Resolve Review Push
 
 This folder contains DaVinci Resolve utility scripts for sending the current
-timeline to FreeFrame review.
+timeline to freeframed review.
 
 ## Configure
 
@@ -15,9 +15,9 @@ chmod 600 ~/.freeframe/config.json
 
 Edit `~/.freeframe/config.json`:
 
-- `api_url`: FreeFrame API origin, for example `http://localhost:8000`.
-- `api_key`: the FreeFrame server's `INTEGRATION_API_KEY`.
-- `project_id`: the FreeFrame project UUID that should hold review assets.
+- `api_url`: freeframed API origin, for example `http://localhost:8000`.
+- `api_key`: the freeframed server's `INTEGRATION_API_KEY`.
+- `project_id`: the freeframed project UUID that should hold review assets.
 
 The config contains a secret. Keep it local and keep permissions restricted with
 `chmod 600 ~/.freeframe/config.json`.
@@ -41,7 +41,7 @@ Open the cut in DaVinci Resolve, then run
 **Workspace > Scripts > Utility > freeframe_push_for_review**.
 
 The script renders the whole current timeline as an H.264 `.mp4`, uploads it to
-FreeFrame, prints the review link in Resolve's Scripts console, and stores the
+freeframed, prints the review link in Resolve's Scripts console, and stores the
 returned token in `~/.freeframe/resolve_links.json`.
 
 Because this is a whole-timeline render, video time `0` maps to timeline frame
@@ -54,9 +54,9 @@ Open the same timeline that was pushed for review, then run
 **Workspace > Scripts > Utility > freeframe_sync_comments**.
 
 The script reads the saved review token, fetches reviewer comments from
-FreeFrame, and places a timeline marker at each timecoded comment. Green markers
+freeframed, and places a timeline marker at each timecoded comment. Green markers
 are resolved comments; Yellow markers are open comments. Re-run the script to
-refresh the FreeFrame markers.
+refresh the freeframed markers.
 
 General comments without a timecode are skipped; only frame-anchored comments
 become Resolve markers.
