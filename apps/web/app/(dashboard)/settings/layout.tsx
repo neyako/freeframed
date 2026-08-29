@@ -31,7 +31,7 @@ export default function SettingsLayout({
   const { user, isSuperAdmin } = useAuthStore()
 
   return (
-    <div className="flex h-full flex-col lg:flex-row">
+    <div className="flex h-full flex-1 flex-col lg:flex-row">
       <nav className="lg:hidden flex gap-2 overflow-x-auto border-b border-border px-4 py-3 [scrollbar-width:none]">
         {settingsNavItems.map((item) => {
           if (item.adminOnly && !isSuperAdmin) return null
