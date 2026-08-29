@@ -242,7 +242,7 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
 
   if (reviewError || projectError) {
     return (
-      <div className="flex h-full items-center justify-center px-6 text-center">
+      <div className="flex flex-1 items-center justify-center px-6 text-center">
         <div>
           <h1 className="text-base font-semibold text-text-primary">Access denied</h1>
           <p className="mt-1 text-sm text-text-tertiary">Your access to this asset is no longer active.</p>
@@ -253,7 +253,7 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
 
   if (isLoading || !asset || !project) {
     return (
-      <div className="flex h-full items-center justify-center">
+      <div className="flex flex-1 items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
           <span className="text-xs text-text-tertiary">Loading asset...</span>

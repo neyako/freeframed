@@ -1,9 +1,12 @@
 'use client'
 
 import * as React from 'react'
-import { Monitor, Moon, Sun, Check } from 'lucide-react'
+import { Monitor, Moon, Sun, Check, Inbox, LayoutGrid } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useThemeStore, type Theme } from '@/stores/theme-store'
+import { useHomeModeStore, type HomeMode } from '@/stores/home-mode-store'
+import { useMounted } from '@/hooks/use-mounted'
+
 
 const themes: { value: Theme; label: string; description: string; icon: React.ElementType }[] = [
   {
@@ -26,8 +29,25 @@ const themes: { value: Theme; label: string; description: string; icon: React.El
   },
 ]
 
+const homeModes: { value: HomeMode; label: string; description: string; icon: React.ElementType }[] = [
+  {
+    value: 'review',
+    label: 'Review feed',
+    description: 'Upload-first dashboard with recent and assigned assets',
+    icon: Inbox,
+  },
+  {
+    value: 'projects',
+    label: 'Projects',
+    description: 'Frame.io-style project grid for organizing folders of work',
+    icon: LayoutGrid,
+  },
+]
+
 export default function AppearancePage() {
   const { theme, setTheme } = useThemeStore()
+  const { mode: homeMode, setMode: setHomeMode } = useHomeModeStore()
+  const mounted = useMounted()
 
   return (
     <div className="p-6 max-w-2xl">
@@ -36,6 +56,42 @@ export default function AppearancePage() {
         <p className="text-sm text-text-tertiary mt-1">
           Customize how freeframed looks on your device.
         </p>
+      </div>
+
+      {/* Home screen selector */}
+      <div className="space-y-3">
+        <h2 className="text-sm font-medium text-text-primary">Home screen</h2>
+        <div className="grid grid-cols-2 gap-3">
+          {homeModes.map((m) => {
+            const Icon = m.icon
+            const isActive = mounted && homeMode === m.value
+            return (
+              <button
+                key={m.value}
+                onClick={() => setHomeMode(m.value)}
+                className={cn(
+                  'relative flex items-start gap-3 rounded-xl border p-4 transition-all text-left',
+                  isActive
+                    ? 'border-accent bg-accent/5 ring-1 ring-accent/30'
+                    : 'border-border bg-bg-secondary hover:bg-bg-tertiary hover:border-border-focus',
+                )}
+              >
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-bg-tertiary">
+                  <Icon className="h-4 w-4 text-text-secondary" />
+                </div>
+                <div className="min-w-0">
+                  <span className="text-sm font-medium text-text-primary">{m.label}</span>
+                  <p className="text-2xs text-text-tertiary mt-0.5">{m.description}</p>
+                </div>
+                {isActive && (
+                  <div className="absolute top-2 right-2 flex h-5 w-5 items-center justify-center rounded-full bg-accent text-white">
+                    <Check className="h-3 w-3" />
+                  </div>
+                )}
+              </button>
+            )
+          })}
+        </div>
       </div>
 
       {/* Theme selector */}

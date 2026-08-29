@@ -6,6 +6,9 @@ import Link from "next/link";
 import { Film, Clock, Trash2, UserCheck, type LucideIcon } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth-store";
+import { useHomeModeStore } from "@/stores/home-mode-store";
+import { useRouter } from "next/navigation";
+import { LayoutGrid } from "lucide-react";
 import { formatRelativeTime } from "@/lib/utils";
 import { QuickShare } from "@/components/dashboard/quick-share";
 import { StorageMeter } from "@/components/dashboard/storage-meter";
@@ -190,6 +193,15 @@ function Section({
 export default function HomePage() {
   const mounted = useMounted();
   const { user } = useAuthStore();
+  const router = useRouter();
+  const homeMode = useHomeModeStore((s) => s.mode);
+  const setHomeMode = useHomeModeStore((s) => s.setMode);
+
+  // Projects-style home preference: the review feed here is only one of two
+  // landing modes (Appearance → Home screen). Hand the route over.
+  React.useEffect(() => {
+    if (mounted && homeMode === "projects") router.replace("/projects");
+  }, [mounted, homeMode, router]);
 
   const {
     data: recentAssets,
@@ -232,8 +244,19 @@ export default function HomePage() {
             Here&apos;s what&apos;s happening with your assets today.
           </p>
         </div>
-        <div className="hidden sm:block w-56 shrink-0 pt-1">
-          <StorageMeter />
+        <div className="hidden sm:flex items-start gap-3 shrink-0 pt-1">
+          <button
+            type="button"
+            onClick={() => setHomeMode("projects")}
+            title="Use the Frame.io-style projects grid as your home screen"
+            className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-[11px] font-mono uppercase tracking-[0.14em] text-text-secondary hover:text-text-primary hover:border-text-tertiary transition-colors"
+          >
+            <LayoutGrid className="h-3.5 w-3.5" />
+            Projects home
+          </button>
+          <div className="w-56">
+            <StorageMeter />
+          </div>
         </div>
       </div>
 

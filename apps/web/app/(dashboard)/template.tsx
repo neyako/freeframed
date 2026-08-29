@@ -10,6 +10,12 @@ export default function DashboardTemplate({
   children: React.ReactNode;
 }) {
   return (
-    <div className="animate-in fade-in duration-200 ease-out">{children}</div>
+    // flex + min-h-full: pages that style themselves full-height (settings
+    // shell, review chrome) resolve their own h-full against a definite
+    // parent; short pages still fill the viewport so full-height sidebars
+    // don't crop at content height. taller-than-viewport content grows it.
+    <div className="flex min-h-full flex-col animate-in fade-in duration-200 ease-out">
+      {children}
+    </div>
   );
 }
