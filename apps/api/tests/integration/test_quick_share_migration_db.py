@@ -35,6 +35,15 @@ def _alembic() -> Config:
     return Config(str(API_ROOT / "alembic.ini"))
 
 
+@pytest.fixture(scope="module", autouse=True)
+def _restore_schema_head():
+    """These tests drive the shared session DB to pinned pre-head revisions
+    (the schema gets dropped and rebuilt below head). Restore head afterwards
+    so later modules' ORM fixtures see the full current schema."""
+    yield
+    command.upgrade(_alembic(), "head")
+
+
 def _reset() -> None:
     with psycopg2.connect(DATABASE_URL) as connection, connection.cursor() as cursor:
         cursor.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public")
