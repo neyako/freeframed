@@ -22,6 +22,9 @@ import { Segmented } from "@/components/ui/segmented";
 import { ProjectCard } from "@/components/projects/project-card";
 import { EmptyState } from "@/components/shared/empty-state";
 import { useAuthStore } from "@/stores/auth-store";
+import { useHomeModeStore } from "@/stores/home-mode-store";
+import { useSearchParams } from "next/navigation";
+import { Inbox } from "lucide-react";
 import { usePageTitle } from "@/hooks/use-page-title";
 import type { Project, ProjectType } from "@/types";
 
@@ -212,9 +215,21 @@ function sortQuickShareFirst(projects: Project[]) {
 export default function ProjectsPage() {
   usePageTitle("Projects");
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user } = useAuthStore();
+  const homeMode = useHomeModeStore((s) => s.mode);
+  const setHomeMode = useHomeModeStore((s) => s.setMode);
   const [viewMode, setViewMode] = React.useState<ViewMode>("grid");
   const [dialogOpen, setDialogOpen] = React.useState(false);
+
+  // Command palette / external links land on /projects?new=1 to open the
+  // create dialog directly (there is no /projects/new route).
+  React.useEffect(() => {
+    if (searchParams.get("new")) {
+      setDialogOpen(true);
+      router.replace("/projects", { scroll: false });
+    }
+  }, [searchParams, router]);
   const [isCreating, setIsCreating] = React.useState(false);
   const [formError, setFormError] = React.useState("");
 
@@ -301,6 +316,22 @@ export default function ProjectsPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setHomeMode("review");
+              router.push("/");
+            }}
+            title={
+              homeMode === "projects"
+                ? "This grid is your home screen — switch back to the review feed"
+                : "Use the review feed as your home screen"
+            }
+            className="hidden sm:inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-[11px] font-mono uppercase tracking-[0.14em] text-text-secondary hover:text-text-primary hover:border-text-tertiary transition-colors"
+          >
+            <Inbox className="h-3.5 w-3.5" />
+            {homeMode === "projects" ? "Home ✓" : "Home feed"}
+          </button>
           <Segmented
             options={[
               {

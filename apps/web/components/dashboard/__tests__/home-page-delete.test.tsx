@@ -33,6 +33,11 @@ const mocks = vi.hoisted(() => ({
   mutateAssigned: vi.fn<() => Promise<void>>(async () => undefined),
 }));
 
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
+}));
+
 vi.mock("next/link", () => ({
   default: ({
     children,

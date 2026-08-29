@@ -125,7 +125,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
       id: "new-project",
       label: "New Project",
       icon: FolderPlus,
-      href: "/projects/new",
+      href: "/projects?new=1",
       group: "actions",
       shortcut: "N P",
     },
