@@ -40,3 +40,19 @@ def test_presigned_upload_part_is_path_style_on_public_endpoint():
         url = s3_service.presign_upload_part("raw/abc/video.mp4", "upload-1", 1)
     assert url.startswith("http://nas.example.com:8080/freeframe/raw/abc/video.mp4?")
     assert "partNumber=1" in url
+
+
+def test_download_presign_is_sigv4():
+    """SigV2 breaks on MinIO when the disposition value contains '&'
+    (e.g. an asset named "A&B.mov") — the server computes a different
+    signature and rejects the download with SignatureDoesNotMatch."""
+    with (
+        patch.object(settings, "s3_storage", "minio"),
+        patch.object(settings, "s3_bucket", "freeframe"),
+        patch.object(settings, "s3_public_endpoint", "http://nas.example.com:8080"),
+    ):
+        url = s3_service.generate_presigned_get_url(
+            "raw/abc/original.mov", download_filename="A&B (final).mov"
+        )
+    assert "X-Amz-Signature=" in url, f"expected SigV4 presigned URL, got: {url}"
+    assert "AWSAccessKeyId=" not in url  # SigV2 marker
