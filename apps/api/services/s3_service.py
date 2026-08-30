@@ -81,7 +81,14 @@ def _get_presign_client():
         # Path-style (/<bucket>/<key>) so presigned URLs work on endpoints
         # without wildcard DNS — e.g. the all-in-one image serves them on the
         # app origin itself via an nginx route for the bucket path.
-        kwargs["config"] = Config(s3={"addressing_style": "path"})
+        # SigV4 is required: with the default SigV2 botocore uses for custom
+        # endpoints, MinIO rejects download URLs whose
+        # response-content-disposition value contains an ampersand.
+        kwargs["config"] = Config(
+            signature_version="s3v4", s3={"addressing_style": "path"}
+        )
+    else:
+        kwargs["config"] = Config(signature_version="s3v4")
     client = boto3.client("s3", **kwargs)
     _presign_clients[cache_key] = client
     return client
