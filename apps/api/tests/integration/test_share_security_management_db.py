@@ -23,6 +23,73 @@ from ._share_security_support import (
     uuid,
 )
 
+
+@pytest.mark.parametrize("scope", ["asset", "folder", "project", "multi"])
+@pytest.mark.parametrize("role", [None, ProjectRole.reviewer])
+def test_admin_can_manage_shares_without_editor_membership(db, make_project, make_user, scope, role) -> None:
+    project, owner = make_project()
+    admin = make_user()
+    admin.is_superadmin = True
+    if role is not None:
+        _add_member(db, project.id, admin.id, role)
+    asset = _add_asset(db, project.id, owner.id)
+    folder = _add_folder(db, project.id, owner.id)
+    target = {"asset": asset, "folder": folder, "project": project, "multi": project}[scope]
+    target_field = "project_id" if scope == "multi" else f"{scope}_id"
+    link = ShareLink(
+        **{target_field: target.id}, token=uuid.uuid4().hex,
+        created_by=owner.id, permission=SharePermission.comment,
+        allow_download=False, show_watermark=False,
+    )
+    db.add(link)
+    db.flush()
+    if scope == "multi":
+        db.add(share.ShareLinkItem(share_link_id=link.id, asset_id=asset.id))
+    db.commit()
+
+    assert share.get_share_link_details(link.token, db, admin).token == link.token
+    assert share.get_share_link_activity(link.token, 1, 50, db, admin) == []
+    updated = share.update_share_link(link.token, ShareLinkUpdate(allow_download=True), db, admin)
+    assert updated.allow_download is True
+    updated = share.update_share_link(
+        link.token, ShareLinkUpdate(allow_download=False, show_watermark=True), db, admin,
+    )
+    assert updated.show_watermark is True
+    assert updated.allow_download is False
+    # Admin access must not bypass the watermark/download invariant.
+    with pytest.raises(share.HTTPException) as exc_info:
+        share.update_share_link(link.token, ShareLinkUpdate(allow_download=True), db, admin)
+    assert exc_info.value.status_code == 422
+    share.add_asset_to_share_link(link.token, asset.id, db, admin)
+    share.revoke_share_link(link.token, db, admin)
+    assert db.get(ShareLink, link.id).deleted_at is not None
+    _assert_forbidden(lambda: share.get_share_link_details(link.token, db, admin))
+
+
+@pytest.mark.parametrize("scope", ["asset", "folder", "project"])
+@pytest.mark.parametrize("deleted", ["target", "project"])
+def test_admin_cannot_manage_shares_of_deleted_targets(db, make_project, make_user, scope, deleted) -> None:
+    project, owner = make_project()
+    admin = make_user()
+    admin.is_superadmin = True
+    target = project
+    if scope == "asset":
+        target = _add_asset(db, project.id, owner.id)
+    elif scope == "folder":
+        target = _add_folder(db, project.id, owner.id)
+    link = ShareLink(
+        **{f"{scope}_id": target.id}, token=uuid.uuid4().hex, created_by=owner.id,
+    )
+    db.add(link)
+    (target if deleted == "target" else project).deleted_at = datetime.now(timezone.utc)
+    db.commit()
+
+    for token in (link.token, uuid.uuid4().hex):
+        _assert_forbidden(lambda: share.get_share_link_details(token, db, admin))
+        _assert_forbidden(lambda: share.update_share_link(token, ShareLinkUpdate(title="blocked"), db, admin))
+        _assert_forbidden(lambda: share.revoke_share_link(token, db, admin))
+
+
 def test_management_requires_editor_and_redacts_password_and_activity_pii(db, make_project, make_user) -> None:
     project, owner = make_project()
     foreign_project, foreign_owner = make_project()
@@ -220,4 +287,3 @@ def test_disabled_download_stream_enforcement_uses_the_same_membership_rule(
         current_user=actor,
     )
     assert response["url"] == "redacted"
-

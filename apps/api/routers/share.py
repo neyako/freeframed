@@ -196,6 +196,8 @@ def _get_manageable_share_link(db: Session, token: str, user: User) -> ShareLink
             Project.deleted_at.is_(None),
         )
     )
+    if user.is_superadmin:
+        managed_project_ids = sqlalchemy.select(Project.id).where(Project.deleted_at.is_(None))
     managed_asset_ids = sqlalchemy.select(Asset.id).where(
         Asset.project_id.in_(managed_project_ids),
         Asset.deleted_at.is_(None),
