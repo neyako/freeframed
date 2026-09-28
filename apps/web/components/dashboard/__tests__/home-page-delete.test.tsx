@@ -50,7 +50,7 @@ vi.mock("next/link", () => ({
 
 vi.mock("swr", () => ({
   default: (key: string) => {
-    if (key === "/me/assets?filter=owned") {
+    if (key === "/me/assets") {
       return { data: [mocks.asset], isLoading: false, mutate: mocks.mutateOwned };
     }
     return { data: [], isLoading: false, mutate: vi.fn() };
