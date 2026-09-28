@@ -103,6 +103,7 @@ def build_hls_command(
     backend: str,
     device: str = "/dev/dri/renderD128",
     hw_decode: bool = False,
+    has_audio: bool = True,
 ) -> list[str]:
     hls_path = os.fspath(hls_dir)
     split_outputs = "".join(f"[v{index}]" for index in range(len(qualities)))
@@ -134,7 +135,9 @@ def build_hls_command(
 
     for index, quality in enumerate(qualities):
         _scale, quality_target = quality_map[quality]
-        cmd += ["-map", f"[{quality}]", "-map", "a:0"]
+        cmd += ["-map", f"[{quality}]"]
+        if has_audio:
+            cmd += ["-map", "a:0"]
         cmd += _encoder_args(backend, index, quality_target)
         cmd += ["-force_key_frames", "expr:gte(t,n_forced*2)"]
 
@@ -152,7 +155,10 @@ def build_hls_command(
         "-master_pl_name",
         "master.m3u8",
         "-var_stream_map",
-        " ".join(f"v:{index},a:{index}" for index in range(len(qualities))),
+        " ".join(
+            f"v:{index},a:{index}" if has_audio else f"v:{index}"
+            for index in range(len(qualities))
+        ),
         "-hls_segment_filename",
         os.path.join(hls_path, "%v", "seg_%03d.ts"),
         os.path.join(hls_path, "%v", "playlist.m3u8"),

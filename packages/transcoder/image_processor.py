@@ -4,7 +4,6 @@ import os
 import shutil
 import subprocess
 import tempfile
-from pathlib import Path
 
 log = logging.getLogger(__name__)
 
@@ -17,6 +16,19 @@ def process_image(s3_client, bucket: str, input_s3_key: str, output_prefix: str)
     result = {}
     try:
         s3_client.download_file(bucket, input_s3_key, tmp_input)
+
+        # Dimensions let the grid show the image at its real shape (best effort)
+        try:
+            probe = subprocess.run(
+                ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height",
+                 "-print_format", "json", tmp_input],
+                check=True, capture_output=True, text=True, timeout=60,
+            )
+            stream = (json.loads(probe.stdout).get("streams") or [{}])[0]
+            result["width"] = int(stream.get("width") or 0) or None
+            result["height"] = int(stream.get("height") or 0) or None
+        except (subprocess.SubprocessError, ValueError, OSError) as exc:
+            log.warning("image dimension probe failed for %s: %s", input_s3_key, exc)
 
         # Convert to WebP
         webp_path = os.path.join(work_dir, "processed.webp")
@@ -45,7 +57,7 @@ def process_image(s3_client, bucket: str, input_s3_key: str, output_prefix: str)
 
 
 def process_audio(s3_client, bucket: str, input_s3_key: str, output_prefix: str) -> dict:
-    """Normalize audio to MP3 + generate waveform JSON. Returns dict of S3 keys."""
+    """Normalize audio to MP3. Returns dict of S3 keys."""
     with tempfile.NamedTemporaryFile(suffix=".audio", delete=False) as f:
         tmp_input = f.name
     work_dir = tempfile.mkdtemp()
@@ -79,15 +91,6 @@ def process_audio(s3_client, bucket: str, input_s3_key: str, output_prefix: str)
         mp3_key = f"{output_prefix}/processed.mp3"
         s3_client.upload_file(mp3_path, bucket, mp3_key, ExtraArgs={"ContentType": "audio/mpeg", "CacheControl": "max-age=86400"})
         result["mp3_key"] = mp3_key
-
-        # Waveform as JSON (simplified peak data)
-        waveform_data = {"peaks": [], "duration": 0, "sample_rate": 44100}
-        waveform_path = os.path.join(work_dir, "waveform.json")
-        with open(waveform_path, "w") as wf:
-            json.dump(waveform_data, wf)
-        waveform_key = f"{output_prefix}/waveform.json"
-        s3_client.upload_file(waveform_path, bucket, waveform_key, ExtraArgs={"ContentType": "application/json", "CacheControl": "max-age=86400"})
-        result["waveform_key"] = waveform_key
 
     finally:
         os.unlink(tmp_input)

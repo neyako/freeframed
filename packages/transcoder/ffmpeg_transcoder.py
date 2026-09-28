@@ -5,18 +5,12 @@ import subprocess
 import tempfile
 import threading
 from pathlib import Path
-from typing import Callable, Optional, TypedDict
+from typing import Callable, Optional
 
-from .base import BaseTranscoder, TranscodeJob, TranscodeResult, VideoMetadata
+from .base import TranscodeJob, TranscodeResult, VideoMetadata
 from .hwaccel import build_hls_command, resolve_backend
 
 logger = logging.getLogger(__name__)
-
-
-class WaveformData(TypedDict):
-    samples: list[float]
-    peak: float
-    source: str
 
 
 def _parse_progress_percent(line: str, duration: float) -> float | None:
@@ -46,15 +40,70 @@ def _stderr_tail(stderr: str | bytes | None, sensitive_url: str) -> str:
     return (stderr or "").replace(sensitive_url, "<redacted input URL>")[-2000:]
 
 
-def _reset_hls_dir(hls_dir: Path, qualities: list[str]) -> None:
+def _reset_hls_dir(hls_dir: Path) -> None:
+    # ffmpeg creates the per-rendition %v directories itself.
     for child in hls_dir.iterdir():
         if child.is_dir() and not child.is_symlink():
             shutil.rmtree(child, ignore_errors=True)
         else:
             child.unlink(missing_ok=True)
 
-    for quality in qualities:
-        (hls_dir / quality).mkdir(exist_ok=True)
+
+# Rendition ladder keyed by the frame's SHORT edge, so a vertical 9:16 source
+# gets the same resolution as landscape (1080x1920 stays 1080x1920).
+LADDER: dict[str, tuple[int, int]] = {"1080p": (1080, 20), "720p": (720, 22), "360p": (360, 26)}
+# Used only when ffprobe couldn't read the dimensions.
+_FALLBACK_BOXES = {"1080p": "1920:1080", "720p": "1280:720", "360p": "640:360"}
+
+
+def _even(value: float) -> int:
+    return max(2, int(round(value / 2)) * 2)
+
+
+def plan_renditions(qualities: list[str], width: int, height: int) -> dict[str, tuple[str, int]]:
+    """Map requested rungs to exact "W:H" scales that keep the source aspect.
+
+    Never upscales: a rung above the source's short edge is capped to the
+    source size, and duplicate sizes are dropped (a 480p source yields 480 + 360).
+    """
+    rungs = [q for q in qualities if q in LADDER]
+    if not width or not height:
+        return {q: (_FALLBACK_BOXES[q], LADDER[q][1]) for q in rungs}
+    short, long_ = min(width, height), max(width, height)
+    plan: dict[str, tuple[str, int]] = {}
+    seen: set[int] = set()
+    for quality in rungs:
+        target, crf = LADDER[quality]
+        out_short = _even(min(target, short))
+        if out_short in seen:
+            continue
+        seen.add(out_short)
+        out_long = _even(long_ * out_short / short)
+        w, h = (out_long, out_short) if width >= height else (out_short, out_long)
+        plan[quality] = (f"{w}:{h}", crf)
+    return plan
+
+
+def _rotation(stream: dict) -> int:
+    for side_data in stream.get("side_data_list") or []:
+        if "rotation" in side_data:
+            try:
+                return int(float(side_data["rotation"]))
+            except (TypeError, ValueError):
+                return 0
+    try:
+        return int(float((stream.get("tags") or {}).get("rotate") or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def is_rotated_90(data: dict) -> bool:
+    video = next((s for s in data.get("streams") or [] if s.get("codec_type", "video") == "video"), None)
+    return video is not None and abs(_rotation(video)) % 180 == 90
+
+
+def has_audio_stream(data: dict) -> bool:
+    return any(s.get("codec_type") == "audio" for s in data.get("streams") or [])
 
 
 def parse_probe_metadata(data: dict) -> Optional[VideoMetadata]:
@@ -62,12 +111,15 @@ def parse_probe_metadata(data: dict) -> Optional[VideoMetadata]:
 
     Returns None when there is no video stream. Guards r_frame_rate "0/0"
     (fps stays 0.0 — never fabricate a rate) and falls back to format-level
-    duration when the stream lacks one (common for MKV/WebM).
+    duration when the stream lacks one (common for MKV/WebM). Width/height
+    are display dimensions: phone footage stored landscape with a 90° rotation
+    flag reports as portrait, matching what ffmpeg's autorotate decodes.
     """
     streams = data.get("streams") or []
-    if not streams:
+    video_streams = [s for s in streams if s.get("codec_type", "video") == "video"]
+    if not video_streams:
         return None
-    stream = streams[0]
+    stream = video_streams[0]
     fps = 0.0
     raw_rate = stream.get("r_frame_rate") or ""
     if "/" in raw_rate:
@@ -80,15 +132,14 @@ def parse_probe_metadata(data: dict) -> Optional[VideoMetadata]:
     duration = float(stream.get("duration") or 0)
     if not duration:
         duration = float((data.get("format") or {}).get("duration") or 0)
-    return VideoMetadata(
-        duration_seconds=duration,
-        width=int(stream.get("width") or 0),
-        height=int(stream.get("height") or 0),
-        fps=fps,
-    )
+    width = int(stream.get("width") or 0)
+    height = int(stream.get("height") or 0)
+    if abs(_rotation(stream)) % 180 == 90:
+        width, height = height, width
+    return VideoMetadata(duration_seconds=duration, width=width, height=height, fps=fps)
 
 
-class FFmpegTranscoder(BaseTranscoder):
+class FFmpegTranscoder:
     def __init__(
         self,
         s3_client,
@@ -111,46 +162,6 @@ class FFmpegTranscoder(BaseTranscoder):
             ExpiresIn=expires_in,
         )
 
-    async def get_video_metadata(self, s3_key: str) -> VideoMetadata:
-        """Get video metadata using streaming (no full download)."""
-        input_url = self._get_presigned_url(s3_key)
-        cmd = [
-            "ffprobe", "-v", "quiet", "-print_format", "json",
-            "-show_streams", "-select_streams", "v:0", input_url,
-        ]
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=120)
-        data = json.loads(result.stdout)
-        stream = data["streams"][0]
-        fps_parts = stream.get("r_frame_rate", "30/1").split("/")
-        fps = float(fps_parts[0]) / float(fps_parts[1])
-        return VideoMetadata(
-            duration_seconds=float(stream.get("duration", 0)),
-            width=int(stream.get("width", 0)),
-            height=int(stream.get("height", 0)),
-            fps=fps,
-        )
-
-    async def generate_thumbnails(self, s3_key: str, count: int) -> list[str]:
-        """Generate thumbnails at 1 per 10 seconds using streaming input."""
-        input_url = self._get_presigned_url(s3_key)
-        thumb_dir = tempfile.mkdtemp()
-        try:
-            cmd = [
-                "ffmpeg", "-i", input_url,
-                "-vf", "fps=0.1",
-                "-q:v", "2",
-                f"{thumb_dir}/thumb_%04d.jpg",
-            ]
-            subprocess.run(cmd, capture_output=True, check=True, timeout=600)
-            return [str(p) for p in sorted(Path(thumb_dir).glob("thumb_*.jpg"))]
-        finally:
-            shutil.rmtree(thumb_dir, ignore_errors=True)
-
-    async def generate_waveform(self, s3_key: str) -> WaveformData:
-        """Generate waveform data for audio visualization using streaming."""
-        # Simplified waveform: just return peak data (full waveform extraction is complex)
-        return {"samples": [], "peak": 1.0, "source": s3_key}
-
     async def transcode(
         self,
         job: TranscodeJob,
@@ -170,38 +181,38 @@ class FFmpegTranscoder(BaseTranscoder):
             # 1. Get metadata via streaming (no download); also sizes progress %.
             cmd = [
                 "ffprobe", "-v", "quiet", "-print_format", "json",
-                "-show_format", "-show_streams", "-select_streams", "v:0", input_url,
+                "-show_format", "-show_streams", input_url,
             ]
             probe = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-            duration = 0.0
             meta = None
+            # Assume audio when the probe fails, matching the old behavior.
+            has_audio = True
+            rotated = False
             try:
                 probe_data = json.loads(probe.stdout)
-                duration = float(probe_data.get("streams", [{}])[0].get("duration", 0) or 0)
-                if not duration:
-                    duration = float(probe_data.get("format", {}).get("duration", 0) or 0)
                 meta = parse_probe_metadata(probe_data)
+                has_audio = has_audio_stream(probe_data)
+                rotated = is_rotated_90(probe_data)
             except (ValueError, TypeError, IndexError, json.JSONDecodeError):
-                duration = 0.0
                 meta = None
+            duration = meta.duration_seconds if meta else 0.0
 
-            # 3. Build quality ladder based on available qualities
-            QUALITY_MAP = {
-                "1080p": ("1920:1080", 20),
-                "720p": ("1280:720", 22),
-                "360p": ("640:360", 26),
-            }
-            qualities = [q for q in job.qualities if q in QUALITY_MAP]
+            # 3. Build the quality ladder from the source's display size
+            quality_map = plan_renditions(
+                job.qualities,
+                meta.width if meta else 0,
+                meta.height if meta else 0,
+            )
+            qualities = list(quality_map)
 
             hls_dir = work_dir / "hls"
             hls_dir.mkdir()
 
             backend = resolve_backend(self.hwaccel, self.vaapi_device)
 
-            for q in qualities:
-                (hls_dir / q).mkdir(exist_ok=True)
-
-            initial_hw_decode = backend == "vaapi"
+            # ffmpeg doesn't autorotate VAAPI-decoded frames, so 90°-rotated
+            # phone footage skips full-GPU decode and starts at hwupload.
+            initial_hw_decode = backend == "vaapi" and not rotated
             logger.info(
                 "Starting HLS transcode: backend=%s hw_decode=%s",
                 backend,
@@ -212,7 +223,7 @@ class FFmpegTranscoder(BaseTranscoder):
                     ("vaapi", True, "vaapi-full-hw"),
                     ("vaapi", False, "vaapi-hwupload"),
                     ("software", False, "software"),
-                ]
+                ][0 if initial_hw_decode else 1:]
             elif backend == "software":
                 attempts = [("software", False, "software")]
             else:
@@ -226,11 +237,12 @@ class FFmpegTranscoder(BaseTranscoder):
                 ffmpeg_cmd = build_hls_command(
                     input_url,
                     qualities,
-                    QUALITY_MAP,
+                    quality_map,
                     hls_dir,
                     attempt_backend,
                     self.vaapi_device,
                     hw_decode=hw_decode,
+                    has_audio=has_audio,
                 )
                 try:
                     self._run_ffmpeg_with_progress(ffmpeg_cmd, duration, progress_callback)
@@ -242,7 +254,7 @@ class FFmpegTranscoder(BaseTranscoder):
                         mode_name,
                         _stderr_tail(error.stderr, input_url),
                     )
-                    _reset_hls_dir(hls_dir, qualities)
+                    _reset_hls_dir(hls_dir)
                 else:
                     break
 
@@ -259,25 +271,31 @@ class FFmpegTranscoder(BaseTranscoder):
                     )
                     uploaded_keys.append(s3_key)
 
-            # 5. Generate and upload thumbnail (using streaming URL)
-            thumb_path = work_dir / "thumb_0001.jpg"
+            # 5. Thumbnail: best effort — the HLS output is already uploaded, so
+            # a thumbnail failure must not fail the transcode. Seek past frame 0,
+            # which is often black.
+            thumb_path = work_dir / "thumbnail.jpg"
             thumb_cmd = [
-                "ffmpeg", "-y", "-i", input_url,
-                "-vf", "fps=0.1", "-q:v", "2", "-frames:v", "1",
-                str(work_dir / "thumb_%04d.jpg"),
+                "ffmpeg", "-y", "-ss", f"{min(1.0, duration / 2):.3f}", "-i", input_url,
+                "-q:v", "2", "-frames:v", "1", str(thumb_path),
             ]
-            subprocess.run(thumb_cmd, check=True, capture_output=True)
-            thumbnail_key = f"{job.output_s3_prefix}/thumbnail.jpg"
+            thumbnail_keys: list[str] = []
+            try:
+                subprocess.run(thumb_cmd, capture_output=True, timeout=300)
+            except subprocess.SubprocessError as error:
+                logger.warning("Thumbnail generation failed: %s", error)
             if thumb_path.exists():
+                thumbnail_key = f"{job.output_s3_prefix}/thumbnail.jpg"
                 self.s3.upload_file(
                     str(thumb_path), self.bucket, thumbnail_key,
                     ExtraArgs={"ContentType": "image/jpeg", "CacheControl": "max-age=86400"},
                 )
+                thumbnail_keys.append(thumbnail_key)
 
             return TranscodeResult(
                 success=True,
                 hls_prefix=job.output_s3_prefix,
-                thumbnail_keys=[thumbnail_key],
+                thumbnail_keys=thumbnail_keys,
                 duration_seconds=(meta.duration_seconds or None) if meta else None,
                 width=(meta.width or None) if meta else None,
                 height=(meta.height or None) if meta else None,
