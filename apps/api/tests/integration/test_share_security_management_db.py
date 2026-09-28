@@ -4,6 +4,8 @@ from ._share_security_support import (
     FileType,
     MediaFile,
     ProjectRole,
+    ShareLink,
+    SharePermission,
     ShareLinkUpdate,
     _add_asset,
     _add_folder,
@@ -17,6 +19,56 @@ from ._share_security_support import (
     timezone,
     uuid,
 )
+
+
+@pytest.mark.parametrize("scope", ["asset", "folder"])
+@pytest.mark.parametrize("role", [None, ProjectRole.editor])
+def test_owner_account_can_manage_shares_without_membership(db, make_project, make_user, scope, role) -> None:
+    project, owner = make_project()
+    admin = make_user()
+    admin.is_superadmin = True
+    if role is not None:
+        _add_member(db, project.id, admin.id, role)
+    target = _add_asset(db, project.id, owner.id) if scope == "asset" else _add_folder(db, project.id, owner.id)
+    link = ShareLink(
+        **{f"{scope}_id": target.id}, token=uuid.uuid4().hex,
+        created_by=owner.id, permission=SharePermission.comment,
+        allow_download=False, show_watermark=False,
+    )
+    db.add(link)
+    db.commit()
+
+    updated = share.update_share_link(link.token, ShareLinkUpdate(allow_download=True), db, admin)
+    assert updated.allow_download is True
+    updated = share.update_share_link(
+        link.token, ShareLinkUpdate(allow_download=False, show_watermark=True), db, admin,
+    )
+    assert updated.show_watermark is True and updated.allow_download is False
+    # Owner access must not bypass the watermark/download invariant.
+    with pytest.raises(share.HTTPException) as exc_info:
+        share.update_share_link(link.token, ShareLinkUpdate(allow_download=True), db, admin)
+    assert exc_info.value.status_code == 422
+    share.revoke_share_link(link.token, db, admin)
+    assert db.get(ShareLink, link.id).deleted_at is not None
+    _assert_forbidden(lambda: share.update_share_link(link.token, ShareLinkUpdate(title="gone"), db, admin))
+
+
+@pytest.mark.parametrize("scope", ["asset", "folder"])
+@pytest.mark.parametrize("deleted", ["target", "project"])
+def test_owner_account_cannot_manage_shares_of_deleted_targets(db, make_project, make_user, scope, deleted) -> None:
+    project, owner = make_project()
+    admin = make_user()
+    admin.is_superadmin = True
+    target = _add_asset(db, project.id, owner.id) if scope == "asset" else _add_folder(db, project.id, owner.id)
+    link = ShareLink(**{f"{scope}_id": target.id}, token=uuid.uuid4().hex, created_by=owner.id)
+    db.add(link)
+    (target if deleted == "target" else project).deleted_at = datetime.now(timezone.utc)
+    db.commit()
+
+    for token in (link.token, uuid.uuid4().hex):
+        _assert_forbidden(lambda: share.update_share_link(token, ShareLinkUpdate(title="blocked"), db, admin))
+        _assert_forbidden(lambda: share.revoke_share_link(token, db, admin))
+
 
 def test_management_requires_membership_and_redacts_password(db, make_project, make_user) -> None:
     project, owner = make_project()

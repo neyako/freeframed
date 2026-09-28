@@ -24,6 +24,12 @@ The Dockerfile defaults to `linux/amd64` so the bundled Jellyfin ffmpeg build ex
 NVENC, QSV, and VAAPI encoder set required by the image smoke test. Other platforms can be built
 with `--build-arg ALLINONE_PLATFORM=linux/arm64`, but hardware encoder availability may differ.
 
+MinIO is compiled from source in the Dockerfile (`MINIO_RELEASE`, currently
+`RELEASE.2025-10-15T17-29-55Z`): MinIO no longer serves community binaries (`dl.min.io`
+answers 410) and `quay.io/minio/minio` refuses anonymous pulls. Only ever move the pin
+forward, since an older MinIO must not open data a newer one wrote. `mc` isn't bundled;
+the API creates the bucket on startup.
+
 ## Run
 
 All state lives under `/data` — mount a host directory there (bind mount), so your
