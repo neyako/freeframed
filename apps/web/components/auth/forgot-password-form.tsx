@@ -37,27 +37,22 @@ export function ForgotPasswordForm() {
   }
 
   return (
-    <div className="animate-slide-up">
-      <div className="mb-8">
-        <h1 className="text-xl font-medium tracking-[-0.02em] text-text-primary mb-1">Reset your password</h1>
-        <p className="text-sm text-text-secondary">Enter your email and we&apos;ll send you a reset link.</p>
-      </div>
+    <div className="space-y-4">
+      <h2 className="text-[18px] font-semibold text-text-primary">Reset password</h2>
 
       {sent ? (
-        <div className="flex flex-col gap-4">
-          <p className="text-sm text-text-secondary">
-            If that email is registered, a reset link is on its way. Check your inbox.
+        <div className="flex flex-col gap-3 text-[13px]">
+          <p className="text-text-secondary">
+            If that email is registered, a reset link is on its way.
           </p>
-          <Link href="/login" className="text-sm text-text-secondary hover:text-text-primary underline">
+          <Link href="/login" className="text-text-secondary transition-colors duration-100 hover:text-text-primary">
             Back to sign in
           </Link>
         </div>
       ) : (
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           {error && (
-            <div className="animate-shake rounded border border-accent-line bg-accent-muted px-3 py-2.5 font-mono text-[12px] text-accent">
-              {error}
-            </div>
+            <p role="alert" className="text-[12.5px] text-accent">{error}</p>
           )}
 
           <Input
@@ -69,11 +64,11 @@ export function ForgotPasswordForm() {
             onChange={(e) => { setEmail(e.target.value); setError('') }}
           />
 
-          <Button type="submit" size="lg" loading={loading} className="mt-2 w-full">
-            Send reset link
+          <Button type="submit" loading={loading} className="mt-1 w-full">
+            {loading ? 'Sending…' : 'Send reset link'}
           </Button>
 
-          <Link href="/login" className="text-sm text-text-secondary hover:text-text-primary underline">
+          <Link href="/login" className="text-[12.5px] text-text-secondary transition-colors duration-100 hover:text-text-primary">
             Back to sign in
           </Link>
         </form>

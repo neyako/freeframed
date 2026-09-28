@@ -6,7 +6,6 @@ import { clearTokens } from '@/lib/auth'
 interface AuthState {
   user: User | null
   isAuthenticated: boolean
-  isSuperAdmin: boolean
   isLoading: boolean
   setUser: (user: User) => void
   logout: () => void
@@ -16,14 +15,12 @@ interface AuthState {
 export const useAuthStore = create<AuthState>()((set) => ({
   user: null,
   isAuthenticated: false,
-  isSuperAdmin: false,
   isLoading: false,
 
   setUser: (user: User) => {
     set({
       user,
       isAuthenticated: true,
-      isSuperAdmin: user.is_superadmin,
     })
   },
 
@@ -32,7 +29,6 @@ export const useAuthStore = create<AuthState>()((set) => ({
     set({
       user: null,
       isAuthenticated: false,
-      isSuperAdmin: false,
     })
   },
 
@@ -43,13 +39,11 @@ export const useAuthStore = create<AuthState>()((set) => ({
       set({
         user,
         isAuthenticated: true,
-        isSuperAdmin: user.is_superadmin,
       })
     } catch {
       set({
         user: null,
         isAuthenticated: false,
-        isSuperAdmin: false,
       })
     } finally {
       set({ isLoading: false })

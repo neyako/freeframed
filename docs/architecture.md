@@ -35,7 +35,7 @@ nginx in all-in-one container (:80, published as :8080 by docker-compose.aio.yml
 | **Redis** | Message broker for Celery task queues, magic code TTL storage |
 | **MinIO / S3 Storage** | Stores originals, transcoded outputs, and thumbnails |
 | **Transcoding Workers** | Celery workers that process video/audio/image files via FFmpeg |
-| **Email Workers** | Celery workers that send transactional emails (invites, magic codes, notifications) |
+| **Email Workers** | Celery workers that send transactional emails (invites, password resets, mentions, approvals) |
 
 This fork ships only the all-in-one topology (plus the multi-service dev
 compose for local development). SaaS, multi-tenant, and larger production-house
@@ -95,55 +95,56 @@ Reviewer approves / rejects ──▶ SSE: approval_updated
 
 1. Raw file uploaded to S3 via presigned multipart upload
 2. Celery worker reads directly from S3 presigned URL (no full download)
-3. `ffprobe` extracts metadata (duration, resolution, FPS)
+3. `ffprobe` extracts metadata (duration, display resolution incl. phone
+   rotation, FPS, whether there is an audio track)
 4. FFmpeg generates multi-bitrate HLS:
-   - 1080p (CRF 20), 720p (CRF 22), 360p (CRF 26)
-   - 2-second segments with forced keyframes
-5. Thumbnails generated (1 per 10 seconds)
-6. Waveform JSON generated for audio track
-7. All outputs uploaded to S3 at `hls/{project_id}/{version_id}/`
-8. Asset status set to `ready`, SSE event fired
+   - 1080p (CRF 20), 720p (CRF 22), 360p (CRF 26), sized by the frame's
+     short edge so vertical 9:16 keeps full resolution; never upscaled
+   - 2-second segments with forced keyframes; video-only when there's no audio
+5. One thumbnail (best effort; a failure doesn't fail the transcode)
+6. All outputs uploaded to S3 at `processed/{project_id}/{asset_id}/{version_id}/`
+7. Version status set to `ready`, SSE event fired. Failures retry 3 times
+   before the version is marked `failed`; versions stuck uploading/processing
+   for a day are failed by the nightly `fail_stale_versions` task
 
 ### Audio
 
 1. Raw file (MP3, WAV, FLAC, AAC) uploaded to S3
 2. Worker normalizes audio and converts to MP3
-3. Waveform JSON generated for visualization
-4. Outputs uploaded to S3
+3. Output uploaded to S3 (the web draws the waveform client-side)
 
 ### Image
 
 1. Raw file (JPEG, PNG, HEIC, TIFF) uploaded to S3
 2. Worker converts to optimized WebP + generates thumbnail
-3. For **carousels**: each image processed independently with sequence ordering
+
+Downloads always serve the original upload, never the processed copy.
 
 ---
 
 ## Permission Model
 
-Enforced asset access is project-scoped. Organization/team tables and
-`shared_with_team_id` remnants still exist in migrations/API edges, but
-`can_access_asset` does not grant access through a team or org-admin path.
-Clean up those remnants in a separate API plan.
+freeframed has three kinds of people:
+
+- **Owner**: the superadmin created at first setup. Passes every project check.
+- **Editor**: an invited account added to a project. Uploads, adds versions,
+  comments, approves, and manages share links.
+- **Guests**: brands and clients who open an asset or folder share link. No account.
 
 ```
 Project
-├── owner    ── full control over project
-├── editor   ── upload, edit assets
-├── reviewer ── comment, approve/reject
-└── viewer   ── read-only access
+├── owner    ── everything, plus members, settings, delete, empty trash
+└── editor   ── upload, versions, comments, approvals, share links
     │
-    Share Link
-    ├── approve  ── can approve/reject
+    Share Link (one asset or one folder)
+    ├── approve  ── can approve/reject (secure links only)
     ├── comment  ── can add comments
     └── view     ── read-only
 ```
 
-**Asset access is checked in this order:**
-1. Is the user the asset creator?
-2. Is the user a project member (any role)?
-3. Was the asset shared directly with the user (`AssetShare`)?
-4. Is the project public (`Project.is_public`)? Any authenticated user can view.
+Account holders reach a project only through `ProjectMember` (or superadmin).
+Every member can read, comment on, and approve every asset in the project
+(`can_access_asset`). There are no public projects and no per-user direct shares.
 
 Guest users (via share links) use the `GuestUser` table — they provide email + name only, no account required.
 
@@ -187,8 +188,8 @@ Projects ──── ProjectMembers
     │            │              ├── Attachments
     │            │              └── Reactions
     │            ├── Approvals
-    │            └── AssetShares
-    └── Collections
+    │            └── ShareLinks (asset)
+    └── Folders ──── ShareLinks (folder)
 ```
 
 **ORM:** SQLAlchemy 2.0 with Alembic for migrations.

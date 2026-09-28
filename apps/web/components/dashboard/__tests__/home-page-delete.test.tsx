@@ -17,11 +17,7 @@ const mocks = vi.hoisted(() => ({
     description: null,
     asset_type: "video",
     status: "draft",
-    rating: null,
-    assignee_id: null,
     folder_id: null,
-    due_date: "2026-07-20T00:00:00Z",
-    keywords: [],
     created_by: "user-1",
     created_at: "2026-07-07T00:00:00Z",
     updated_at: "2026-07-07T00:00:00Z",
@@ -30,7 +26,6 @@ const mocks = vi.hoisted(() => ({
     thumbnail_url: null,
   } satisfies AssetResponse,
   mutateOwned: vi.fn<() => Promise<void>>(async () => undefined),
-  mutateAssigned: vi.fn<() => Promise<void>>(async () => undefined),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -57,9 +52,6 @@ vi.mock("swr", () => ({
   default: (key: string) => {
     if (key === "/me/assets?filter=owned") {
       return { data: [mocks.asset], isLoading: false, mutate: mocks.mutateOwned };
-    }
-    if (key === "/me/assets?filter=assigned") {
-      return { data: [], isLoading: false, mutate: mocks.mutateAssigned };
     }
     return { data: [], isLoading: false, mutate: vi.fn() };
   },
@@ -116,7 +108,7 @@ describe("HomePage asset delete", () => {
     mockedApi.delete.mockResolvedValue(undefined);
   });
 
-  it("deletes an asset from the dashboard and revalidates both asset lists", async () => {
+  it("deletes an asset from the dashboard and revalidates the asset list", async () => {
     const user = userEvent.setup();
     render(<HomePage />);
 
@@ -129,10 +121,9 @@ describe("HomePage asset delete", () => {
       expect(mockedApi.delete).toHaveBeenCalledWith("/assets/asset-1");
     });
     expect(mocks.mutateOwned).toHaveBeenCalledTimes(1);
-    expect(mocks.mutateAssigned).toHaveBeenCalledTimes(1);
   });
 
-  it("hydrates greeting and asset dates from deterministic initial markup", async () => {
+  it("hydrates greeting and relative asset time from deterministic initial markup", async () => {
     // Given
     let clientRender = false;
     const getHoursSpy = vi
@@ -143,9 +134,6 @@ describe("HomePage asset delete", () => {
       .mockImplementation(() =>
         Date.parse(clientRender ? "2026-07-07T18:00:00Z" : "2026-07-07T08:00:00Z"),
       );
-    const localeDateSpy = vi
-      .spyOn(Date.prototype, "toLocaleDateString")
-      .mockImplementation(() => (clientRender ? "CLIENT DATE" : "SERVER DATE"));
     const serverHtml = renderToString(<HomePage />);
     const container = document.createElement("div");
     container.innerHTML = serverHtml;
@@ -166,18 +154,15 @@ describe("HomePage asset delete", () => {
       await waitFor(() => {
         expect(container).toHaveTextContent("Good evening, Neya");
         expect(container).toHaveTextContent("18 hours ago");
-        expect(container).toHaveTextContent("Due CLIENT DATE");
       });
       expect(recoverableErrors).toHaveLength(0);
       expect(serverHtml).not.toContain("Good morning");
       expect(serverHtml).not.toContain("8 hours ago");
-      expect(serverHtml).not.toContain("Due SERVER DATE");
     } finally {
       await act(async () => root?.unmount());
       container.remove();
       getHoursSpy.mockRestore();
       nowSpy.mockRestore();
-      localeDateSpy.mockRestore();
     }
   });
 });

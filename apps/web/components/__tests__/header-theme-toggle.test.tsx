@@ -4,7 +4,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Header } from '../layout/header'
 
 const mocks = vi.hoisted(() => ({
-  fetchNotifications: vi.fn(),
   logout: vi.fn(),
   setTheme: vi.fn(),
   togglePanel: vi.fn(),
@@ -33,13 +32,6 @@ vi.mock('@/stores/upload-store', () => ({
   }),
 }))
 
-vi.mock('@/stores/notification-store', () => ({
-  useNotificationStore: () => ({
-    unreadCount: 0,
-    fetchNotifications: mocks.fetchNotifications,
-  }),
-}))
-
 vi.mock('@/stores/branding-store', () => ({
   useBrandingStore: () => ({
     orgName: 'freeframed',
@@ -57,7 +49,6 @@ vi.mock('@/stores/theme-store', () => ({
 
 describe('Header theme toggle', () => {
   beforeEach(() => {
-    mocks.fetchNotifications.mockClear()
     mocks.logout.mockClear()
     mocks.setTheme.mockClear()
     mocks.togglePanel.mockClear()

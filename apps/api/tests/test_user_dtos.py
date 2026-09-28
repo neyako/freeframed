@@ -66,21 +66,6 @@ def test_ordinary_user_endpoints_omit_populated_invite_tokens(
     assert all("invite_token" not in user for user in search_response.json())
 
 
-def test_admin_user_list_retains_invite_token(
-    authenticated_client,
-    mock_db,
-    test_user,
-):
-    pending_user = _user_with_invite_token()
-    test_user.is_superadmin = True
-    mock_db.all.return_value = [pending_user]
-
-    response = authenticated_client.get("/admin/users")
-
-    assert response.status_code == 200
-    assert response.json()[0]["invite_token"] == "fixed-synthetic-invite-token"
-
-
 def test_admin_invite_response_retains_generated_invite_token(
     authenticated_client,
     mock_db,
@@ -115,23 +100,10 @@ def test_admin_invite_response_retains_generated_invite_token(
     assert response.json()["invite_token"] == "fixed-synthetic-invite-token"
 
 
-@pytest.mark.parametrize(
-    ("path_template", "payload"),
-    [
-        ("/users/{user_id}", {"name": "Renamed User"}),
-        ("/users/{user_id}/deactivate", None),
-        ("/users/{user_id}/reactivate", None),
-        ("/admin/users/{user_id}/deactivate", None),
-        ("/admin/users/{user_id}/reactivate", None),
-        ("/admin/users/{user_id}/role", {"is_admin": False}),
-    ],
-)
-def test_profile_and_admin_mutations_omit_invite_token(
+def test_profile_update_omits_invite_token(
     authenticated_client,
     mock_db,
     test_user,
-    path_template,
-    payload,
 ):
     target_user = _user_with_invite_token()
     target_user.status = UserStatus.active
@@ -139,8 +111,8 @@ def test_profile_and_admin_mutations_omit_invite_token(
     mock_db.first.return_value = target_user
 
     response = authenticated_client.patch(
-        path_template.format(user_id=target_user.id),
-        json=payload,
+        f"/users/{target_user.id}",
+        json={"name": "Renamed User"},
     )
 
     assert response.status_code == 200

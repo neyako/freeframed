@@ -9,7 +9,7 @@ from fastapi import HTTPException
 from sqlalchemy.exc import InvalidRequestError
 
 from apps.api.models.approval import ApprovalStatus
-from apps.api.routers import approvals, share
+from apps.api.routers import approvals
 from apps.api.schemas.approval import ApprovalCreate
 
 
@@ -50,19 +50,14 @@ def test_approval_service_stages_with_flush_and_never_owns_commit() -> None:
     db.refresh.assert_not_called()
 
 
-def _configure_approval_route(monkeypatch, scoped, action, db, actor, asset, creator, approval):
-    module = share if scoped else approvals
+def _configure_approval_route(monkeypatch, action, db, actor, asset, creator, approval):
+    module = approvals
     monkeypatch.setattr(module, "upsert_approval", lambda *args, **kwargs: approval)
     monkeypatch.setattr(module, "get_workspace_name", lambda _db: "Synthetic workspace")
     monkeypatch.setattr(module, "send_task_safe", MagicMock())
     db.query.return_value.filter.return_value.first.return_value = creator
-    if scoped:
-        monkeypatch.setattr(module, "_validate_secure_approval_link", lambda *args: (MagicMock(), actor))
-        monkeypatch.setattr(module, "_get_asset", lambda *args: asset)
-        monkeypatch.setattr(module, "validate_asset_in_share", lambda *args: None)
-        return module.approve_shared_asset if action == "approve" else module.reject_shared_asset
     monkeypatch.setattr(module, "_get_asset", lambda *args: asset)
-    monkeypatch.setattr(module, "get_asset_access", lambda *args: SimpleNamespace(can_approve=True))
+    monkeypatch.setattr(module, "require_asset_access", lambda *args: None)
     monkeypatch.setattr(
         module,
         "get_active_version",
@@ -95,7 +90,7 @@ def test_approval_routes_reject_review_of_own_upload(
     version = SimpleNamespace(created_by=actor.id if version_created_by_user else None)
     db = MagicMock()
     approval = MagicMock()
-    route = _configure_approval_route(monkeypatch, False, action, db, actor, asset, None, approval)
+    route = _configure_approval_route(monkeypatch, action, db, actor, asset, None, approval)
     version_lookup = MagicMock(return_value=version)
     upsert = MagicMock(return_value=approval)
     monkeypatch.setattr(approvals, "get_active_version", version_lookup)
@@ -120,7 +115,7 @@ def test_approval_routes_allow_different_user_to_review_version(monkeypatch, act
     version = SimpleNamespace(created_by=version_creator_id)
     db = MagicMock()
     approval = MagicMock()
-    route = _configure_approval_route(monkeypatch, False, action, db, actor, asset, creator, approval)
+    route = _configure_approval_route(monkeypatch, action, db, actor, asset, creator, approval)
     version_lookup = MagicMock(return_value=version)
     monkeypatch.setattr(approvals, "get_active_version", version_lookup)
     body = ApprovalCreate(version_id=uuid.uuid4(), note="Synthetic note")
@@ -131,9 +126,8 @@ def test_approval_routes_allow_different_user_to_review_version(monkeypatch, act
     assert result is approval
 
 
-@pytest.mark.parametrize("scoped", [False, True])
 @pytest.mark.parametrize("action", ["approve", "reject"])
-def test_approval_routes_capture_email_scalars_before_commit(monkeypatch, scoped, action) -> None:
+def test_approval_routes_capture_email_scalars_before_commit(monkeypatch, action) -> None:
     expired = [False]
     actor = MagicMock(id=uuid.uuid4(), email="reviewer@example.invalid")
     asset = MagicMock(id=uuid.uuid4(), created_by=uuid.uuid4())
@@ -144,27 +138,26 @@ def test_approval_routes_capture_email_scalars_before_commit(monkeypatch, scoped
     db = MagicMock()
     db.commit.side_effect = lambda: expired.__setitem__(0, True)
     approval = MagicMock()
-    route = _configure_approval_route(monkeypatch, scoped, action, db, actor, asset, creator, approval)
+    route = _configure_approval_route(monkeypatch, action, db, actor, asset, creator, approval)
     body = ApprovalCreate(version_id=uuid.uuid4(), note="Synthetic note")
 
-    result = route(uuid.uuid4().hex, asset.id, body, None, db, actor) if scoped else route(asset.id, body, db, actor)
+    result = route(asset.id, body, db, actor)
 
     assert result is approval
 
 
-@pytest.mark.parametrize("scoped", [False, True])
 @pytest.mark.parametrize("action", ["approve", "reject"])
-def test_committed_approval_survives_dispatch_start_failure(monkeypatch, scoped, action) -> None:
+def test_committed_approval_survives_dispatch_start_failure(monkeypatch, action) -> None:
     actor = SimpleNamespace(id=uuid.uuid4(), name="Reviewer", email="reviewer@example.invalid")
     asset = SimpleNamespace(id=uuid.uuid4(), name="Asset", created_by=uuid.uuid4())
     creator = SimpleNamespace(id=asset.created_by, email="creator@example.invalid")
     db = MagicMock()
     approval = MagicMock()
-    route = _configure_approval_route(monkeypatch, scoped, action, db, actor, asset, creator, approval)
-    (share if scoped else approvals).send_task_safe.side_effect = RuntimeError("thread start failed")
+    route = _configure_approval_route(monkeypatch, action, db, actor, asset, creator, approval)
+    approvals.send_task_safe.side_effect = RuntimeError("thread start failed")
     body = ApprovalCreate(version_id=uuid.uuid4(), note="Synthetic note")
 
-    result = route(uuid.uuid4().hex, asset.id, body, None, db, actor) if scoped else route(asset.id, body, db, actor)
+    result = route(asset.id, body, db, actor)
 
     db.commit.assert_called_once()
     assert result is approval

@@ -35,7 +35,6 @@ describe('Auth store', () => {
     useAuthStore.setState({
       user: null,
       isAuthenticated: false,
-      isSuperAdmin: false,
       isLoading: false,
     })
   })
@@ -44,7 +43,6 @@ describe('Auth store', () => {
     const state = useAuthStore.getState()
     expect(state.user).toBeNull()
     expect(state.isAuthenticated).toBe(false)
-    expect(state.isSuperAdmin).toBe(false)
     expect(state.isLoading).toBe(false)
   })
 
@@ -53,23 +51,15 @@ describe('Auth store', () => {
     const state = useAuthStore.getState()
     expect(state.user).toEqual(mockUser)
     expect(state.isAuthenticated).toBe(true)
-    expect(state.isSuperAdmin).toBe(false)
-  })
-
-  it('setUser sets isSuperAdmin when user is super admin', () => {
-    const adminUser = { ...mockUser, is_superadmin: true }
-    useAuthStore.getState().setUser(adminUser)
-    expect(useAuthStore.getState().isSuperAdmin).toBe(true)
   })
 
   it('logout clears state and calls clearTokens', () => {
-    useAuthStore.setState({ user: mockUser, isAuthenticated: true, isSuperAdmin: false })
+    useAuthStore.setState({ user: mockUser, isAuthenticated: true })
     useAuthStore.getState().logout()
 
     const state = useAuthStore.getState()
     expect(state.user).toBeNull()
     expect(state.isAuthenticated).toBe(false)
-    expect(state.isSuperAdmin).toBe(false)
     expect(clearTokens).toHaveBeenCalledOnce()
   })
 

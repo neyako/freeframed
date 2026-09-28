@@ -14,8 +14,6 @@ celery_app = Celery(
     backend=settings.redis_url,
     include=[
         "apps.api.tasks.transcode_tasks",
-        "apps.api.tasks.watermark_tasks",
-        "apps.api.tasks.reminder_tasks",
         "apps.api.tasks.purge_tasks",
         "apps.api.tasks.email_tasks",
     ],
@@ -42,11 +40,12 @@ celery_app.conf.update(
     # Route tasks to queues
     task_routes={
         "apps.api.tasks.transcode_tasks.*": {"queue": "transcoding"},
+        # Maintenance tasks share the transcoding worker; nothing consumes "default".
+        "purge_expired_trash": {"queue": "transcoding"},
+        "fail_stale_versions": {"queue": "transcoding"},
         "apps.api.tasks.email_tasks.send_invite_email": {"queue": "email_high"},
         "apps.api.tasks.email_tasks.send_mention_email": {"queue": "email_low"},
         "apps.api.tasks.email_tasks.send_comment_email": {"queue": "email_low"},
-        "apps.api.tasks.email_tasks.send_assignment_email": {"queue": "email_low"},
-        "apps.api.tasks.email_tasks.send_share_email": {"queue": "email_low"},
         "apps.api.tasks.email_tasks.send_approval_email": {"queue": "email_low"},
         "apps.api.tasks.email_tasks.send_project_added_email": {"queue": "email_low"},
     },
@@ -57,13 +56,13 @@ celery_app.conf.update(
 )
 
 celery_app.conf.beat_schedule = {
-    "due-date-reminders": {
-        "task": "send_due_date_reminders",
-        "schedule": crontab(minute="0"),  # every hour
-    },
     "purge-expired-trash": {
         "task": "purge_expired_trash",
         "schedule": crontab(minute="30", hour="3", day_of_week="0"),  # weekly, Sun 03:30
+    },
+    "fail-stale-versions": {
+        "task": "fail_stale_versions",
+        "schedule": crontab(minute="0", hour="4"),  # daily 04:00
     },
 }
 

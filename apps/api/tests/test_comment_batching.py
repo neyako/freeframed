@@ -62,7 +62,6 @@ def test_assemble_comment_response_preserves_nested_maps_and_reactions() -> None
         comment_id=root.id,
         drawing_data={"objects": []},
         frame_number=12,
-        carousel_position=None,
     )
     attachment = CommentAttachment(
         id=uuid.uuid4(),

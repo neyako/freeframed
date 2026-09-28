@@ -12,7 +12,6 @@ from pydantic import ValidationError
 from sqlalchemy import event
 from sqlalchemy.orm import Session, sessionmaker
 
-from apps.api.models.activity import ActivityLog, Notification
 from apps.api.models.approval import Approval
 from apps.api.models.asset import (
     Asset,
@@ -24,17 +23,10 @@ from apps.api.models.asset import (
 )
 from apps.api.models.folder import Folder
 from apps.api.models.project import ProjectMember, ProjectRole
-from apps.api.models.share import (
-    AssetShare,
-    ShareActivityAction,
-    ShareLink,
-    ShareLinkActivity,
-    SharePermission,
-    ShareVisibility,
-)
+from apps.api.models.share import ShareLink, SharePermission, ShareVisibility
 from apps.api.routers import approvals, share
 from apps.api.schemas.approval import ApprovalCreate
-from apps.api.schemas.share import DirectShareCreate, MultiShareCreate, ShareLinkCreate, ShareLinkUpdate
+from apps.api.schemas.share import ShareLinkCreate, ShareLinkUpdate
 
 
 def _add_member(db: Session, project_id: uuid.UUID, user_id: uuid.UUID, role: ProjectRole) -> ProjectMember:

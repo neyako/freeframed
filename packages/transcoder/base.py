@@ -1,4 +1,3 @@
-from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -15,7 +14,6 @@ class TranscodeResult:
     success: bool
     hls_prefix: Optional[str] = None
     thumbnail_keys: list[str] = field(default_factory=list)
-    waveform_key: Optional[str] = None
     error: Optional[str] = None
     duration_seconds: Optional[float] = None
     width: Optional[int] = None
@@ -28,20 +26,3 @@ class VideoMetadata:
     width: int
     height: int
     fps: float
-
-class BaseTranscoder(ABC):
-    @abstractmethod
-    async def transcode(self, job: TranscodeJob) -> TranscodeResult:
-        pass
-
-    @abstractmethod
-    async def get_video_metadata(self, s3_key: str) -> VideoMetadata:
-        pass
-
-    @abstractmethod
-    async def generate_thumbnails(self, s3_key: str, count: int) -> list[str]:
-        pass
-
-    @abstractmethod
-    async def generate_waveform(self, s3_key: str) -> dict:
-        pass

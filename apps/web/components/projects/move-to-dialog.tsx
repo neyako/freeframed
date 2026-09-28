@@ -2,9 +2,10 @@
 
 import * as React from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
-import { ChevronRight, Folder as FolderIcon, X, ArrowLeft, FolderInput } from 'lucide-react'
+import { ChevronRight, Folder as FolderIcon, X, ArrowLeft } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { dialogContentClass, dialogOverlayClass } from '@/components/ui/surface'
 import type { FolderTreeNode } from '@/types'
 
 interface MoveToDialogProps {
@@ -83,84 +84,73 @@ export function MoveToDialog({
     return false
   }
 
-  const targetIsRoot = browseFolderId === null
-
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-black/50 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-full max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-bg-secondary shadow-2xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95">
-          {/* Header */}
-          <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
-            {browseFolderId ? (
+        <Dialog.Overlay className={dialogOverlayClass} />
+        <Dialog.Content className={cn(dialogContentClass, 'max-w-sm p-0')}>
+          <Dialog.Description className="sr-only">Choose a destination folder.</Dialog.Description>
+          <div className="flex h-11 items-center gap-1.5 border-b border-border px-2">
+            {browseFolderId && (
               <button
+                type="button"
+                aria-label="Up one level"
                 onClick={() => setBrowseFolderId(breadcrumbs.length > 1 ? breadcrumbs[breadcrumbs.length - 2].id : null)}
-                className="flex items-center justify-center h-6 w-6 rounded text-text-tertiary hover:text-text-primary hover:bg-bg-hover transition-colors shrink-0"
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-text-tertiary transition-colors duration-100 hover:bg-bg-hover hover:text-text-primary"
               >
-                <ArrowLeft className="h-4 w-4" />
+                <ArrowLeft className="h-[15px] w-[15px]" />
               </button>
-            ) : (
-              <FolderInput className="h-4 w-4 text-text-tertiary shrink-0" />
             )}
 
-            {/* Breadcrumb */}
-            <div className="flex items-center gap-1 flex-1 min-w-0 text-sm font-semibold text-text-primary truncate">
-              <span
-                className="cursor-pointer hover:text-accent transition-colors truncate"
-                onClick={() => setBrowseFolderId(null)}
-              >
+            <Dialog.Title className="flex min-w-0 flex-1 items-center gap-1 truncate px-1 text-[13px] font-medium text-text-primary">
+              <button type="button" className="truncate hover:text-text-secondary" onClick={() => setBrowseFolderId(null)}>
                 {projectName}
-              </span>
+              </button>
               {breadcrumbs.map((crumb) => (
                 <React.Fragment key={crumb.id}>
-                  <ChevronRight className="h-3 w-3 text-text-tertiary shrink-0" />
-                  <span
-                    className="cursor-pointer hover:text-accent transition-colors truncate"
-                    onClick={() => setBrowseFolderId(crumb.id)}
-                  >
+                  <ChevronRight className="h-3 w-3 shrink-0 text-text-tertiary" />
+                  <button type="button" className="truncate hover:text-text-secondary" onClick={() => setBrowseFolderId(crumb.id)}>
                     {crumb.name}
-                  </span>
+                  </button>
                 </React.Fragment>
               ))}
-            </div>
+            </Dialog.Title>
 
-            <Dialog.Close className="flex items-center justify-center h-6 w-6 rounded text-text-tertiary hover:text-text-primary hover:bg-bg-hover transition-colors shrink-0">
-              <X className="h-4 w-4" />
+            <Dialog.Close
+              aria-label="Close"
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-text-tertiary transition-colors duration-100 hover:bg-bg-hover hover:text-text-primary"
+            >
+              <X className="h-[15px] w-[15px]" />
             </Dialog.Close>
           </div>
 
-          {/* Folder list */}
-          <div className="max-h-64 overflow-y-auto py-1">
+          <div className="max-h-64 overflow-y-auto p-1">
             {children.length === 0 ? (
-              <p className="px-4 py-6 text-center text-sm text-text-tertiary">No subfolders</p>
+              <p className="px-2 py-2 text-[13px] text-text-tertiary">No subfolders.</p>
             ) : (
               children.map((folder) => {
                 const disabled = movingFolderIds.includes(folder.id)
                 return (
-                  <div
+                  <button
                     key={folder.id}
-                    className={cn(
-                      'flex items-center gap-2.5 px-3 py-2 transition-colors',
-                      disabled
-                        ? 'opacity-40 cursor-not-allowed'
-                        : 'cursor-pointer hover:bg-bg-hover',
-                    )}
-                    onClick={() => !disabled && setBrowseFolderId(folder.id)}
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => setBrowseFolderId(folder.id)}
+                    className="flex h-8 w-full items-center gap-2 rounded px-2 text-left text-[13px] text-text-primary transition-colors duration-100 hover:bg-bg-hover disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    <FolderIcon className="h-4 w-4 text-text-tertiary shrink-0" />
-                    <span className="flex-1 text-sm text-text-primary truncate">{folder.name}</span>
+                    <FolderIcon className="h-[15px] w-[15px] shrink-0 text-text-tertiary" />
+                    <span className="flex-1 truncate">{folder.name}</span>
                     {folder.children.length > 0 && (
-                      <ChevronRight className="h-3.5 w-3.5 text-text-tertiary shrink-0" />
+                      <ChevronRight className="h-3.5 w-3.5 shrink-0 text-text-tertiary" />
                     )}
-                  </div>
+                  </button>
                 )
               })
             )}
           </div>
 
-          {/* Footer */}
-          <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-border">
-            <Button variant="secondary" size="sm" onClick={() => onOpenChange(false)}>
+          <div className="flex items-center justify-end gap-2 border-t border-border px-3 py-2.5">
+            <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
             <Button

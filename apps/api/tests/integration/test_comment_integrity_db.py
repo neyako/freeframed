@@ -58,7 +58,7 @@ def test_create_rejects_foreign_or_deleted_version_before_writes(
     else:
         response = request_as(
             comment_security,
-            "reviewer",
+            "editor",
             "POST",
             f"/assets/{comment_security.private.asset.id}/comments",
             {"version_id": str(version.id), "body": "auth"},
@@ -80,7 +80,7 @@ def test_reply_rejects_foreign_or_deleted_parent_before_writes(
         comment_security.db,
         foreign_asset,
         foreign_version,
-        comment_security.actors["reviewer"],
+        comment_security.actors["editor"],
     )
     if parent_state == "deleted":
         parent.asset_id = comment_security.private.asset.id
@@ -102,7 +102,7 @@ def test_reply_rejects_foreign_or_deleted_parent_before_writes(
     else:
         response = request_as(
             comment_security,
-            "reviewer",
+            "editor",
             "POST",
             f"/assets/{comment_security.private.asset.id}/comments/{parent.id}/replies",
             {"version_id": str(comment_security.private.version.id), "body": "reply"},
@@ -121,14 +121,14 @@ def test_valid_reply_inherits_parent_version_visibility_and_rejects_body_conflic
 
     accepted = request_as(
         comment_security,
-        "reviewer",
+        "editor",
         "POST",
         f"/assets/{comment_security.private.asset.id}/comments/{parent.id}/replies",
         {"version_id": str(parent.version_id), "parent_id": str(parent.id), "body": "reply"},
     )
     conflict = request_as(
         comment_security,
-        "reviewer",
+        "editor",
         "POST",
         f"/assets/{comment_security.private.asset.id}/comments/{parent.id}/replies",
         {
@@ -148,7 +148,6 @@ def test_valid_reply_inherits_parent_version_visibility_and_rejects_body_conflic
 @pytest.mark.parametrize(
     ("method", "suffix", "payload"),
     (
-        ("GET", "/reactions", None),
         ("PATCH", "", {"body": "edited"}),
         ("POST", "/resolve", None),
         ("POST", "/react", {"emoji": "ok"}),
@@ -168,7 +167,7 @@ def test_id_only_routes_reject_comment_with_invalid_version_context(
     comment = Comment(
         asset_id=comment_security.private.asset.id,
         version_id=version.id,
-        author_id=comment_security.actors["reviewer"].id,
+        author_id=comment_security.actors["editor"].id,
         body="corrupt",
     )
     comment_security.db.add(comment)
@@ -176,7 +175,7 @@ def test_id_only_routes_reject_comment_with_invalid_version_context(
 
     response = request_as(
         comment_security,
-        "reviewer",
+        "editor",
         method,
         f"/comments/{comment.id}{suffix}",
         payload,

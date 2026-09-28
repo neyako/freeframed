@@ -10,7 +10,7 @@ describe('canGoBackInApp', () => {
   })
 
   it('goes back when the previous page was same-origin', () => {
-    // e.g. the notification drawer, which uses a full window.location.href nav.
+    // e.g. a full window.location.href nav from elsewhere in the app.
     expect(canGoBackInApp({ length: 3 }, `${ORIGIN}/projects/abc`, ORIGIN)).toBe(true)
   })
 

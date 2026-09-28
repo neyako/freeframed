@@ -1,24 +1,23 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, func
+from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 import uuid
 from datetime import datetime, timezone
 from ..database import get_db
 from ..middleware.auth import get_current_user
 from ..models.user import User
-from ..models.project import Project, ProjectMember, ProjectRole, ProjectType
+from ..models.project import Project, ProjectMember, ProjectRole
 from ..models.asset import Asset, AssetVersion, MediaFile
 from ..models.folder import Folder
-from ..models.share import AssetShare, ShareLink
-from ..schemas.project import FolderAccessGrantResponse, FolderAccessResponse, FolderDirectProjectResponse, ProjectAccessResponse, ProjectCreate, ProjectUpdate, ProjectResponse, ProjectMemberResponse, AddProjectMemberRequest, UpdateProjectMemberRequest
+from ..models.share import ShareLink
+from ..schemas.project import ProjectCreate, ProjectUpdate, ProjectResponse, ProjectMemberResponse, AddProjectMemberRequest, UpdateProjectMemberRequest
 from ..tasks.email_tasks import send_project_added_email
 from ..tasks.celery_app import send_task_safe
 from ..services.s3_service import put_object, generate_presigned_get_url, delete_object
 from ..services.workspace_service import get_workspace_name
 from ..config import settings
-from ..services.folder_access import folder_scope_select, resolve_folder_access
-from ..services.permissions import get_asset_scoped_project_assets
+from ..services.permissions import require_project_role
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -39,10 +38,8 @@ def _project_to_response(project: Project) -> ProjectResponse:
         id=project.id,
         name=project.name,
         description=project.description,
-        project_type=project.project_type,
         created_by=project.created_by,
         created_at=project.created_at,
-        is_public=project.is_public,
         is_quick_share=project.is_quick_share,
     )
 
@@ -96,7 +93,6 @@ def create_project(body: ProjectCreate, db: Session = Depends(get_db), current_u
     project = Project(
         name=body.name,
         description=body.description,
-        project_type=body.project_type,
         created_by=current_user.id,
     )
     db.add(project)
@@ -117,7 +113,6 @@ def get_or_create_quick_share_project(db: Session = Depends(get_db), current_use
         project = Project(
             name="Quick Shares",
             description=None,
-            project_type=ProjectType.personal,
             created_by=current_user.id,
             is_quick_share=True,
         )
@@ -137,23 +132,17 @@ def get_or_create_quick_share_project(db: Session = Depends(get_db), current_use
 
 @router.get("", response_model=list[ProjectResponse])
 def list_projects(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    from sqlalchemy import or_
-
-    # Get memberships for current user
     memberships = db.query(ProjectMember).filter(
         ProjectMember.user_id == current_user.id,
         ProjectMember.deleted_at.is_(None),
     ).all()
     membership_map = {m.project_id: m.role for m in memberships}
-    member_project_ids = list(membership_map.keys())
+    if not membership_map:
+        return []
 
-    # Get projects: user's memberships + all public projects
     projects = db.query(Project).filter(
         Project.deleted_at.is_(None),
-        or_(
-            Project.id.in_(member_project_ids) if member_project_ids else False,
-            Project.is_public == True,
-        ),
+        Project.id.in_(list(membership_map.keys())),
     ).all()
 
     all_project_ids = [p.id for p in projects]
@@ -199,86 +188,17 @@ def list_projects(db: Session = Depends(get_db), current_user: User = Depends(ge
 
     return result
 
-@router.get("/{project_id}", response_model=ProjectAccessResponse)
+@router.get("/{project_id}", response_model=ProjectResponse)
 def get_project(
     project_id: uuid.UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> ProjectAccessResponse:
+) -> ProjectResponse:
     project = _get_project(db, project_id)
-    member = db.query(ProjectMember).filter(
-        ProjectMember.project_id == project_id,
-        ProjectMember.user_id == current_user.id,
-        ProjectMember.deleted_at.is_(None),
-    ).first()
-    folder_access = None
-    asset_scoped_assets: list[Asset] = []
-    if not member and not project.is_public and not current_user.is_superadmin:
-        folder_access = resolve_folder_access(db, project_id, current_user.id)
-        if folder_access is None:
-            asset_scoped_assets = get_asset_scoped_project_assets(
-                db,
-                project_id,
-                current_user,
-            )
-            if not asset_scoped_assets:
-                raise HTTPException(status_code=403, detail="Not a project member")
-    if folder_access is not None or asset_scoped_assets:
-        asset_scope_filter = (
-            Asset.folder_id.in_(
-                folder_scope_select(project_id, folder_access.accessible_root_ids)
-            )
-            if folder_access is not None
-            else Asset.id.in_([asset.id for asset in asset_scoped_assets])
-        )
-        scoped_asset_count, scoped_storage_bytes = (
-            db.query(
-                func.count(func.distinct(Asset.id)),
-                func.coalesce(func.sum(MediaFile.file_size_bytes), 0),
-            )
-            .outerjoin(
-                AssetVersion,
-                and_(
-                    AssetVersion.asset_id == Asset.id,
-                    AssetVersion.deleted_at.is_(None),
-                ),
-            )
-            .outerjoin(MediaFile, MediaFile.version_id == AssetVersion.id)
-            .filter(
-                Asset.project_id == project_id,
-                asset_scope_filter,
-                Asset.deleted_at.is_(None),
-            )
-            .one()
-        )
-        scoped_folder_access = (
-            FolderAccessResponse(
-                accessible_root_ids=list(folder_access.accessible_root_ids),
-                grants=[
-                    FolderAccessGrantResponse(
-                        folder_id=grant.folder_id,
-                        permission=grant.permission,
-                    )
-                    for grant in folder_access.grants
-                ],
-            )
-            if folder_access is not None
-            else FolderAccessResponse(accessible_root_ids=[], grants=[])
-        )
-        scoped = FolderDirectProjectResponse(
-            id=project.id,
-            name=project.name,
-            asset_count=int(scoped_asset_count),
-            storage_bytes=int(scoped_storage_bytes),
-            folder_access=scoped_folder_access,
-        )
-        return scoped
+    member = require_project_role(db, project_id, current_user, ProjectRole.editor)
     resp = _project_to_response(project)
     resp.poster_url = _resolve_poster_url(project)
-    if member:
-        resp.role = member.role
-    elif current_user.is_superadmin:
-        resp.role = ProjectRole.owner
+    resp.role = member.role
     # Calculate storage, asset count, member count
     resp.asset_count = db.query(func.count(Asset.id)).filter(
         Asset.project_id == project_id, Asset.deleted_at.is_(None),
@@ -303,8 +223,6 @@ def update_project(project_id: uuid.UUID, body: ProjectUpdate, db: Session = Dep
         project.name = body.name
     if body.description is not None:
         project.description = body.description
-    if body.is_public is not None:
-        project.is_public = body.is_public
     db.commit()
     db.refresh(project)
     resp = _project_to_response(project)
@@ -349,27 +267,15 @@ def delete_project(project_id: uuid.UUID, db: Session = Depends(get_db), current
             AssetVersion.asset_id.in_(asset_ids),
             AssetVersion.deleted_at.is_(None),
         ).update({"deleted_at": now}, synchronize_session="fetch")
-        db.query(AssetShare).filter(
-            AssetShare.asset_id.in_(asset_ids),
-            AssetShare.deleted_at.is_(None),
-        ).update({"deleted_at": now}, synchronize_session="fetch")
         db.query(ShareLink).filter(
             ShareLink.asset_id.in_(asset_ids),
             ShareLink.deleted_at.is_(None),
         ).update({"deleted_at": now}, synchronize_session="fetch")
     if folder_ids:
-        db.query(AssetShare).filter(
-            AssetShare.folder_id.in_(folder_ids),
-            AssetShare.deleted_at.is_(None),
-        ).update({"deleted_at": now}, synchronize_session="fetch")
         db.query(ShareLink).filter(
             ShareLink.folder_id.in_(folder_ids),
             ShareLink.deleted_at.is_(None),
         ).update({"deleted_at": now}, synchronize_session="fetch")
-    db.query(ShareLink).filter(
-        ShareLink.project_id == project_id,
-        ShareLink.deleted_at.is_(None),
-    ).update({"deleted_at": now}, synchronize_session="fetch")
     db.commit()
 
 @router.get("/{project_id}/members", response_model=list[ProjectMemberResponse])

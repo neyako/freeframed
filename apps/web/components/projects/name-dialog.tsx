@@ -5,6 +5,13 @@ import * as Dialog from '@radix-ui/react-dialog'
 import { X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { cn } from '@/lib/utils'
+import {
+  dialogCloseClass,
+  dialogContentClass,
+  dialogOverlayClass,
+  dialogTitleClass,
+} from '@/components/ui/surface'
 
 interface NameDialogProps {
   open: boolean
@@ -22,7 +29,7 @@ export function NameDialog({
   onOpenChange,
   title,
   description,
-  placeholder = 'Enter name...',
+  placeholder = 'Name',
   defaultValue = '',
   submitLabel = 'Create',
   onSubmit,
@@ -45,24 +52,24 @@ export function NameDialog({
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-black/50 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+        <Dialog.Overlay className={dialogOverlayClass} />
         <Dialog.Content
-          className="fixed left-1/2 top-1/2 z-50 w-full max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-bg-secondary p-5 shadow-xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
+          className={cn(dialogContentClass, 'max-w-sm')}
           onOpenAutoFocus={(e) => {
             e.preventDefault()
             inputRef.current?.focus()
             inputRef.current?.select()
           }}
         >
-          <Dialog.Close className="absolute right-3 top-3 text-text-tertiary hover:text-text-primary transition-colors">
-            <X className="h-4 w-4" />
+          <Dialog.Close className={dialogCloseClass} aria-label="Close">
+            <X />
           </Dialog.Close>
 
-          <Dialog.Title className="text-sm font-semibold text-text-primary">
+          <Dialog.Title className={dialogTitleClass}>
             {title}
           </Dialog.Title>
           {description && (
-            <Dialog.Description className="mt-1 text-xs text-text-tertiary">
+            <Dialog.Description className="mt-1 text-[13px] text-text-secondary">
               {description}
             </Dialog.Description>
           )}
@@ -78,7 +85,7 @@ export function NameDialog({
             <div className="flex justify-end gap-2">
               <Button
                 type="button"
-                variant="secondary"
+                variant="ghost"
                 size="sm"
                 onClick={() => onOpenChange(false)}
               >

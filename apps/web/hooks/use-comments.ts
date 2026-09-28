@@ -40,10 +40,11 @@ interface CreateCommentPayload {
   annotation?: {
     drawing_data: Record<string, unknown>
     frame_number?: number
-    carousel_position?: number
   }
   parent_id?: string
   visibility?: string
+  mention_user_ids?: string[]
+  is_cut?: boolean
 }
 
 /** Presign + upload comment attachments (sequential — these are small files). */
@@ -57,8 +58,12 @@ export async function uploadCommentAttachments(commentId: string, files: File[])
       method: 'PUT',
       headers: { 'Content-Type': file.type },
       body: file,
-    })
-    if (!res.ok) throw new Error(`Failed to upload ${file.name}`)
+    }).catch(() => null)
+    if (!res?.ok) {
+      // The record exists before the bytes do; drop it so no broken attachment shows
+      await api.delete(`/comments/${commentId}/attachments/${presign.attachment_id}`).catch(() => {})
+      throw new Error(`Failed to upload ${file.name}`)
+    }
   }
 }
 
@@ -82,25 +87,28 @@ export function useComments(assetId: string | null, versionId: string | null) {
 
   // ─── Create comment ─────────────────────────────────────────────────────────
 
-  async function createComment(
-    body: string,
-    timecodeStart?: number,
-    timecodeEnd?: number,
-    annotationData?: Record<string, unknown>,
-    parentId?: string,
-    visibility?: string,
-    mentionUserIds?: string[],
-  ): Promise<CommentWithReplies> {
+  async function createComment(draft: {
+    body: string
+    timecodeStart?: number
+    timecodeEnd?: number
+    annotation?: Record<string, unknown>
+    parentId?: string
+    visibility?: string
+    mentionUserIds?: string[]
+    isCut?: boolean
+  }): Promise<CommentWithReplies> {
     if (!assetId) throw new Error('No asset selected')
     if (!versionId) throw new Error('No version selected')
+    const { body, timecodeStart, timecodeEnd, annotation, parentId, visibility, mentionUserIds, isCut } = draft
 
     const payload: CreateCommentPayload = { body, version_id: versionId }
     if (timecodeStart !== undefined) payload.timecode_start = timecodeStart
     if (timecodeEnd !== undefined) payload.timecode_end = timecodeEnd
-    if (annotationData) payload.annotation = { drawing_data: annotationData }
+    if (annotation) payload.annotation = { drawing_data: annotation }
     if (parentId) payload.parent_id = parentId
     if (visibility) payload.visibility = visibility
-    if (mentionUserIds?.length) (payload as any).mention_user_ids = mentionUserIds
+    if (mentionUserIds?.length) payload.mention_user_ids = mentionUserIds
+    if (isCut) payload.is_cut = true
 
     const endpoint = parentId
       ? `/assets/${assetId}/comments/${parentId}/replies`
@@ -115,6 +123,13 @@ export function useComments(assetId: string | null, versionId: string | null) {
 
   async function resolveComment(commentId: string): Promise<void> {
     await api.post(`/comments/${commentId}/resolve`)
+    await mutate()
+  }
+
+  // ─── Cut toggle (range comments) ─────────────────────────────────────────────
+
+  async function toggleCut(commentId: string): Promise<void> {
+    await api.post(`/comments/${commentId}/cut`)
     await mutate()
   }
 
@@ -144,6 +159,7 @@ export function useComments(assetId: string | null, versionId: string | null) {
     mutate,
     createComment,
     resolveComment,
+    toggleCut,
     deleteComment,
     addReaction,
     removeReaction,

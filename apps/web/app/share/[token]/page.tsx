@@ -16,7 +16,6 @@ interface SharePreviewInfo {
   title?: string | null;
   description?: string | null;
   folder_name?: string | null;
-  project_name?: string | null;
   asset?: {
     name?: string;
     description?: string | null;
@@ -57,7 +56,7 @@ export async function generateMetadata({
   const locked = info.requires_password || info.requires_auth;
   if (locked) {
     // Password/secure links stay generic — no asset info before unlock.
-    const title = info.title ? `${info.title} — ${SITE_NAME}` : SITE_NAME;
+    const title = info.title ? `${info.title} · ${SITE_NAME}` : SITE_NAME;
     metadata.title = title;
     metadata.description = "This share link is protected.";
     return metadata;
@@ -67,9 +66,8 @@ export async function generateMetadata({
     info.asset?.name ||
     info.title ||
     info.folder_name ||
-    info.project_name ||
     null;
-  if (name) metadata.title = `${name} — ${SITE_NAME}`;
+  if (name) metadata.title = `${name} · ${SITE_NAME}`;
   const description =
     info.description || info.asset?.description || null;
   if (description) metadata.description = description;

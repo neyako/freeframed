@@ -26,11 +26,6 @@ describe('Segmented component', () => {
     expect(onChange).toHaveBeenCalledWith('list')
   })
 
-  it('renders accent active option', () => {
-    render(<Segmented options={options} value="grid" onChange={vi.fn()} accent />)
-    expect(screen.getByRole('button', { name: 'Grid' }).className).toContain('bg-accent')
-  })
-
   it('names icon-only options', () => {
     render(
       <Segmented

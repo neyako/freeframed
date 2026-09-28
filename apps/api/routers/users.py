@@ -7,16 +7,14 @@ from botocore.exceptions import ClientError
 from datetime import datetime, timezone, timedelta
 from ..database import get_db
 from ..schemas.auth import AdminUserResponse, UserResponse, InviteRequest, UpdateProfileRequest
-from ..models.project import ProjectMember
-from ..models.share import AssetShare
 from ..models.user import User, UserStatus
 from ..middleware.auth import get_current_user
 from ..services import s3_service
-from ..services.auth_service import hash_password, get_user_by_email, revoke_user_refresh_tokens
 from ..tasks.email_tasks import send_invite_email
 from ..tasks.celery_app import send_task_safe
 from ..config import settings
 from ..services.workspace_service import get_workspace_name
+from ..services.auth_service import revoke_user_refresh_tokens
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -178,6 +176,46 @@ def invite_user(body: InviteRequest, db: Session = Depends(get_db), current_user
     
     return user
 
+# ── People (workspace owner only) ─────────────────────────────────────────
+
+@router.get("/people", response_model=list[UserResponse])
+def list_people(db: Session = Depends(get_db), _: User = Depends(require_admin)):
+    """Every account, including pending invites and deactivated ones."""
+    return db.query(User).filter(User.deleted_at.is_(None)).order_by(User.created_at).all()
+
+
+def _get_other_user(db: Session, user_id: uuid.UUID, current_user: User) -> User:
+    if user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="You can't change your own access")
+    user = db.query(User).filter(User.id == user_id, User.deleted_at.is_(None)).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
+
+
+@router.post("/{user_id}/deactivate", response_model=UserResponse)
+def deactivate_user(user_id: uuid.UUID, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
+    """Lock an account out: access tokens stop working (auth rejects deactivated
+    users) and refresh tokens are revoked so no session survives."""
+    user = _get_other_user(db, user_id, current_user)
+    user.status = UserStatus.deactivated
+    revoke_user_refresh_tokens(db, user.id)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@router.post("/{user_id}/reactivate", response_model=UserResponse)
+def reactivate_user(user_id: uuid.UUID, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
+    user = _get_other_user(db, user_id, current_user)
+    if user.status == UserStatus.deactivated:
+        # Invited-but-never-accepted accounts go back to pending, not active
+        user.status = UserStatus.active if user.password_hash else UserStatus.pending_invite
+    db.commit()
+    db.refresh(user)
+    return user
+
+
 @router.patch("/{user_id}", response_model=UserResponse)
 def update_user(user_id: uuid.UUID, body: UpdateProfileRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Update user profile. Users can update their own profile."""
@@ -193,42 +231,3 @@ def update_user(user_id: uuid.UUID, body: UpdateProfileRequest, db: Session = De
     db.commit()
     db.refresh(user)
     return user
-
-@router.patch("/{user_id}/deactivate", response_model=UserResponse)
-def deactivate_user(user_id: uuid.UUID, db: Session = Depends(get_db), _: User = Depends(require_admin)):
-    user = db.query(User).filter(User.id == user_id, User.deleted_at.is_(None)).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    user.status = UserStatus.deactivated
-    revoke_user_refresh_tokens(db, user.id)
-    db.commit()
-    db.refresh(user)
-    return user
-
-@router.patch("/{user_id}/reactivate", response_model=UserResponse)
-def reactivate_user(user_id: uuid.UUID, db: Session = Depends(get_db), _: User = Depends(require_admin)):
-    user = db.query(User).filter(User.id == user_id, User.deleted_at.is_(None)).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    user.status = UserStatus.active
-    db.commit()
-    db.refresh(user)
-    return user
-
-@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_user(user_id: uuid.UUID, db: Session = Depends(get_db), _: User = Depends(require_admin)):
-    user = db.query(User).filter(User.id == user_id, User.deleted_at.is_(None)).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    revoke_user_refresh_tokens(db, user.id)
-    now = datetime.now(timezone.utc)
-    user.deleted_at = now
-    db.query(ProjectMember).filter(
-        ProjectMember.user_id == user.id,
-        ProjectMember.deleted_at.is_(None),
-    ).update({"deleted_at": now}, synchronize_session="fetch")
-    db.query(AssetShare).filter(
-        AssetShare.shared_with_user_id == user.id,
-        AssetShare.deleted_at.is_(None),
-    ).update({"deleted_at": now}, synchronize_session="fetch")
-    db.commit()

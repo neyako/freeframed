@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { FileText, Film, ImageIcon, Download, Trash2, Loader2 } from 'lucide-react'
+import { FileText, Film, ImageIcon, Download, Trash2 } from 'lucide-react'
 import { cn, formatBytes } from '@/lib/utils'
 import type { CommentAttachmentInfo } from '@/hooks/use-comments'
 
@@ -82,32 +82,22 @@ export function CommentAttachment({
                 disabled={deleting}
                 title="Delete attachment"
               >
-                {deleting ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Trash2 className="h-4 w-4" />
-                )}
+                <Trash2 className="h-4 w-4" />
               </button>
             )}
           </div>
         </div>
       )}
 
-      {/* Video preview */}
+      {/* Video: plays inline, original file (no transcode) */}
       {isVideo && !isImage && (
-        <div className="relative bg-black">
-          <video
-            src={attachment.url}
-            className="max-h-48 w-full object-contain"
-            controls={false}
-            preload="metadata"
-          />
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="rounded-full bg-black/60 p-3">
-              <Film className="h-6 w-6 text-white" />
-            </div>
-          </div>
-        </div>
+        <video
+          src={attachment.url}
+          className="block max-h-72 w-full bg-black object-contain"
+          controls
+          playsInline
+          preload="metadata"
+        />
       )}
 
       {/* File info row */}
@@ -143,11 +133,7 @@ export function CommentAttachment({
               disabled={deleting}
               title="Delete attachment"
             >
-              {deleting ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Trash2 className="h-3.5 w-3.5" />
-              )}
+              <Trash2 className="h-3.5 w-3.5" />
             </button>
           )}
         </div>

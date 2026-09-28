@@ -83,49 +83,20 @@ describe('useSSE hook', () => {
     expect(MockEventSource.instances).toHaveLength(0)
   })
 
-  it('sets isConnected to true when connection opens', () => {
-    const { result } = renderHook(() => useSSE('project-123'))
-    expect(result.current.isConnected).toBe(false)
-    act(() => {
-      MockEventSource.instances[0].onopen?.()
-    })
-    expect(result.current.isConnected).toBe(true)
-  })
-
-  it('sets isConnected to false and closes on error', () => {
-    vi.useFakeTimers()
-    const { result } = renderHook(() => useSSE('project-123'))
+  it('calls onTranscodeComplete when transcode_complete fires', () => {
+    const onTranscodeComplete = vi.fn()
+    renderHook(() => useSSE('project-123', { onTranscodeComplete }))
 
     act(() => {
-      MockEventSource.instances[0].onopen?.()
-    })
-    expect(result.current.isConnected).toBe(true)
-
-    act(() => {
-      MockEventSource.instances[0].onerror?.()
-    })
-    expect(result.current.isConnected).toBe(false)
-    expect(MockEventSource.instances[0].closed).toBe(true)
-
-    vi.useRealTimers()
-  })
-
-  it('calls onNewComment callback when new_comment event fires', () => {
-    const onNewComment = vi.fn()
-    renderHook(() => useSSE('project-123', { onNewComment }))
-
-    act(() => {
-      MockEventSource.instances[0].emit('new_comment', {
+      MockEventSource.instances[0].emit('transcode_complete', {
         asset_id: 'a1',
-        comment_id: 'c1',
-        author: 'Alice',
+        version_id: 'v1',
       })
     })
 
-    expect(onNewComment).toHaveBeenCalledWith({
+    expect(onTranscodeComplete).toHaveBeenCalledWith({
       asset_id: 'a1',
-      comment_id: 'c1',
-      author: 'Alice',
+      version_id: 'v1',
     })
   })
 

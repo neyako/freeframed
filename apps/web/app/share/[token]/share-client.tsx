@@ -5,11 +5,10 @@ import {
   Lock,
   AlertTriangle,
   Clock,
-  Loader2,
-} from 'lucide-react'
+  } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { FolderShareViewer, ShareReviewScreen } from '@/components/share/folder-share-viewer'
-import type { Asset, SharePermission, ProjectBranding, ShareLinkAppearance } from '@/types'
+import type { Asset, SharePermission, ShareLinkAppearance } from '@/types'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -17,9 +16,7 @@ interface ShareValidateResponse {
   asset?: Asset
   asset_id?: string | null
   folder_id?: string | null
-  project_id?: string | null
   folder_name?: string
-  project_name?: string
   title?: string
   description?: string | null
   permission?: SharePermission
@@ -35,7 +32,6 @@ interface ShareValidateResponse {
   created_by_name?: string | null
   viewer_name?: string | null
   viewer_email?: string | null
-  branding?: ProjectBranding | null
   internal_url?: string | null
   error?: string
 }
@@ -47,15 +43,12 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 async function fetchShareInfo(
   token: string,
   password?: string,
-  logOpen?: boolean,
 ): Promise<ShareValidateResponse> {
-  const params = new URLSearchParams()
-  if (password) params.set('password', password)
-  if (logOpen) params.set('log_open', 'true')
-  const qs = params.toString() ? `?${params.toString()}` : ''
-  const url = `${API_URL}/share/${token}${qs}`
-
-  const response = await fetch(url, { credentials: 'include' })
+  // Header, not query string, so the password stays out of access logs
+  const response = await fetch(`${API_URL}/share/${token}`, {
+    credentials: 'include',
+    headers: password ? { 'X-Share-Password': password } : undefined,
+  })
   if (!response.ok) {
     if (response.status === 403) {
       const data = await response.json().catch(() => ({}))
@@ -170,7 +163,7 @@ export function SharePageClient({
         allowDownload: boolean
         showVersions: boolean
         viewerName: string | null
-        branding: ProjectBranding | null
+        watermark: string | null
       }
     | {
         stage: 'folder_ready'
@@ -183,12 +176,11 @@ export function SharePageClient({
         allowDownload: boolean
         showVersions: boolean
         appearance: ShareLinkAppearance
-        branding: any
+        watermark: string | null
       }
 
   const [state, setState] = React.useState<PageState>({ stage: 'loading' })
   const [shareSession, setShareSession] = React.useState<string | null>(null)
-  const openLogged = React.useRef(false)
   const refreshTried = React.useRef(false)
 
   async function validate(password?: string) {
@@ -196,9 +188,7 @@ export function SharePageClient({
       setState({ stage: 'password_required', loading: true })
     }
     try {
-      const shouldLogOpen = !password && !openLogged.current
-      if (shouldLogOpen) openLogged.current = true
-      let data = await fetchShareInfo(token, password, shouldLogOpen)
+      let data = await fetchShareInfo(token, password)
 
       // The httpOnly access cookie may have expired while the refresh cookie is
       // still valid. The dashboard refreshes on 401, but this public endpoint
@@ -250,8 +240,14 @@ export function SharePageClient({
         setShareSession(data.share_session)
       }
 
-      // Folder share mode OR project root share mode
-      if ((data.folder_id || data.project_id) && !data.asset_id) {
+      // Fallback watermark text: the signed-in viewer, else the link title.
+      // Guests who gave a name/email when commenting override it in the viewer.
+      const watermark = data.show_watermark
+        ? data.viewer_email || data.viewer_name || data.title || 'Confidential'
+        : null
+
+      // Folder share mode
+      if (data.folder_id && !data.asset_id) {
         const defaultAppearance: ShareLinkAppearance = {
           layout: 'grid',
           theme: 'dark',
@@ -263,7 +259,7 @@ export function SharePageClient({
           thumbnail_scale: 'fill',
           show_card_info: true,
         }
-        const folderName = data.folder_name ?? data.project_name ?? 'Shared'
+        const folderName = data.folder_name ?? 'Shared'
         setState({
           stage: 'folder_ready',
           folderName,
@@ -275,7 +271,7 @@ export function SharePageClient({
           allowDownload: data.allow_download ?? false,
           showVersions: data.show_versions ?? true,
           appearance: { ...defaultAppearance, ...(data.appearance ?? {}) },
-          branding: data.branding ?? null,
+          watermark,
         })
         return
       }
@@ -292,7 +288,7 @@ export function SharePageClient({
         allowDownload: data.allow_download ?? false,
         showVersions: data.show_versions ?? true,
         viewerName: data.viewer_name ?? null,
-        branding: data.branding ?? null,
+        watermark,
       })
     } catch {
       setState({ stage: 'invalid' })
@@ -306,8 +302,8 @@ export function SharePageClient({
 
   if (state.stage === 'loading') {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-zinc-950">
-        <Loader2 className="h-8 w-8 animate-spin text-zinc-500" />
+      <div className="flex min-h-screen items-center justify-center bg-bg-primary">
+        <span className="text-[13px] text-text-tertiary">Loading…</span>
       </div>
     )
   }
@@ -368,7 +364,7 @@ export function SharePageClient({
         allowDownload={state.allowDownload}
         showVersions={state.showVersions}
         appearance={state.appearance}
-        branding={state.branding}
+        watermark={state.watermark}
       />
     )
   }
@@ -382,6 +378,7 @@ export function SharePageClient({
       viewerName={state.viewerName}
       permission={state.permission}
       allowDownload={state.allowDownload}
+      watermark={state.watermark}
     />
   )
 }

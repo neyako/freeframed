@@ -17,12 +17,6 @@ export function getAccessToken(): string | null {
   return null
 }
 
-export function getRefreshToken(): string | null {
-  if (typeof window === 'undefined') return null
-  clearLegacyTokens()
-  return null
-}
-
 export function setTokens(access: string, refresh: string): void {
   if (typeof window === 'undefined') return
   void access

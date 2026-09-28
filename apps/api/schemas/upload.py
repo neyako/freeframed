@@ -30,8 +30,6 @@ class InitiateUploadRequest(BaseModel):
     original_filename: str
     mime_type: str
     file_size_bytes: int
-    # For new version of existing asset
-    asset_id: uuid.UUID | None = None
     folder_id: uuid.UUID | None = None
 
 class InitiateUploadResponse(BaseModel):

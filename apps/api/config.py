@@ -46,7 +46,6 @@ class Settings(BaseSettings):
     frontend_url: str = "http://localhost:3000"
     cors_origins: str | None = None
     setup_token: str | None = None
-    integration_api_key: str | None = None
     transcoder_engine: str = "ffmpeg"
     transcode_hwaccel: str = "auto"
     transcode_vaapi_device: str = "/dev/dri/renderD128"

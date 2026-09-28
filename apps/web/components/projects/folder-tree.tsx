@@ -1,23 +1,28 @@
 'use client'
 
 import React, { useState, useCallback } from 'react'
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import {
   ChevronRight,
-  FolderOpen,
   Folder as FolderIcon,
-  Plus,
+  FolderOpen,
   Trash2,
   MoreHorizontal,
   Pencil,
   FolderPlus,
-  Trash,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import {
+  menuContentClass,
+  menuItemClass,
+  menuItemDangerClass,
+  menuSeparatorClass,
+} from '@/components/ui/surface'
 import type { FolderTreeNode } from '@/types'
 
 interface FolderTreeProps {
   tree: FolderTreeNode[]
-  projectName: string
   currentFolderId: string | null // null = root
   showTrash: boolean
   onSelectFolder: (folderId: string | null) => void
@@ -27,7 +32,6 @@ interface FolderTreeProps {
   onDeleteFolder: (folderId: string) => Promise<void>
   // Drag-drop targets
   onDropItems?: (targetFolderId: string | null, assetIds: string[], folderIds: string[]) => void
-  scopedRoots?: boolean
 }
 
 interface FolderNodeProps {
@@ -39,7 +43,20 @@ interface FolderNodeProps {
   onRenameFolder: (folderId: string, name: string) => Promise<void>
   onDeleteFolder: (folderId: string) => Promise<void>
   onDropItems?: (targetFolderId: string | null, assetIds: string[], folderIds: string[]) => void
-  scopedRoots: boolean
+}
+
+const rowClass =
+  'group flex h-7 cursor-pointer items-center gap-2 rounded-md px-2 text-[12.5px] transition-colors duration-100'
+const rowActive = 'bg-bg-hover text-text-primary'
+const rowIdle = 'text-text-secondary hover:bg-bg-hover hover:text-text-primary'
+
+function readDragPayload(e: React.DragEvent): { assetIds: string[]; folderIds: string[] } | null {
+  try {
+    const data = JSON.parse(e.dataTransfer.getData('application/json'))
+    return { assetIds: data.assetIds ?? [], folderIds: data.folderIds ?? [] }
+  } catch {
+    return null
+  }
 }
 
 function FolderNode({
@@ -51,15 +68,14 @@ function FolderNode({
   onRenameFolder,
   onDeleteFolder,
   onDropItems,
-  scopedRoots,
 }: FolderNodeProps) {
   const [expanded, setExpanded] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [renaming, setRenaming] = useState(false)
   const [renameName, setRenameName] = useState(node.name)
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const [isDragOver, setIsDragOver] = useState(false)
   const isActive = currentFolderId === node.id
-
   const hasChildren = node.children.length > 0
 
   const handleClick = useCallback(() => {
@@ -74,70 +90,43 @@ function FolderNode({
     setRenaming(false)
   }, [renameName, node.id, node.name, onRenameFolder])
 
-  // Drag-drop target
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    e.dataTransfer.dropEffect = 'move'
-    setIsDragOver(true)
-  }, [])
-
-  const handleDragLeave = useCallback(() => setIsDragOver(false), [])
-
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault()
-      setIsDragOver(false)
-      try {
-        const data = JSON.parse(e.dataTransfer.getData('application/json'))
-        onDropItems?.(node.id, data.assetIds ?? [], data.folderIds ?? [])
-      } catch {
-        // ignore
-      }
-    },
-    [node.id, onDropItems],
-  )
-
   return (
     <div>
       <div
-        className={cn(
-          'group flex items-center gap-1 px-2 py-1 rounded font-mono text-xs tracking-[0.04em] cursor-pointer transition-colors',
-          isActive
-            ? 'bg-accent-muted text-accent'
-            : 'text-text-secondary hover:text-text-primary hover:bg-bg-hover',
-          isDragOver && 'ring-1 ring-accent bg-accent-muted',
-        )}
-        style={{ paddingLeft: `${8 + depth * 16}px` }}
+        className={cn(rowClass, isActive ? rowActive : rowIdle, isDragOver && rowActive)}
+        style={{ paddingLeft: `${8 + depth * 12}px` }}
         onClick={handleClick}
-        onDragOver={scopedRoots ? undefined : handleDragOver}
-        onDragLeave={scopedRoots ? undefined : handleDragLeave}
-        onDrop={scopedRoots ? undefined : handleDrop}
-        onContextMenu={(e) => {
-          if (scopedRoots) return
+        onDragOver={(e) => {
           e.preventDefault()
-          setMenuOpen((p) => !p)
+          e.dataTransfer.dropEffect = 'move'
+          setIsDragOver(true)
+        }}
+        onDragLeave={() => setIsDragOver(false)}
+        onDrop={(e) => {
+          e.preventDefault()
+          setIsDragOver(false)
+          const data = readDragPayload(e)
+          if (data) onDropItems?.(node.id, data.assetIds, data.folderIds)
+        }}
+        onContextMenu={(e) => {
+          e.preventDefault()
+          setMenuOpen(true)
         }}
       >
-        {/* Expand chevron */}
-        <span className={cn('shrink-0 transition-transform', expanded && 'rotate-90')}>
-          {hasChildren ? (
-            <ChevronRight className="h-3 w-3" />
-          ) : (
-            <span className="w-3" />
-          )}
-        </span>
-
-        {/* Icon */}
-        {isActive || expanded ? (
-          <FolderOpen className="h-3.5 w-3.5 shrink-0" />
+        {hasChildren ? (
+          <ChevronRight className={cn('h-3 w-3 shrink-0', expanded && 'rotate-90')} />
         ) : (
-          <FolderIcon className="h-3.5 w-3.5 shrink-0" />
+          <span className="w-3 shrink-0" />
+        )}
+        {isActive || expanded ? (
+          <FolderOpen className="h-[15px] w-[15px] shrink-0" />
+        ) : (
+          <FolderIcon className="h-[15px] w-[15px] shrink-0" />
         )}
 
-        {/* Name */}
         {renaming ? (
           <input
-            className="flex-1 min-w-0 bg-transparent border-b border-accent outline-none text-[13px] text-text-primary px-0.5"
+            className="min-w-0 flex-1 border-b border-text-primary/60 bg-transparent px-0.5 text-[12.5px] text-text-primary outline-none"
             value={renameName}
             onChange={(e) => setRenameName(e.target.value)}
             onBlur={handleRename}
@@ -149,64 +138,51 @@ function FolderNode({
             onClick={(e) => e.stopPropagation()}
           />
         ) : (
-          <span className="truncate flex-1 min-w-0">{node.name}</span>
+          <span className="min-w-0 flex-1 truncate">{node.name}</span>
         )}
 
-        {/* Item count */}
         {node.item_count > 0 && !renaming && (
-          <span className="text-[10px] text-text-tertiary shrink-0">{node.item_count}</span>
+          <span className="shrink-0 font-mono text-[11px] text-text-tertiary group-hover:hidden">
+            {node.item_count}
+          </span>
         )}
 
-        {/* Context menu button */}
-        {!scopedRoots && <button
-          className="opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 shrink-0 h-5 w-5 flex items-center justify-center rounded hover:bg-bg-hover transition-opacity"
-          onClick={(e) => {
-            e.stopPropagation()
-            setMenuOpen((p) => !p)
-          }}
-        >
-          <MoreHorizontal className="h-3 w-3" />
-        </button>}
+        <DropdownMenu.Root open={menuOpen} onOpenChange={setMenuOpen}>
+          <DropdownMenu.Trigger asChild>
+            <button
+              aria-label={`${node.name} options`}
+              onClick={(e) => e.stopPropagation()}
+              className="hidden h-5 w-5 shrink-0 items-center justify-center rounded text-text-tertiary hover:text-text-primary group-hover:flex data-[state=open]:flex pointer-coarse:flex"
+            >
+              <MoreHorizontal className="h-3.5 w-3.5" />
+            </button>
+          </DropdownMenu.Trigger>
+          <DropdownMenu.Portal>
+            <DropdownMenu.Content align="start" sideOffset={4} className={menuContentClass}>
+              <DropdownMenu.Item
+                className={menuItemClass}
+                onSelect={() => {
+                  setRenameName(node.name)
+                  setRenaming(true)
+                }}
+              >
+                <Pencil />
+                Rename
+              </DropdownMenu.Item>
+              <DropdownMenu.Item className={menuItemClass} onSelect={() => onCreateFolder('', node.id)}>
+                <FolderPlus />
+                New subfolder
+              </DropdownMenu.Item>
+              <DropdownMenu.Separator className={menuSeparatorClass} />
+              <DropdownMenu.Item className={menuItemDangerClass} onSelect={() => setConfirmDelete(true)}>
+                <Trash2 />
+                Delete
+              </DropdownMenu.Item>
+            </DropdownMenu.Content>
+          </DropdownMenu.Portal>
+        </DropdownMenu.Root>
       </div>
 
-      {/* Context menu */}
-      {menuOpen && !scopedRoots && (
-        <div className="ml-8 mt-0.5 mb-1 rounded-lg border border-border bg-bg-elevated shadow-xl py-1 z-50 w-44">
-          <button
-            className="flex w-full items-center gap-2 px-3 py-1.5 text-[12px] text-text-secondary hover:bg-bg-hover hover:text-text-primary"
-            onClick={() => {
-              setMenuOpen(false)
-              setRenaming(true)
-              setRenameName(node.name)
-            }}
-          >
-            <Pencil className="h-3 w-3" /> Rename
-          </button>
-          <button
-            className="flex w-full items-center gap-2 px-3 py-1.5 text-[12px] text-text-secondary hover:bg-bg-hover hover:text-text-primary"
-            onClick={() => {
-              setMenuOpen(false)
-              onCreateFolder('', node.id)
-            }}
-          >
-            <FolderPlus className="h-3 w-3" /> New Subfolder
-          </button>
-          <div className="my-1 border-t border-border" />
-          <button
-            className="flex w-full items-center gap-2 px-3 py-1.5 text-[12px] text-red-400 hover:bg-red-500/10"
-            onClick={async () => {
-              setMenuOpen(false)
-              if (confirm(`Delete folder "${node.name}" and all its contents?`)) {
-                await onDeleteFolder(node.id)
-              }
-            }}
-          >
-            <Trash className="h-3 w-3" /> Delete
-          </button>
-        </div>
-      )}
-
-      {/* Children */}
       {expanded && hasChildren && (
         <div>
           {node.children.map((child) => (
@@ -220,18 +196,26 @@ function FolderNode({
               onRenameFolder={onRenameFolder}
               onDeleteFolder={onDeleteFolder}
               onDropItems={onDropItems}
-              scopedRoots={scopedRoots}
             />
           ))}
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmDelete}
+        onOpenChange={setConfirmDelete}
+        title={`Delete "${node.name}"?`}
+        description="The folder and its contents move to trash, where you can restore them."
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={() => onDeleteFolder(node.id)}
+      />
     </div>
   )
 }
 
 export function FolderTree({
   tree,
-  projectName,
   currentFolderId,
   showTrash,
   onSelectFolder,
@@ -240,21 +224,14 @@ export function FolderTree({
   onRenameFolder,
   onDeleteFolder,
   onDropItems,
-  scopedRoots = false,
 }: FolderTreeProps) {
   const [isDragOverRoot, setIsDragOverRoot] = useState(false)
+  const rootActive = currentFolderId === null && !showTrash
 
   return (
     <div className="space-y-0.5">
-      {/* Project root */}
-      {!scopedRoots && <div
-        className={cn(
-          'flex items-center gap-2 px-2 py-1.5 rounded font-mono text-xs tracking-[0.04em] cursor-pointer transition-colors',
-          currentFolderId === null && !showTrash
-            ? 'bg-accent-muted text-accent'
-            : 'text-text-secondary hover:text-text-primary hover:bg-bg-hover',
-          isDragOverRoot && 'ring-1 ring-accent bg-accent-muted',
-        )}
+      <div
+        className={cn(rowClass, rootActive || isDragOverRoot ? rowActive : rowIdle)}
         onClick={() => onSelectFolder(null)}
         onDragOver={(e) => {
           e.preventDefault()
@@ -264,45 +241,32 @@ export function FolderTree({
         onDrop={(e) => {
           e.preventDefault()
           setIsDragOverRoot(false)
-          try {
-            const data = JSON.parse(e.dataTransfer.getData('application/json'))
-            onDropItems?.(null, data.assetIds ?? [], data.folderIds ?? [])
-          } catch {}
+          const data = readDragPayload(e)
+          if (data) onDropItems?.(null, data.assetIds, data.folderIds)
         }}
       >
-        <FolderOpen className="h-4 w-4 shrink-0" />
-        <span className="truncate">{projectName}</span>
-      </div>}
+        <FolderOpen className="h-[15px] w-[15px] shrink-0" />
+        <span className="truncate">All files</span>
+      </div>
 
-      {/* Folder tree */}
       {tree.map((node) => (
         <FolderNode
           key={node.id}
           node={node}
-          depth={scopedRoots ? 0 : 1}
+          depth={0}
           currentFolderId={currentFolderId}
           onSelectFolder={onSelectFolder}
           onCreateFolder={onCreateFolder}
           onRenameFolder={onRenameFolder}
           onDeleteFolder={onDeleteFolder}
           onDropItems={onDropItems}
-          scopedRoots={scopedRoots}
         />
       ))}
 
-      {/* Recently Deleted */}
-      {!scopedRoots && <div
-        className={cn(
-          'flex items-center gap-2 px-2 py-1 rounded font-mono text-xs tracking-[0.04em] cursor-pointer transition-colors mt-2',
-          showTrash
-            ? 'bg-accent-muted text-accent'
-            : 'text-text-tertiary hover:text-text-secondary hover:bg-bg-hover',
-        )}
-        onClick={onShowTrash}
-      >
-        <Trash2 className="h-3.5 w-3.5 shrink-0" />
-        <span>Recently Deleted</span>
-      </div>}
+      <div className={cn(rowClass, showTrash ? rowActive : rowIdle)} onClick={onShowTrash}>
+        <Trash2 className="h-[15px] w-[15px] shrink-0" />
+        <span>Trash</span>
+      </div>
     </div>
   )
 }

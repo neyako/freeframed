@@ -72,7 +72,7 @@ def test_soft_deleted_second_owner_does_not_satisfy_invariant(db, make_user) -> 
         update_project_member(
             project.id,
             owner.id,
-            UpdateProjectMemberRequest(role=ProjectRole.reviewer),
+            UpdateProjectMemberRequest(role=ProjectRole.editor),
             db=db,
             current_user=owner,
         )
@@ -131,31 +131,31 @@ def test_non_owner_role_change_remains_valid(db, make_user) -> None:
     member = update_project_member(
         project.id,
         editor.id,
-        UpdateProjectMemberRequest(role=ProjectRole.viewer),
+        UpdateProjectMemberRequest(role=ProjectRole.owner),
         db=db,
         current_user=owner,
     )
 
     # Then
-    assert member.role == ProjectRole.viewer
-    assert _active_owner_ids(db, project.id) == {owner.id}
+    assert member.role == ProjectRole.owner
+    assert _active_owner_ids(db, project.id) == {owner.id, editor.id}
 
 
 def test_non_owner_removal_remains_valid(db, make_user) -> None:
     # Given
     owner = make_user("remove-owner@invalid.test", "Remove Owner")
-    reviewer = make_user("remove-reviewer@invalid.test", "Remove Reviewer")
+    editor = make_user("remove-editor@invalid.test", "Remove Editor")
     project = _project_with_owner(db, owner)
-    reviewer_member = _member(project, reviewer, ProjectRole.reviewer)
-    db.add(reviewer_member)
+    editor_member = _member(project, editor, ProjectRole.editor)
+    db.add(editor_member)
     db.commit()
 
     # When
-    remove_project_member(project.id, reviewer.id, db=db, current_user=owner)
+    remove_project_member(project.id, editor.id, db=db, current_user=owner)
 
     # Then
-    db.refresh(reviewer_member)
-    assert reviewer_member.deleted_at is not None
+    db.refresh(editor_member)
+    assert editor_member.deleted_at is not None
     assert _active_owner_ids(db, project.id) == {owner.id}
 
 

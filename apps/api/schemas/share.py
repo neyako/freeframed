@@ -43,55 +43,13 @@ class ShareLinkCreate(BaseModel):
     def validate_resulting_state(self) -> "ShareLinkCreate":
         if self.show_watermark and self.allow_download:
             raise ValueError("Watermarked shares cannot allow downloads")
-        if self.permission == SharePermission.approve and self.visibility != ShareVisibility.secure:
-            raise ValueError("Approve permission requires secure visibility")
         return self
-
-
-class MultiShareCreate(BaseModel):
-    asset_ids: list[uuid.UUID] = []
-    folder_ids: list[uuid.UUID] = []
-    title: Optional[str] = None
-    permission: SharePermission = SharePermission.view
-    visibility: ShareVisibility = ShareVisibility.public
-    expires_at: Optional[datetime] = None
-    password: Optional[str] = None
-    allow_download: bool = False
-    show_versions: bool = True
-    show_watermark: bool = False
-    appearance: ShareLinkAppearance = ShareLinkAppearance()
-
-    @model_validator(mode="after")
-    def validate_resulting_state(self) -> "MultiShareCreate":
-        if self.show_watermark and self.allow_download:
-            raise ValueError("Watermarked shares cannot allow downloads")
-        if self.permission == SharePermission.approve and self.visibility != ShareVisibility.secure:
-            raise ValueError("Approve permission requires secure visibility")
-        return self
-
-
-class ReviewerShareCreate(BaseModel):
-    permission: SharePermission = SharePermission.comment
-    allow_download: bool = False
-    expires_at: Optional[datetime] = None
-    password: Optional[str] = None
-    title: Optional[str] = None
-
-
-class ReviewerShareResponse(BaseModel):
-    token: str
-    asset_id: uuid.UUID
-    permission: SharePermission
-    allow_download: bool
-    url: str
-    expires_at: Optional[datetime] = None
 
 
 class ShareLinkResponse(BaseModel):
     id: uuid.UUID
     asset_id: Optional[uuid.UUID] = None
     folder_id: Optional[uuid.UUID] = None
-    project_id: Optional[uuid.UUID] = None
     token: str
     title: str
     description: Optional[str] = None
@@ -111,9 +69,7 @@ class ShareLinkResponse(BaseModel):
 class ShareLinkValidateResponse(BaseModel):
     asset_id: Optional[uuid.UUID] = None
     folder_id: Optional[uuid.UUID] = None
-    project_id: Optional[uuid.UUID] = None
     folder_name: Optional[str] = None
-    project_name: Optional[str] = None
     title: Optional[str] = None
     description: Optional[str] = None
     permission: SharePermission = SharePermission.view
@@ -128,7 +84,6 @@ class ShareLinkValidateResponse(BaseModel):
     viewer_name: Optional[str] = None  # Logged-in user's name (if authenticated)
     viewer_email: Optional[str] = None  # Logged-in user's email (if authenticated)
     asset: Optional[dict] = None  # Full asset details for asset shares
-    branding: Optional[dict] = None  # Project branding info
     share_session: Optional[str] = None  # Session token for password-protected links
     internal_url: Optional[str] = None  # Editor-viewport path when viewer has internal access
 
@@ -176,18 +131,6 @@ class ShareLinkListItem(BaseModel):
     permission: SharePermission
     share_type: str
     target_name: str
-    view_count: int = 0
-    last_viewed_at: Optional[datetime] = None
-    model_config = {"from_attributes": True}
-
-
-class ShareLinkActivityResponse(BaseModel):
-    id: uuid.UUID
-    share_link_id: uuid.UUID
-    action: str
-    asset_id: Optional[uuid.UUID] = None
-    asset_name: Optional[str] = None
-    created_at: datetime
     model_config = {"from_attributes": True}
 
 
@@ -216,21 +159,3 @@ class FolderShareAssetsResponse(BaseModel):
     total: int
     page: int
     per_page: int
-
-
-class DirectShareCreate(BaseModel):
-    permission: SharePermission = SharePermission.view
-    user_id: Optional[uuid.UUID] = None
-    email: Optional[str] = None  # Alternative to user_id — invite by email
-    share_token: Optional[str] = None  # If sharing from a share link context, include token for email link
-
-
-class DirectShareResponse(BaseModel):
-    id: uuid.UUID
-    asset_id: Optional[uuid.UUID] = None
-    folder_id: Optional[uuid.UUID] = None
-    project_id: Optional[uuid.UUID] = None
-    shared_with_user_id: Optional[uuid.UUID]
-    permission: SharePermission
-    created_at: datetime
-    model_config = {"from_attributes": True}

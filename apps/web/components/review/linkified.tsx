@@ -15,7 +15,7 @@ export function Linkified({ text }: { text: string }) {
         href={match[0]}
         target="_blank"
         rel="noopener noreferrer"
-        className="text-accent underline underline-offset-2 hover:text-accent/80 break-all"
+        className="text-text-primary underline decoration-text-tertiary underline-offset-2 hover:decoration-text-primary break-all"
         onClick={(e) => e.stopPropagation()}
       >
         {match[0]}

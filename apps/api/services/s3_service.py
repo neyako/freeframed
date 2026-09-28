@@ -163,19 +163,6 @@ def get_content_type(key: str) -> tuple[str, str]:
     return CONTENT_TYPE_MAP.get(ext, ("application/octet-stream", "no-cache"))
 
 
-def upload_fileobj(s3_key: str, fileobj, content_type: str | None = None) -> None:
-    s3 = get_s3_client()
-    if content_type is not None:
-        s3.upload_fileobj(
-            fileobj,
-            settings.s3_bucket,
-            s3_key,
-            ExtraArgs={"ContentType": content_type},
-        )
-        return
-    s3.upload_fileobj(fileobj, settings.s3_bucket, s3_key)
-
-
 def create_multipart_upload(s3_key: str, content_type: str) -> str:
     """Initiate a multipart upload and return the upload_id."""
     s3 = get_s3_client()
@@ -289,7 +276,7 @@ def delete_object(s3_key: str) -> None:
 
 def delete_prefix(prefix: str) -> int:
     """Permanently delete every object under prefix. Returns count deleted."""
-    if not prefix or prefix.strip("/") in ("", "raw", "processed", "watermarked"):
+    if not prefix or prefix.strip("/") in ("", "raw", "processed"):
         raise ValueError(f"refusing to delete overly broad prefix: {prefix!r}")
     s3 = get_s3_client()
     deleted = 0

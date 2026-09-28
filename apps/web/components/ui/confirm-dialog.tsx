@@ -2,9 +2,9 @@
 
 import * as React from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
-import { AlertTriangle } from 'lucide-react'
-import { cn } from '@/lib/utils'
 import { Button } from './button'
+import { dialogContentClass, dialogOverlayClass, dialogTitleClass } from './surface'
+import { cn } from '@/lib/utils'
 
 interface ConfirmDialogProps {
   open: boolean
@@ -48,38 +48,22 @@ export function ConfirmDialog({
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/60 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 motion-reduce:!animate-none" />
+        <Dialog.Overlay className={dialogOverlayClass} />
         <Dialog.Content
-          className={cn(
-            // Keep centering independent of the animation's transform keyframes.
-            'fixed left-1/2 top-1/2 z-50 w-full max-w-sm [translate:-50%_-50%]',
-            'rounded-xl border border-border bg-bg-secondary shadow-xl p-6',
-            'data-[state=open]:animate-in data-[state=closed]:animate-out motion-reduce:!animate-none',
-            'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
-            'data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',
-          )}
+          className={cn(dialogContentClass, 'max-w-sm')}
         >
-          <div className="flex gap-4">
-            {variant === 'danger' && (
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-status-error/10">
-                <AlertTriangle className="h-5 w-5 text-status-error" />
-              </div>
-            )}
-            <div className="flex-1 min-w-0">
-              <Dialog.Title className="text-sm font-semibold text-text-primary">
-                {title}
-              </Dialog.Title>
-              {description && (
-                <Dialog.Description className="mt-1.5 text-sm text-text-tertiary leading-relaxed">
-                  {description}
-                </Dialog.Description>
-              )}
-            </div>
-          </div>
+          <Dialog.Title className={dialogTitleClass}>
+            {title}
+          </Dialog.Title>
+          {description && (
+            <Dialog.Description className="mt-1 text-[13px] leading-relaxed text-text-secondary">
+              {description}
+            </Dialog.Description>
+          )}
 
-          <div className="flex items-center justify-end gap-2 mt-5">
+          <div className="mt-4 flex items-center justify-end gap-2">
             <Button
-              variant="secondary"
+              variant="ghost"
               size="sm"
               onClick={() => onOpenChange(false)}
               disabled={busy}

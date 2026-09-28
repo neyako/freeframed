@@ -106,9 +106,9 @@ def make_user(db):
 def make_project(db, make_user):
     from apps.api.models.project import Project
 
-    def _make(is_public: bool = False):
+    def _make():
         owner = make_user()
-        project = Project(name="Project", created_by=owner.id, is_public=is_public)
+        project = Project(name="Project", created_by=owner.id)
         db.add(project)
         db.flush()
         return project, owner

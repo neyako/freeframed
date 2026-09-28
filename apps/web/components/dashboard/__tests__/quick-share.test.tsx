@@ -96,7 +96,6 @@ function quickShareProject() {
     name: "Quick Shares",
     description: null,
     created_by: "user-1",
-    project_type: "personal",
     is_quick_share: true,
     created_at: "2026-07-07T00:00:00Z",
     deleted_at: null,

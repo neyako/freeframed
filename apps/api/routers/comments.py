@@ -12,13 +12,10 @@ from sqlalchemy.orm import Session, aliased
 from ..config import settings
 from ..database import get_db
 from ..middleware.auth import get_current_user, get_optional_user
-from ..middleware.share_auth import get_share_link
 from ..models.asset import Asset, AssetType, AssetVersion, MediaFile, ProcessingStatus
-from ..models.project import ProjectRole
 from ..models.comment import Annotation, Comment, CommentAttachment, CommentReaction
-from ..models.activity import Mention, Notification, NotificationType, ActivityLog, ActivityAction
 from ..models.user import User, GuestUser
-from ..models.share import ShareLink, ShareLinkActivity, ShareActivityAction, SharePermission
+from ..models.share import SharePermission
 from ..schemas.comment import (
     AnnotationResponse,
     AttachmentResponse,
@@ -36,14 +33,14 @@ from ..schemas.comment import (
 from ..services import comment_export, s3_service
 from ..services import avatar_service
 from ..services.permissions import (
-    get_asset_access,
-    get_project_member,
+    can_access_asset,
     require_asset_access,
+    resolve_share_version,
     validate_asset_in_share,
     validate_share_link_with_session,
 )
 from ..services.workspace_service import get_workspace_name
-from ..tasks.email_tasks import send_mention_email, send_comment_email
+from ..tasks.email_tasks import send_mention_email
 from ..tasks.celery_app import send_task_safe
 
 router = APIRouter(tags=["comments"])
@@ -110,7 +107,7 @@ def _get_comment_context(
 
 
 def _require_can_comment(db: Session, asset: Asset, user: User) -> None:
-    if not get_asset_access(db, asset, user).can_comment:
+    if not can_access_asset(db, asset, user):
         raise HTTPException(status_code=403, detail="Comment permission required")
 
 
@@ -135,8 +132,27 @@ def _resolve_reply_target(
     return parent
 
 
+# Stored as uploaded (no transcode), so reviewers see the exact reference clip.
+_ATTACHMENT_LIMITS = {"image": 25 * 1024 * 1024, "video": 250 * 1024 * 1024}
+
+
+def _normalize_content_type(content_type: str) -> str:
+    return content_type.split(";", 1)[0].strip().lower()
+
+
+def _renders_inline_safely(content_type: str) -> bool:
+    # Bucket objects are served same-origin via nginx, so anything a browser
+    # could execute (HTML, SVG, ...) must download instead of rendering.
+    media_type = _normalize_content_type(content_type)
+    return media_type.startswith(("image/", "video/", "audio/")) and media_type != "image/svg+xml"
+
+
 def _build_attachment_response(attachment: CommentAttachment) -> AttachmentResponse:
-    url = s3_service.generate_presigned_get_url(attachment.s3_key, expires_in=3600)
+    url = s3_service.generate_presigned_get_url(
+        attachment.s3_key,
+        expires_in=3600,
+        download_filename=None if _renders_inline_safely(attachment.file_type) else attachment.original_filename,
+    )
     return AttachmentResponse(
         id=attachment.id,
         file_name=attachment.original_filename,
@@ -322,8 +338,8 @@ def _parse_mentions(body: str) -> list[str]:
     return re.findall(r"@([\w.+-]+@[\w.-]+\.\w+)", body)
 
 
-def _create_mentions(db: Session, comment: Comment, asset: Asset, body: str, author_name: str, mention_user_ids: list | None = None) -> None:
-    """Create Mention + Notification records and send emails.
+def _send_mention_emails(db: Session, comment: Comment, asset: Asset, body: str, author_name: str, mention_user_ids: list | None = None) -> None:
+    """Email every @mentioned user.
     Uses explicit mention_user_ids if provided, else falls back to parsing @email from body."""
     from ..services.auth_service import get_user_by_email
     from ..config import settings
@@ -349,16 +365,6 @@ def _create_mentions(db: Session, comment: Comment, asset: Asset, body: str, aut
 
     workspace_name = get_workspace_name(db)
     for user in mentioned_users:
-        mention = Mention(comment_id=comment.id, mentioned_user_id=user.id)
-        db.add(mention)
-        notif = Notification(
-            user_id=user.id,
-            type=NotificationType.mention,
-            asset_id=asset.id,
-            comment_id=comment.id,
-        )
-        db.add(notif)
-
         asset_link = f"{settings.frontend_url}/projects/{asset.project_id}/assets/{asset.id}"
         send_task_safe(send_mention_email,
             to_email=user.email,
@@ -407,6 +413,59 @@ def list_comments(
     ]
 
 
+def _merge_overlapping_cuts(db: Session, cut: Comment) -> Comment:
+    """Fold every cut that overlaps or touches `cut` (same version) into one.
+
+    The earliest cut survives and its range grows to the union; the others
+    become replies on it so no note is lost (their own replies move up to the
+    survivor). A folded cut with nothing to say is deleted instead of leaving
+    an empty reply. Returns the survivor.
+    """
+    group = [cut]
+    start, end = cut.timecode_start, cut.timecode_end
+    while True:
+        seen = {c.id for c in group}
+        overlapping = [
+            c for c in db.query(Comment).filter(
+                Comment.asset_id == cut.asset_id,
+                Comment.version_id == cut.version_id,
+                Comment.parent_id.is_(None),
+                Comment.is_cut.is_(True),
+                Comment.deleted_at.is_(None),
+                Comment.timecode_start <= end,
+                Comment.timecode_end >= start,
+            ).all()
+            if c.id not in seen
+        ]
+        if not overlapping:
+            break
+        group.extend(overlapping)
+        start = min(c.timecode_start for c in group)
+        end = max(c.timecode_end for c in group)
+
+    if len(group) == 1:
+        return cut
+    survivor = min(group, key=lambda c: (c.created_at is None, c.created_at or datetime.now(timezone.utc)))
+    survivor.timecode_start, survivor.timecode_end = start, end
+    now = datetime.now(timezone.utc)
+    for folded in group:
+        if folded is survivor:
+            continue
+        db.query(Comment).filter(Comment.parent_id == folded.id).update(
+            {"parent_id": survivor.id}, synchronize_session="fetch"
+        )
+        has_annotation = db.query(Annotation.id).filter(Annotation.comment_id == folded.id).first() is not None
+        if not folded.body.strip() and not has_annotation:
+            folded.deleted_at = now
+        else:
+            folded.parent_id = survivor.id
+            folded.is_cut = False
+            folded.timecode_start = None
+            folded.timecode_end = None
+            folded.visibility = survivor.visibility
+    return survivor
+
+
 @router.post("/assets/{asset_id}/comments", response_model=CommentResponse, status_code=status.HTTP_201_CREATED)
 def create_comment(
     asset_id: uuid.UUID,
@@ -429,6 +488,7 @@ def create_comment(
         timecode_end=body.timecode_end,
         body=body.body,
         visibility=body.visibility or "public",
+        is_cut=body.is_cut,
     )
     db.add(comment)
     db.flush()
@@ -438,24 +498,17 @@ def create_comment(
             comment_id=comment.id,
             drawing_data=body.annotation.drawing_data,
             frame_number=body.annotation.frame_number,
-            carousel_position=body.annotation.carousel_position,
         )
         db.add(annotation)
 
-    _create_mentions(db, comment, asset, body.body, current_user.name, body.mention_user_ids)
+    _send_mention_emails(db, comment, asset, body.body, current_user.name, body.mention_user_ids)
 
-    # Notify asset creator about the comment (unless they're the commenter)
-    if asset.created_by and asset.created_by != current_user.id:
-        db.add(Notification(
-            user_id=asset.created_by,
-            type=NotificationType.comment,
-            asset_id=asset_id,
-            comment_id=comment.id,
-        ))
-
-    # Activity log
-    activity = ActivityLog(user_id=current_user.id, asset_id=asset_id, action=ActivityAction.commented)
-    db.add(activity)
+    if comment.is_cut:
+        db.flush()
+        survivor = _merge_overlapping_cuts(db, comment)
+        # A merged empty cut is gone; hand back the survivor so attachments land there
+        if comment.deleted_at is not None:
+            comment = survivor
 
     db.commit()
     db.refresh(comment)
@@ -491,16 +544,7 @@ def reply_to_comment(
     )
     db.add(reply)
     db.flush()
-    _create_mentions(db, reply, asset, body.body, current_user.name, body.mention_user_ids)
-
-    # Notify parent comment author about the reply (unless they're the replier)
-    if parent.author_id and parent.author_id != current_user.id:
-        db.add(Notification(
-            user_id=parent.author_id,
-            type=NotificationType.comment,
-            asset_id=asset_id,
-            comment_id=reply.id,
-        ))
+    _send_mention_emails(db, reply, asset, body.body, current_user.name, body.mention_user_ids)
 
     db.commit()
     db.refresh(reply)
@@ -517,7 +561,7 @@ def _require_author_comment_context(
     """Own-comment mutations need a live comment path to the asset: project
     capability, or a valid comment-permission share link (logged-in viewers
     on a guest link have no project access but may edit their own words)."""
-    if get_asset_access(db, asset, user).can_comment:
+    if can_access_asset(db, asset, user):
         return
     if share_token:
         try:
@@ -578,25 +622,34 @@ def resolve_comment(
     current_user: User = Depends(get_current_user),
 ):
     comment, asset = _get_comment_context(db, comment_id)
-    member = get_project_member(db, asset.project_id, current_user.id)
-    can_resolve = (
-        current_user.is_superadmin
-        or asset.created_by == current_user.id
-        or asset.assignee_id == current_user.id
-        or (
-            member is not None
-            and member.role in (ProjectRole.owner, ProjectRole.editor)
-        )
-    )
-    if not can_resolve:
-        raise HTTPException(
-            status_code=403,
-            detail=(
-                "Only the asset creator, assignee, or project owners/editors "
-                "can resolve comments"
-            ),
-        )
+    _require_can_comment(db, asset, current_user)
     comment.resolved = not comment.resolved
+    db.commit()
+    db.refresh(comment)
+    return _build_comment_response(comment, db, current_user_id=current_user.id)
+
+
+@router.post("/comments/{comment_id}/cut", response_model=CommentResponse)
+def toggle_cut(
+    comment_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Mark a range comment as a cut (or back). Any member: the owner often
+    decides which of the editor's notes become cuts."""
+    comment, asset = _get_comment_context(db, comment_id)
+    _require_can_comment(db, asset, current_user)
+    if not comment.is_cut and (
+        comment.parent_id is not None
+        or comment.timecode_start is None
+        or comment.timecode_end is None
+        or comment.timecode_end <= comment.timecode_start
+    ):
+        raise HTTPException(status_code=400, detail="Only a top-level comment with a range can be a cut")
+    comment.is_cut = not comment.is_cut
+    if comment.is_cut:
+        db.flush()
+        comment = _merge_overlapping_cuts(db, comment)
     db.commit()
     db.refresh(comment)
     return _build_comment_response(comment, db, current_user_id=current_user.id)
@@ -618,17 +671,26 @@ def create_attachment(
     comment, asset = _get_comment_context(db, comment_id)
     _require_can_comment(db, asset, current_user)
 
+    content_type = _normalize_content_type(body.content_type)
+    limit = _ATTACHMENT_LIMITS.get(content_type.split("/", 1)[0])
+    if limit is None:
+        raise HTTPException(status_code=422, detail="Attachments must be images or videos")
+    if not 0 < body.file_size <= limit:
+        raise HTTPException(status_code=413, detail=f"Attachment exceeds {limit // (1024 * 1024)} MB")
     # Generate S3 key
     key = f"comment-attachments/{comment_id}/{uuid.uuid4()}/{body.file_name}"
 
-    # Generate presigned PUT URL
-    s3 = s3_service.get_s3_client()
+    # Presigned PUT the browser uploads to: must use the public endpoint
+    # (the internal one is unreachable from outside the container).
+    s3 = s3_service._get_presign_client()
     upload_url = s3.generate_presigned_url(
         "put_object",
         Params={
             "Bucket": settings.s3_bucket,
             "Key": key,
-            "ContentType": body.content_type,
+            "ContentType": content_type,
+            # Signed, so the upload can't exceed the size checked above
+            "ContentLength": body.file_size,
         },
         ExpiresIn=3600,
     )
@@ -636,7 +698,7 @@ def create_attachment(
     # Save attachment record
     attachment = CommentAttachment(
         comment_id=comment_id,
-        file_type=body.content_type,
+        file_type=content_type,
         s3_key=key,
         original_filename=body.file_name,
         file_size_bytes=body.file_size,
@@ -672,11 +734,6 @@ def delete_attachment(
         raise HTTPException(status_code=404, detail="Attachment not found")
 
     _require_can_comment(db, asset, current_user)
-    is_comment_author = comment.author_id == current_user.id
-    if not is_comment_author:
-        pm = get_project_member(db, asset.project_id, current_user.id)
-        if not pm or pm.role not in (ProjectRole.owner, ProjectRole.editor):
-            raise HTTPException(status_code=403, detail="Not authorized to delete this attachment")
 
     # Delete from S3
     try:
@@ -717,39 +774,6 @@ def toggle_reaction(
         db.add(reaction)
 
     db.commit()
-
-
-@router.get("/comments/{comment_id}/reactions", response_model=list[ReactionResponse])
-def list_reactions(
-    comment_id: uuid.UUID,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    comment, asset = _get_comment_context(db, comment_id)
-    require_asset_access(db, asset, current_user)
-
-    reactions_raw = db.query(CommentReaction).filter(
-        CommentReaction.comment_id == comment_id,
-    ).all()
-    return _build_reaction_responses(reactions_raw, current_user.id)
-
-
-# ── Deep link ──────────────────────────────────────────────────────────────────
-
-@router.get("/assets/{asset_id}/comments/{comment_id}/link")
-def comment_deep_link(
-    asset_id: uuid.UUID,
-    comment_id: uuid.UUID,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    asset = _get_asset(db, asset_id)
-    require_asset_access(db, asset, current_user)
-    # Verify comment belongs to this asset
-    _get_comment_context(db, comment_id, asset_id)
-
-    url = f"{settings.frontend_url}/assets/{asset_id}?comment={comment_id}"
-    return {"url": url}
 
 
 # ── Export ─────────────────────────────────────────────────────────────────────
@@ -902,7 +926,7 @@ def list_share_comments(
     current_user: Optional[User] = Depends(get_optional_user),
 ):
     """Public endpoint — list comments for a shared asset. No auth required.
-    For folder/project shares, pass asset_id as query param to get comments for a specific asset."""
+    For folder shares, pass asset_id as query param to get comments for a specific asset."""
     link = validate_share_link_with_session(
         db,
         token,
@@ -916,8 +940,9 @@ def list_share_comments(
         return []
     asset = _get_asset(db, target_asset_id)
     validate_asset_in_share(db, link, asset)
-    if version_id is not None:
-        _get_active_version(db, asset.id, version_id)
+    # Without show_versions, only the newest version's comments are visible
+    if version_id is not None or not link.show_versions:
+        version_id = resolve_share_version(db, link, asset, version_id).id
 
     # Get top-level comments — reuse same format as authenticated endpoint
     query = db.query(Comment).join(
@@ -1010,7 +1035,7 @@ def guest_comment(
     # Resolve asset_id: from body, link, or error
     target_asset_id = body.asset_id or link.asset_id
     if not target_asset_id:
-        raise HTTPException(status_code=400, detail="asset_id is required for folder/project shares")
+        raise HTTPException(status_code=400, detail="asset_id is required for folder shares")
     asset = _get_asset(db, target_asset_id)
     validate_asset_in_share(db, link, asset)
 
@@ -1024,21 +1049,11 @@ def guest_comment(
             body.version_id,
             public_only=True,
         )
-        version_id = parent.version_id
+        requested_version_id = parent.version_id
     else:
-        version_id = body.version_id
-    if version_id is not None:
-        _get_active_version(db, asset.id, version_id)
-    else:
-        latest = db.query(AssetVersion).filter(
-            AssetVersion.asset_id == asset.id,
-            AssetVersion.deleted_at.is_(None),
-            AssetVersion.processing_status == ProcessingStatus.ready,
-        ).order_by(AssetVersion.version_number.desc()).first()
-        if latest:
-            version_id = latest.id
-        else:
-            raise HTTPException(status_code=400, detail="No ready version found for this asset")
+        requested_version_id = body.version_id
+    # Guests may only comment on a version the link shows them
+    version_id = resolve_share_version(db, link, asset, requested_version_id).id
 
     # Determine author: logged-in user or guest
     author_id = None
@@ -1070,46 +1085,14 @@ def guest_comment(
     db.add(comment)
     db.flush()
 
-    # Parse mentions (guest can mention registered users)
-    emails = _parse_mentions(body.body)
-    for email in set(emails):
-        from ..services.auth_service import get_user_by_email
-        user = get_user_by_email(db, email)
-        if user:
-            mention = Mention(comment_id=comment.id, mentioned_user_id=user.id)
-            db.add(mention)
-            notif = Notification(
-                user_id=user.id,
-                type=NotificationType.mention,
-                asset_id=asset.id,
-                comment_id=comment.id,
-            )
-            db.add(notif)
-
     if body.annotation:
         annotation = Annotation(
             comment_id=comment.id,
             drawing_data=body.annotation.drawing_data,
             frame_number=body.annotation.frame_number,
-            carousel_position=body.annotation.carousel_position,
         )
         db.add(annotation)
 
     db.commit()
     db.refresh(comment)
-
-    # Log share link activity
-    actor_email = current_user.email if current_user else (body.guest_email or "anonymous")
-    actor_name = current_user.name if current_user else body.guest_name
-    activity = ShareLinkActivity(
-        share_link_id=link.id,
-        action=ShareActivityAction.commented,
-        actor_email=actor_email,
-        actor_name=actor_name,
-        asset_id=asset.id,
-        asset_name=asset.name,
-    )
-    db.add(activity)
-    db.commit()
-
     return _build_comment_response(comment, db)

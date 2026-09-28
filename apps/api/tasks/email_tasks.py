@@ -3,7 +3,7 @@ Celery tasks for sending emails asynchronously.
 
 Queues:
 - email_high: Magic codes, invites (immediate)
-- email_low: Mentions, comments, shares (can be slightly delayed)
+- email_low: Mentions, comments, approvals (can be slightly delayed)
 """
 from datetime import datetime
 from pathlib import Path
@@ -162,75 +162,6 @@ def send_comment_email(
             workspace_name=workspace_name,
         )
         text_body = f"{commenter_name} commented on {asset_name}: {comment_preview}\n\nView: {asset_link}"
-        
-        success = _send_email(to_email, subject, html_body, text_body)
-        if not success:
-            raise Exception("Email sending failed")
-        return {"status": "sent", "to": to_email}
-    except Exception as exc:
-        self.retry(exc=exc)
-
-
-@shared_task(bind=True, queue="email_low", max_retries=3, default_retry_delay=120)
-def send_assignment_email(
-    self,
-    to_email: str,
-    assigner_name: str,
-    asset_name: str,
-    asset_link: str,
-    due_date: Optional[str] = None,
-    project_name: Optional[str] = None,
-    workspace_name: str = "freeframed",
-):
-    """Send assignment notification email."""
-    try:
-        due_text = f" (due {due_date})" if due_date else ""
-        subject = f"You've been assigned to review {asset_name}{due_text}"
-        html_body = render_template(
-            "email/assignment.html",
-            subject=subject,
-            assigner_name=assigner_name,
-            asset_name=asset_name,
-            asset_link=asset_link,
-            due_date=due_date,
-            project_name=project_name,
-            workspace_name=workspace_name,
-        )
-        text_body = f"{assigner_name} assigned you to review {asset_name}.{' Due: ' + due_date if due_date else ''}\n\nView: {asset_link}"
-        
-        success = _send_email(to_email, subject, html_body, text_body)
-        if not success:
-            raise Exception("Email sending failed")
-        return {"status": "sent", "to": to_email}
-    except Exception as exc:
-        self.retry(exc=exc)
-
-
-@shared_task(bind=True, queue="email_low", max_retries=3, default_retry_delay=120)
-def send_share_email(
-    self,
-    to_email: str,
-    sharer_name: str,
-    asset_name: str,
-    asset_link: str,
-    permission: Optional[str] = None,
-    message: Optional[str] = None,
-    workspace_name: str = "freeframed",
-):
-    """Send asset shared notification email."""
-    try:
-        subject = f"{sharer_name} shared {asset_name} with you"
-        html_body = render_template(
-            "email/share.html",
-            subject=subject,
-            sharer_name=sharer_name,
-            asset_name=asset_name,
-            asset_link=asset_link,
-            permission=permission,
-            message=message,
-            workspace_name=workspace_name,
-        )
-        text_body = f"{sharer_name} shared {asset_name} with you.\n\nView: {asset_link}"
         
         success = _send_email(to_email, subject, html_body, text_body)
         if not success:

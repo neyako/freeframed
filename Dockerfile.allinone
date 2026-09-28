@@ -1,8 +1,5 @@
+# Stage 1: build the Next.js standalone web bundle
 ARG ALLINONE_PLATFORM=linux/amd64
-# The official image supplies both binaries; dl.min.io no longer serves them.
-FROM --platform=$ALLINONE_PLATFORM quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e AS minio-binaries
-
-# Build the Next.js standalone web bundle
 FROM --platform=$ALLINONE_PLATFORM node:20-bookworm AS web-builder
 RUN corepack enable && corepack prepare pnpm@10 --activate
 WORKDIR /app
@@ -14,7 +11,17 @@ ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm build
 
-# Runtime with all services in one image
+# Stage 2: MinIO from source. MinIO stopped publishing community binaries and
+# images (dl.min.io answers 410), but the source is still on GitHub. Pin a
+# release at least as new as any image already deployed: an older MinIO must
+# not open data written by a newer one.
+FROM --platform=$ALLINONE_PLATFORM golang:1.24-bookworm AS minio-builder
+ARG MINIO_RELEASE=RELEASE.2025-10-15T17-29-55Z
+RUN git clone --depth 1 --branch "$MINIO_RELEASE" https://github.com/minio/minio /src
+WORKDIR /src
+RUN CGO_ENABLED=0 go build -trimpath -ldflags "$(go run buildscripts/gen-ldflags.go) -s -w" -o /out/minio .
+
+# Stage 3: runtime with all services in one image
 FROM --platform=$ALLINONE_PLATFORM debian:bookworm-slim AS runtime
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -36,8 +43,7 @@ RUN mkdir -p /etc/apt/keyrings \
     && ln -sf /usr/lib/jellyfin-ffmpeg/ffprobe /usr/local/bin/ffprobe \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=minio-binaries /usr/bin/minio /usr/bin/mc /usr/local/bin/
-RUN minio --version && mc --version
+COPY --from=minio-builder /out/minio /usr/local/bin/minio
 
 ENV VENV=/opt/venv
 RUN python3 -m venv $VENV

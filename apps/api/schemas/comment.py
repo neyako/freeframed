@@ -1,4 +1,4 @@
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator
 import uuid
 from datetime import datetime
 from typing import Optional
@@ -6,7 +6,6 @@ from typing import Optional
 class AnnotationData(BaseModel):
     drawing_data: dict  # Fabric.js canvas JSON
     frame_number: Optional[int] = None
-    carousel_position: Optional[int] = None
 
 class CommentCreate(BaseModel):
     version_id: uuid.UUID
@@ -17,9 +16,18 @@ class CommentCreate(BaseModel):
     visibility: Optional[str] = "public"  # "public" or "internal"
     annotation: Optional[AnnotationData] = None
     mention_user_ids: list[uuid.UUID] = []  # Explicit mention IDs from frontend
+    is_cut: bool = False
+
+    @model_validator(mode="after")
+    def cut_needs_range(self) -> "CommentCreate":
+        if self.is_cut and (
+            self.timecode_start is None or self.timecode_end is None or self.timecode_end <= self.timecode_start
+        ):
+            raise ValueError("A cut needs a range: timecode_end after timecode_start")
+        return self
 
 class GuestCommentCreate(BaseModel):
-    asset_id: Optional[uuid.UUID] = None  # Required for folder/project shares
+    asset_id: Optional[uuid.UUID] = None  # Required for folder shares
     version_id: Optional[uuid.UUID] = None  # Auto-resolved if not provided
     parent_id: Optional[uuid.UUID] = None
     timecode_start: Optional[float] = None
@@ -37,7 +45,6 @@ class AnnotationResponse(BaseModel):
     comment_id: uuid.UUID
     drawing_data: dict
     frame_number: Optional[int]
-    carousel_position: Optional[int]
     model_config = {"from_attributes": True}
 
 # ── Attachments ────────────────────────────────────────────────────────────────
@@ -101,6 +108,7 @@ class CommentResponse(BaseModel):
     body: str
     resolved: bool
     visibility: str = "public"
+    is_cut: bool = False
     created_at: datetime
     updated_at: datetime
     author: Optional[AuthorInfo] = None
@@ -110,5 +118,11 @@ class CommentResponse(BaseModel):
     attachments: list[AttachmentResponse] = []
     reactions: list[ReactionResponse] = []
     model_config = {"from_attributes": True}
+
+    @field_validator("is_cut", mode="before")
+    @classmethod
+    def _unflushed_is_not_cut(cls, v):
+        # Column default only applies on INSERT; unflushed rows carry None
+        return bool(v)
 
 CommentResponse.model_rebuild()

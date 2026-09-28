@@ -1,17 +1,11 @@
 "use client";
 
 import * as React from "react";
-import { Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import { LinkControls } from "./share-link-controls";
-import {
-  getRequestTarget,
-  loadLink,
-  requestLink,
-  withLinkDefaults,
-} from "./share-link-requests";
+import { loadLink, requestLink, withLinkDefaults } from "./share-link-requests";
 import type {
   ManagedShareLink,
   ShareLinkCandidate,
@@ -20,26 +14,26 @@ import type {
 } from "./share-targets";
 import { previewShareLinkPatch } from "./share-targets";
 
-export { withLinkDefaults } from "./share-link-requests";
-
 interface SingleLinkSectionProps {
   readonly target: ShareTarget;
-  readonly children?: React.ReactNode;
+  /** Already loaded by the opener, so the surface opens at its final size
+   * instead of jumping from a loading line mid-animation. */
+  readonly initialLink?: ManagedShareLink | null;
 }
 
-export function SingleLinkSection({ target, children }: SingleLinkSectionProps) {
-  const [link, setLink] = React.useState<ManagedShareLink | null>(null);
-  const [loading, setLoading] = React.useState(true);
+export function SingleLinkSection({ target, initialLink }: SingleLinkSectionProps) {
+  const preloaded = initialLink !== undefined;
+  const [link, setLink] = React.useState<ManagedShareLink | null>(initialLink ?? null);
+  const [loading, setLoading] = React.useState(!preloaded);
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  const targetName = target.kind === "project" ? target.name : undefined;
-  const requestTarget = React.useMemo(
-    () => getRequestTarget(target.kind, target.id, targetName),
-    [target.id, target.kind, targetName],
+  const requestTarget = React.useMemo<ShareTarget>(
+    () => ({ kind: target.kind, id: target.id }),
+    [target.id, target.kind],
   );
 
   React.useEffect(() => {
-    if (!requestTarget.id) return;
+    if (!requestTarget.id || preloaded) return;
     let cancelled = false;
     setLoading(true);
     setError(null);
@@ -61,7 +55,7 @@ export function SingleLinkSection({ target, children }: SingleLinkSectionProps) 
     return () => {
       cancelled = true;
     };
-  }, [requestTarget]);
+  }, [requestTarget, preloaded]);
 
   async function createLink() {
     setLoading(true);
@@ -116,9 +110,8 @@ export function SingleLinkSection({ target, children }: SingleLinkSectionProps) 
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 px-5 py-4 font-mono text-xs text-text-secondary">
-        <Loader2 className="h-4 w-4 animate-spin text-text-tertiary" />
-        <span>Preparing share link...</span>
+      <div className="px-5 py-4 text-[13px] text-text-tertiary">
+        <span>Preparing share link…</span>
       </div>
     );
   }
@@ -148,8 +141,6 @@ export function SingleLinkSection({ target, children }: SingleLinkSectionProps) 
       error={error}
       onPatch={(updates) => void patchLink(updates)}
       onRevoke={() => void revokeLink()}
-      showAdvancedControls
-      beforeFooter={children}
     />
   );
 }

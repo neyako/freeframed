@@ -11,6 +11,14 @@ primary deployment path. It is NOT building toward SaaS, multi-tenant, or
 production-house team deployments; that work belongs upstream in mainline
 FreeFrame. Weigh new features against this lens — don't drift.
 
+People model: ONE owner (the superadmin created at setup), their editor
+(invited account; project role `editor` uploads, versions, comments, approves,
+shares), and guests (brands/clients) reviewing via asset or folder share links.
+Project roles are only `owner` and `editor`. There are no notifications feed,
+activity log, metadata fields/collections, assignments/due dates, admin panel,
+public projects, direct user shares, project-wide/multi-item share links, project
+branding/watermark burn-in, or Resolve integration — don't reintroduce them.
+
 Monorepo:
 
 - `apps/api` — FastAPI + SQLAlchemy 2 + Pydantic v2. Postgres, Redis,
@@ -20,10 +28,8 @@ Monorepo:
 - `apps/web` — Next.js 14 App Router + React 18 + Tailwind. Zustand for
   client state, SWR for server state, hls.js for video. Components in
   `components/`, API client in `lib/api.ts`, stores in `stores/`.
-- `packages/transcoder` — Python ffmpeg pipeline (HLS ladder, thumbnails,
-  waveforms, hwaccel selection in `hwaccel.py`).
-- `tools/resolve` — stdlib-only DaVinci Resolve scripts (no pip installs —
-  they run inside Resolve's bundled interpreter).
+- `packages/transcoder` — Python ffmpeg pipeline (short-edge HLS ladder,
+  thumbnails, hwaccel selection in `hwaccel.py`).
 - `deploy/` + `Dockerfile.allinone` — single-container deployment
   (supervisord + bundled Postgres/Redis/MinIO). Deliberate tradeoff.
 
@@ -74,10 +80,17 @@ Full stack: `docker compose -f docker-compose.dev.yml up --build`
 
 ## Gotchas
 
-- Share links: guest access flows through `routers/share.py` +
-  `validate_share_link_with_session`; every new share sub-endpoint must call
-  `validate_asset_in_share` and respect `link.permission` /
-  `link.show_versions` / `link.allow_download`.
+- Share links: a link targets exactly one asset or one folder (DB check
+  `ck_share_link_asset_or_folder`). Guest access flows through
+  `routers/share.py` + `validate_share_link_with_session`; every new share
+  sub-endpoint must call `validate_asset_in_share` and respect
+  `link.permission` / `link.show_versions` / `link.allow_download`
+  (`show_watermark` forces downloads off). Pick the guest-visible version
+  with `resolve_share_version` (services/permissions.py). The link password
+  travels in the `X-Share-Password` header, never the query string.
+- Account access is `ProjectMember` or superadmin only: use
+  `require_project_role(..., ProjectRole.editor)` for "any member" and
+  `can_access_asset` / `require_asset_access` for asset reads and writes.
 - HLS playback in the app goes through `/stream/hls/*` proxy with a JWT
   (`routers/hls_proxy.py`), not raw S3 URLs; the web player is
   `hooks/use-video-player.ts` (hls.js) — reuse it, don't add `<video src>`.
@@ -85,6 +98,12 @@ Full stack: `docker compose -f docker-compose.dev.yml up --build`
 - Uploads: browser → presigned S3 multipart → `/upload/complete` → Celery
   `process_asset`. The upload UI state machine lives in
   `stores/upload-store.ts`.
+- MinIO no longer ships binaries or images; `Dockerfile.allinone` compiles it
+  from a pinned source tag (`MINIO_RELEASE`). Only ever move that tag
+  forward: an older MinIO must not open data a newer one wrote.
+- Celery workers consume only the `transcoding` and `email_*` queues. A new
+  task needs an explicit route in `tasks/celery_app.py`, or it lands in
+  `default` and never runs.
 - Presigned URLs are path-style (`/<bucket>/<key>`); in the all-in-one image
   they resolve same-origin — `S3_PUBLIC_ENDPOINT` defaults to `FRONTEND_URL`
   and nginx routes the bucket path to internal MinIO. Don't reintroduce a

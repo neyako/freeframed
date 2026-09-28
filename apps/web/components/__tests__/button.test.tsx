@@ -8,8 +8,8 @@ describe('Button component', () => {
     expect(screen.getByRole('button', { name: 'Click me' })).toBeInTheDocument()
   })
 
-  it('primary variant has correct classes', () => {
-    render(<Button variant="primary">Primary</Button>)
+  it('destructive variant is the red one', () => {
+    render(<Button variant="destructive">Delete</Button>)
     const button = screen.getByRole('button')
     expect(button.className).toContain('bg-accent')
   })
@@ -26,12 +26,11 @@ describe('Button component', () => {
     expect(button.className).toContain('text-text-secondary')
   })
 
-  it('loading state shows spinner and disables button', () => {
+  it('loading disables the button without a spinner', () => {
     render(<Button loading>Submit</Button>)
     const button = screen.getByRole('button')
     expect(button).toBeDisabled()
-    // Spinner icon (Loader2) should be present as an SVG
-    expect(button.querySelector('svg')).toBeInTheDocument()
+    expect(button.querySelector('svg')).not.toBeInTheDocument()
   })
 
   it('disabled prop disables the button', () => {

@@ -2,11 +2,17 @@
 
 import * as React from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
-import { X, ImagePlus, Globe, Lock } from 'lucide-react'
+import { X, ImagePlus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
-import { Switch } from '@/components/ui/switch'
+import { Input } from '@/components/ui/input'
+import {
+  dialogCloseClass,
+  dialogContentClass,
+  dialogOverlayClass,
+  dialogTitleClass,
+} from '@/components/ui/surface'
 import type { Project } from '@/types'
 
 interface ProjectSettingsDialogProps {
@@ -14,16 +20,6 @@ interface ProjectSettingsDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onUpdated: () => void
-}
-
-function PosterFallback({ count }: { count: number }) {
-  return (
-    <div className="ff-dotgrid flex h-full w-full items-center justify-center bg-bg-tertiary">
-      <span className="font-dot text-[76px] font-black tracking-[0.04em] text-text-tertiary opacity-50">
-        {String(Math.min(count, 99)).padStart(2, '0')}
-      </span>
-    </div>
-  )
 }
 
 export function ProjectSettingsDialog({
@@ -34,17 +30,16 @@ export function ProjectSettingsDialog({
 }: ProjectSettingsDialogProps) {
   const [name, setName] = React.useState(project.name)
   const [description, setDescription] = React.useState(project.description || '')
-  const [isPublic, setIsPublic] = React.useState(project.is_public ?? false)
   const [posterPreview, setPosterPreview] = React.useState<string | null>(project.poster_url ?? null)
   const [posterFile, setPosterFile] = React.useState<File | null>(null)
   const [saving, setSaving] = React.useState(false)
+  const [error, setError] = React.useState<string | null>(null)
   const fileInputRef = React.useRef<HTMLInputElement>(null)
 
   // Sync state when project changes
   React.useEffect(() => {
     setName(project.name)
     setDescription(project.description || '')
-    setIsPublic(project.is_public ?? false)
     setPosterPreview(project.poster_url ?? null)
     setPosterFile(null)
   }, [project])
@@ -58,6 +53,7 @@ export function ProjectSettingsDialog({
 
   const handleSave = async () => {
     setSaving(true)
+    setError(null)
     try {
       // Upload poster if changed
       if (posterFile) {
@@ -70,13 +66,12 @@ export function ProjectSettingsDialog({
       await api.patch(`/projects/${project.id}`, {
         name: name.trim(),
         description: description.trim() || null,
-        is_public: isPublic,
       })
 
       onUpdated()
       onOpenChange(false)
-    } catch {
-      // silently fail
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save project')
     } finally {
       setSaving(false)
     }
@@ -85,112 +80,69 @@ export function ProjectSettingsDialog({
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-black/60 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-full max-w-2xl -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-bg-secondary shadow-2xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95">
-          {/* Header */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-            <Dialog.Title className="text-base font-semibold text-text-primary">
-              Project settings
-            </Dialog.Title>
-            <Dialog.Close className="text-text-tertiary hover:text-text-primary transition-colors">
-              <X className="h-4 w-4" />
-            </Dialog.Close>
-          </div>
+        <Dialog.Overlay className={dialogOverlayClass} />
+        <Dialog.Content className={cn(dialogContentClass, 'max-w-md')}>
+          <Dialog.Close className={dialogCloseClass} aria-label="Close">
+            <X />
+          </Dialog.Close>
+          <Dialog.Title className={dialogTitleClass}>Project settings</Dialog.Title>
+          <Dialog.Description className="sr-only">
+            Edit the project name, description and poster.
+          </Dialog.Description>
 
-          {/* Body */}
-          <div className="p-6">
-            <div className="flex gap-6">
-              {/* Left: Poster + Name */}
-              <div className="flex flex-col items-center gap-3 w-56 shrink-0">
-                {/* Poster area */}
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="relative w-full aspect-square rounded-xl overflow-hidden border-2 border-dashed border-border hover:border-border-strong transition-colors group"
-                >
-                  {posterPreview ? (
-                    <>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={posterPreview} alt="Poster" className="h-full w-full object-cover" />
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 transition-opacity flex items-center justify-center">
-                        <ImagePlus className="h-6 w-6 text-white" />
-                      </div>
-                    </>
-                  ) : (
-                    <PosterFallback count={project.asset_count ?? 0} />
-                  )}
-                </button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp,image/gif"
-                  className="hidden"
-                  onChange={handlePosterSelect}
-                />
-
-                {/* Project name input */}
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full text-center text-sm font-semibold text-text-primary bg-bg-tertiary rounded-lg px-3 py-2 border border-border focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent transition-colors"
-                  placeholder="Project name"
-                />
-              </div>
-
-              {/* Right: Settings */}
-              <div className="flex-1 space-y-5">
-                {/* Description */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-text-tertiary uppercase tracking-wider">Description</label>
-                  <textarea
-                    rows={2}
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Optional project description..."
-                    className="w-full rounded-lg border border-border bg-bg-tertiary px-3 py-2 text-sm text-text-primary placeholder:text-text-tertiary resize-none focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-colors"
-                  />
-                </div>
-
-                {/* Public / Private toggle */}
-                <div className="rounded-xl border border-border bg-bg-tertiary/50 p-4">
-                  <div className="flex items-start gap-3">
-                    <div className={cn(
-                      'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg mt-0.5',
-                      isPublic ? 'bg-accent/10 text-accent' : 'bg-bg-tertiary text-text-tertiary',
-                    )}>
-                      {isPublic ? <Globe className="h-4.5 w-4.5" /> : <Lock className="h-4.5 w-4.5" />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-text-primary">
-                          {isPublic ? 'Public Project' : 'Private Project'}
-                        </span>
-                        <Switch
-                          size="sm"
-                          aria-label="Make project public"
-                          checked={isPublic}
-                          onCheckedChange={setIsPublic}
-                        />
-                      </div>
-                      <p className="text-xs text-text-tertiary mt-0.5">
-                        {isPublic
-                          ? 'All users in the system can view this project.'
-                          : 'Only invited members can access this project.'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
+          <div className="mt-3 flex gap-3">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              aria-label="Change poster"
+              className="group relative flex aspect-video w-36 shrink-0 items-center justify-center overflow-hidden rounded-sm border border-border bg-bg-tertiary text-text-tertiary transition-colors duration-100 hover:border-border-strong hover:text-text-primary"
+            >
+              {posterPreview ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={posterPreview} alt="Poster" className="h-full w-full object-cover" />
+              ) : (
+                <ImagePlus className="h-[15px] w-[15px]" />
+              )}
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              className="hidden"
+              onChange={handlePosterSelect}
+            />
+            <div className="min-w-0 flex-1">
+              <Input
+                label="Name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Project name"
+              />
             </div>
           </div>
 
-          {/* Footer */}
-          <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-border">
+          <div className="mt-3 flex flex-col gap-1.5">
+            <label htmlFor="project-settings-description" className="text-[12.5px] text-text-secondary">
+              Description
+            </label>
+            <textarea
+              id="project-settings-description"
+              rows={2}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Optional"
+              className="w-full resize-none rounded-md border border-border-strong bg-bg-secondary px-2.5 py-2 text-[13px] text-text-primary placeholder:text-text-tertiary transition-colors duration-100 focus:border-text-primary/60 focus:outline-none"
+            />
+          </div>
+
+          {error && <p className="mt-2 text-[12px] text-status-error">{error}</p>}
+
+          <div className="mt-4 flex items-center justify-end gap-2">
             <Dialog.Close asChild>
-              <Button variant="secondary" size="sm">Cancel</Button>
+              <Button variant="ghost" size="sm">Cancel</Button>
             </Dialog.Close>
             <Button size="sm" onClick={handleSave} loading={saving} disabled={!name.trim()}>
-              Save
+              {saving ? 'Saving…' : 'Save'}
             </Button>
           </div>
         </Dialog.Content>

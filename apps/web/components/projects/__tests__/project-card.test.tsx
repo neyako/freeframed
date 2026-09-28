@@ -1,8 +1,12 @@
 import { render, screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { ProjectCard } from '../project-card'
 import type { Project } from '@/types'
+
+vi.mock('@/components/shared/toast', () => ({
+  useToast: () => ({ error: vi.fn() }),
+}))
 
 function makeProject(overrides: Partial<Project> = {}): Project {
   return {
@@ -10,9 +14,7 @@ function makeProject(overrides: Partial<Project> = {}): Project {
     name: 'Poster Project',
     description: 'Client review queue',
     created_by: 'user-1',
-    project_type: 'personal',
     poster_url: null,
-    is_public: false,
     created_at: '2026-07-01T08:00:00Z',
     deleted_at: null,
     asset_count: 8,
@@ -23,21 +25,15 @@ function makeProject(overrides: Partial<Project> = {}): Project {
 }
 
 describe('ProjectCard', () => {
-  it('renders a dot-grid count fallback when a project has no poster', () => {
+  it('shows the item count and size when a project has no poster', () => {
     render(<ProjectCard project={makeProject()} />)
 
-    expect(screen.getByText('08')).toBeInTheDocument()
+    expect(screen.getByText(/^8 items · /)).toBeInTheDocument()
   })
 
   it('renders the poster image when provided', () => {
     render(<ProjectCard project={makeProject({ poster_url: '/poster.jpg' })} />)
 
     expect(screen.getByAltText('Poster Project')).toHaveAttribute('src', '/poster.jpg')
-  })
-
-  it('shows the public pill for public projects', () => {
-    render(<ProjectCard project={makeProject({ is_public: true })} />)
-
-    expect(screen.getByText('Public')).toBeInTheDocument()
   })
 })

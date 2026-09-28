@@ -21,17 +21,14 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
         {label && (
           <label
             htmlFor={inputId}
-            className="font-mono text-[11px] font-normal uppercase tracking-[0.14em] text-text-secondary"
+            className="text-[12.5px] text-text-secondary"
           >
             {label}
           </label>
         )}
-        {/* ponytail: shake replays when error goes falsy→truthy; a repeat
-            submit with the same error still showing won't re-fire. Forms here
-            clear error onChange, so a resubmit does replay. Good enough. */}
-        <div className={cn('relative', error && 'animate-shake')}>
+        <div className="relative">
           {icon && (
-            <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-text-tertiary">
+            <div className="pointer-events-none absolute inset-y-0 left-2.5 flex items-center text-text-tertiary">
               {icon}
             </div>
           )}
@@ -40,11 +37,11 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
             ref={ref}
             type={isPassword && showPassword ? 'text' : type}
             className={cn(
-              'flex h-11 w-full rounded border border-border-strong bg-bg-secondary px-3 py-2 text-sm text-text-primary placeholder:text-text-tertiary',
-              'transition-[border-color,box-shadow] duration-150 focus:outline-none focus:border-accent focus:shadow-[inset_0_0_0_1px_var(--accent)]',
+              'flex h-[34px] w-full rounded-md border border-border-strong bg-bg-secondary px-2.5 text-[13px] text-text-primary placeholder:text-text-tertiary',
+              'transition-colors duration-100 focus:outline-none focus:border-text-primary/60',
               'disabled:cursor-not-allowed disabled:opacity-45',
-              icon && 'pl-9',
-              isPassword && 'pr-9',
+              icon && 'pl-8',
+              isPassword && 'pr-8',
               error && 'border-accent focus:border-accent',
               className,
             )}
@@ -55,18 +52,18 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
               type="button"
               tabIndex={-1}
               onClick={() => setShowPassword((v) => !v)}
-              className="absolute inset-y-0 right-2.5 flex items-center text-text-tertiary hover:text-text-secondary transition-colors"
+              className="absolute inset-y-0 right-2.5 flex items-center text-text-tertiary hover:text-text-primary transition-colors duration-100"
             >
               {showPassword ? (
-                <EyeOff className="h-4 w-4" />
+                <EyeOff className="h-[15px] w-[15px]" />
               ) : (
-                <Eye className="h-4 w-4" />
+                <Eye className="h-[15px] w-[15px]" />
               )}
             </button>
           )}
         </div>
         {error && (
-          <p className="font-mono text-[11px] tracking-[0.04em] text-accent">{error}</p>
+          <p className="text-[12px] text-accent">{error}</p>
         )}
       </div>
     )

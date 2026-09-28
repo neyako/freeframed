@@ -4,36 +4,44 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import * as Dialog from "@radix-ui/react-dialog";
-import {
-  Plus,
-  LayoutGrid,
-  List,
-  FolderOpen,
-  X,
-  Users,
-  Share2,
-  Globe,
-} from "lucide-react";
-import { formatBytes } from "@/lib/utils";
+import Link from "next/link";
+import { Plus, LayoutGrid, List, FolderOpen, X, Inbox } from "lucide-react";
+import { cn, formatBytes } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Segmented } from "@/components/ui/segmented";
+import {
+  dialogCloseClass,
+  dialogContentClass,
+  dialogOverlayClass,
+  dialogTitleClass,
+} from "@/components/ui/surface";
 import { ProjectCard } from "@/components/projects/project-card";
 import { EmptyState } from "@/components/shared/empty-state";
 import { useAuthStore } from "@/stores/auth-store";
 import { useHomeModeStore } from "@/stores/home-mode-store";
 import { useSearchParams } from "next/navigation";
-import { Inbox } from "lucide-react";
 import { usePageTitle } from "@/hooks/use-page-title";
-import type { Project, ProjectType } from "@/types";
+import type { Project } from "@/types";
 
 type ViewMode = "grid" | "list";
 
 interface CreateProjectForm {
   name: string;
   description: string;
-  project_type: ProjectType;
+}
+
+function projectMeta(project: Project, showRole?: boolean): string {
+  const count = project.asset_count ?? 0;
+  const parts = [
+    count > 0
+      ? `${count} item${count !== 1 ? "s" : ""} · ${formatBytes(project.storage_bytes ?? 0)}`
+      : "Empty",
+  ];
+  if (project.is_quick_share) parts.push("Quick shares");
+  if (showRole && project.role && project.role !== "owner") parts.push("Editor");
+  return parts.join(" · ");
 }
 
 function ProjectListRow({
@@ -43,120 +51,55 @@ function ProjectListRow({
   project: Project;
   showRole?: boolean;
 }) {
-  const roleName =
-    project.role === "owner"
-      ? "Owner"
-      : project.role === "editor"
-        ? "Editor"
-        : project.role === "reviewer"
-          ? "Reviewer"
-          : project.role === "viewer"
-            ? "Viewer"
-            : "Member";
-
   return (
-    <a
+    <Link
       href={`/projects/${project.id}`}
-      className="flex items-center gap-4 px-4 py-3 hover:bg-bg-hover transition-colors border-b border-border last:border-b-0"
+      className="flex h-11 items-center gap-3 px-2 text-[13px] transition-colors duration-100 hover:bg-bg-hover"
     >
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded border border-border bg-bg-tertiary">
-        <FolderOpen className="h-4 w-4 text-text-tertiary" />
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-text-primary truncate">
-            {project.name}
-          </span>
-          {project.is_quick_share && (
-            <span className="shrink-0 rounded-[2px] border border-accent-line px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.12em] text-accent">
-              QUICK SHARES
-            </span>
-          )}
-        </div>
-        <span className="font-mono text-[10px] tracking-[0.04em] text-text-tertiary">
-          {(project.asset_count ?? 0) > 0
-            ? `${project.asset_count} item${(project.asset_count ?? 0) !== 1 ? "s" : ""} · ${formatBytes(project.storage_bytes ?? 0)}`
-            : "No assets yet"}
-        </span>
-      </div>
-      <div className="hidden sm:flex items-center gap-1.5 text-xs text-text-tertiary">
-        <Users className="h-3 w-3" />
-        {project.member_count ?? 1}
-      </div>
-      <span className="hidden md:block text-xs text-text-tertiary w-28">
+      <FolderOpen className="h-[15px] w-[15px] shrink-0 text-text-tertiary" />
+      <span className="min-w-0 flex-1 truncate text-text-primary">{project.name}</span>
+      <span className="hidden font-mono text-[12px] text-text-tertiary sm:inline">
+        {projectMeta(project, showRole)}
+      </span>
+      <span className="hidden w-24 text-right font-mono text-[12px] text-text-tertiary md:inline">
         {new Date(project.created_at).toLocaleDateString("en-US", {
           month: "short",
           day: "numeric",
           year: "numeric",
         })}
       </span>
-      {showRole && (
-        <span className="hidden sm:inline-flex items-center rounded-[2px] border border-border-strong px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.14em] text-text-secondary">
-          {roleName}
-        </span>
-      )}
-    </a>
+    </Link>
   );
 }
 
 function ProjectSection({
   title,
-  icon,
   projects,
   viewMode,
-  emptyMessage,
-  onNewProject,
-  showNewButton,
   showRole,
   userId,
   onMutate,
 }: {
   title: string;
-  icon?: React.ReactNode;
   projects: Project[];
   viewMode: ViewMode;
-  emptyMessage: string;
-  onNewProject?: () => void;
-  showNewButton?: boolean;
   showRole?: boolean;
   userId?: string;
   onMutate?: () => void;
 }) {
-  if (projects.length === 0 && !showNewButton) {
-    return null;
-  }
+  if (projects.length === 0) return null;
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2">
-        {icon}
-        <h2 className="font-mono text-[11px] uppercase tracking-[0.16em] text-text-secondary">
-          {title}
-        </h2>
-        <span className="rounded-[2px] border border-border px-[7px] py-0.5 font-dot text-xs font-bold text-text-tertiary">
+    <section className="space-y-2">
+      <h2 className="flex items-baseline gap-2 text-[13px] font-medium text-text-primary">
+        {title}
+        <span className="font-mono text-[12px] font-normal text-text-tertiary">
           {projects.length}
         </span>
-      </div>
+      </h2>
 
-      {projects.length === 0 && showNewButton ? (
-        <button
-          onClick={onNewProject}
-          className="flex w-full items-center gap-4 rounded-lg border border-dashed border-border-strong bg-transparent px-5 py-8 text-text-tertiary transition-colors hover:border-text-secondary hover:text-text-secondary"
-        >
-          <span className="flex h-11 w-11 items-center justify-center rounded border border-border-strong bg-bg-secondary">
-            <Plus className="h-[18px] w-[18px]" />
-          </span>
-          <div className="text-left">
-            <p className="text-sm font-medium text-text-primary">
-              Create your first project
-            </p>
-            <p className="mt-0.5 font-mono text-[11px] uppercase tracking-[0.14em] text-text-tertiary">
-              Organize and review your media assets
-            </p>
-          </div>
-        </button>
-      ) : viewMode === "grid" ? (
-        <div className="ff-stagger grid grid-cols-2 gap-3.5 sm:grid-cols-[repeat(auto-fill,minmax(240px,1fr))]">
+      {viewMode === "grid" ? (
+        <div className="grid grid-cols-2 gap-x-3 gap-y-4 sm:grid-cols-[repeat(auto-fill,minmax(200px,1fr))]">
           {projects.map((project) => (
             <ProjectCard
               key={project.id}
@@ -166,43 +109,15 @@ function ProjectSection({
               onMutate={onMutate}
             />
           ))}
-          {showNewButton && onNewProject && (
-            <button
-              onClick={onNewProject}
-              className="flex min-h-[280px] flex-col items-center justify-center gap-3.5 rounded-lg border border-dashed border-border-strong text-text-tertiary transition-colors hover:border-text-secondary hover:text-text-secondary"
-            >
-              <span className="flex h-11 w-11 items-center justify-center rounded border border-border-strong bg-bg-secondary">
-                <Plus className="h-[18px] w-[18px]" />
-              </span>
-              <span className="font-mono text-[11px] uppercase tracking-[0.16em]">
-                New project
-              </span>
-            </button>
-          )}
         </div>
       ) : (
-        <div className="ff-stagger rounded-lg border border-border overflow-hidden bg-bg-secondary">
+        <div className="divide-y divide-border border-y border-border">
           {projects.map((project) => (
-            <ProjectListRow
-              key={project.id}
-              project={project}
-              showRole={showRole}
-            />
+            <ProjectListRow key={project.id} project={project} showRole={showRole} />
           ))}
-          {showNewButton && onNewProject && (
-            <button
-              onClick={onNewProject}
-              className="flex items-center gap-3 px-4 py-3 w-full hover:bg-bg-hover transition-colors text-left border-t border-border"
-            >
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded border border-dashed border-border-strong text-text-tertiary">
-                <Plus className="h-3.5 w-3.5" />
-              </div>
-              <span className="text-sm text-text-secondary">New Project</span>
-            </button>
-          )}
         </div>
       )}
-    </div>
+    </section>
   );
 }
 
@@ -236,7 +151,6 @@ export default function ProjectsPage() {
   const [form, setForm] = React.useState<CreateProjectForm>({
     name: "",
     description: "",
-    project_type: "personal",
   });
 
   const {
@@ -255,18 +169,8 @@ export default function ProjectsPage() {
     [projects, user?.id],
   );
 
-  const publicProjects = React.useMemo(
-    () =>
-      sortQuickShareFirst(
-        (projects ?? []).filter(
-          (p) => p.is_public && p.created_by !== user?.id && !p.role,
-        ),
-      ),
-    [projects, user?.id],
-  );
-
   const resetForm = () => {
-    setForm({ name: "", description: "", project_type: "personal" });
+    setForm({ name: "", description: "" });
     setFormError("");
   };
 
@@ -282,7 +186,6 @@ export default function ProjectsPage() {
       const created = await api.post<Project>("/projects", {
         name: form.name.trim(),
         description: form.description.trim() || null,
-        project_type: form.project_type,
       });
       await mutate();
       setDialogOpen(false);
@@ -298,55 +201,37 @@ export default function ProjectsPage() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-[1360px] px-4 sm:px-8 lg:px-10 pt-6 sm:pt-10 pb-24 space-y-9">
-      {/* Header */}
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="font-sans text-[clamp(26px,4vw,36px)] font-medium tracking-[-0.02em] leading-none text-text-primary">
-            Projects
-          </h1>
-          {projects && projects.length > 0 && (
-            <p className="mt-1.5 font-mono text-[11px] uppercase tracking-[0.14em] text-text-tertiary">
-              <span className="font-dot text-[13px] font-bold text-text-secondary">
-                {projects.length}
-              </span>{" "}
-              project{projects.length !== 1 ? "s" : ""}
-            </p>
-          )}
-        </div>
+    <div className="mx-auto w-full max-w-[1200px] space-y-6 px-4 pb-16 pt-6 sm:px-6">
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-[18px] font-semibold text-text-primary">Projects</h1>
 
         <div className="flex items-center gap-2">
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="sm"
+            className="hidden sm:inline-flex"
             onClick={() => {
               setHomeMode("review");
               router.push("/");
             }}
             title={
               homeMode === "projects"
-                ? "This grid is your home screen — switch back to the review feed"
-                : "Use the review feed as your home screen"
+                ? "Switch your home screen back to the review feed"
+                : "Open the review feed"
             }
-            className="hidden sm:inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-[11px] font-mono uppercase tracking-[0.14em] text-text-secondary hover:text-text-primary hover:border-text-tertiary transition-colors"
           >
-            <Inbox className="h-3.5 w-3.5" />
-            {homeMode === "projects" ? "Home ✓" : "Home feed"}
-          </button>
+            <Inbox />
+            Review home
+          </Button>
           <Segmented
             options={[
-              {
-                value: "grid",
-                label: "Grid view",
-                icon: <LayoutGrid className="h-[13px] w-[13px]" />,
-              },
-              {
-                value: "list",
-                label: "List view",
-                icon: <List className="h-[13px] w-[13px]" />,
-              },
+              { value: "grid", label: "Grid view", icon: <LayoutGrid className="h-[15px] w-[15px]" /> },
+              { value: "list", label: "List view", icon: <List className="h-[15px] w-[15px]" /> },
             ] as const}
             value={viewMode}
             onChange={setViewMode}
+            optionClassName="px-1.5"
           />
 
           <Dialog.Root
@@ -357,30 +242,27 @@ export default function ProjectsPage() {
             }}
           >
             <Dialog.Trigger asChild>
-              <Button size="sm" className="hidden sm:inline-flex">
-                <Plus className="h-4 w-4" />
+              <Button size="sm">
+                <Plus />
                 New project
               </Button>
             </Dialog.Trigger>
 
             <Dialog.Portal>
-              <Dialog.Overlay className="fixed inset-0 z-40 bg-black/50 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
-              <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-bg-secondary p-6 shadow-xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95">
-                <Dialog.Close className="absolute right-4 top-4 text-text-tertiary hover:text-text-primary transition-colors">
-                  <X className="h-4 w-4" />
+              <Dialog.Overlay className={dialogOverlayClass} />
+              <Dialog.Content className={cn(dialogContentClass, "max-w-md")}>
+                <Dialog.Close className={dialogCloseClass} aria-label="Close">
+                  <X />
                 </Dialog.Close>
-
-                <Dialog.Title className="text-base font-semibold text-text-primary">
-                  New Project
-                </Dialog.Title>
-                <Dialog.Description className="mt-1 text-sm text-text-secondary">
-                  Create a new project to organize your assets.
+                <Dialog.Title className={dialogTitleClass}>New project</Dialog.Title>
+                <Dialog.Description className="sr-only">
+                  Name the project and optionally describe it.
                 </Dialog.Description>
 
-                <form onSubmit={handleCreate} className="mt-5 space-y-4">
+                <form onSubmit={handleCreate} className="mt-3 space-y-3">
                   <Input
-                    label="Project name"
-                    placeholder="e.g. Brand Campaign 2025"
+                    label="Name"
+                    placeholder="Smarthome series"
                     value={form.name}
                     onChange={(e) =>
                       setForm((f) => ({ ...f, name: e.target.value }))
@@ -389,32 +271,33 @@ export default function ProjectsPage() {
                   />
 
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-text-secondary">
+                    <label htmlFor="project-description" className="text-[12.5px] text-text-secondary">
                       Description
                     </label>
                     <textarea
+                      id="project-description"
                       rows={2}
-                      placeholder="Optional description..."
+                      placeholder="Optional"
                       value={form.description}
                       onChange={(e) =>
                         setForm((f) => ({ ...f, description: e.target.value }))
                       }
-                      className="flex w-full rounded-md border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary placeholder:text-text-tertiary resize-none focus:outline-none focus:border-border-focus focus:ring-1 focus:ring-border-focus"
+                      className="w-full resize-none rounded-md border border-border-strong bg-bg-secondary px-2.5 py-2 text-[13px] text-text-primary placeholder:text-text-tertiary transition-colors duration-100 focus:border-text-primary/60 focus:outline-none"
                     />
                   </div>
 
                   {formError && (
-                    <p className="text-sm text-status-error">{formError}</p>
+                    <p className="text-[12px] text-status-error">{formError}</p>
                   )}
 
-                  <div className="flex justify-end gap-2 pt-2">
+                  <div className="flex justify-end gap-2 pt-1">
                     <Dialog.Close asChild>
-                      <Button type="button" variant="secondary" size="sm">
+                      <Button type="button" variant="ghost" size="sm">
                         Cancel
                       </Button>
                     </Dialog.Close>
                     <Button type="submit" size="sm" loading={isCreating}>
-                      Create project
+                      {isCreating ? "Creating…" : "Create project"}
                     </Button>
                   </div>
                 </form>
@@ -424,75 +307,30 @@ export default function ProjectsPage() {
         </div>
       </div>
 
-      {/* Mobile primary action — spec 1a full-width New project */}
-      <Button size="sm" className="w-full sm:hidden" onClick={() => setDialogOpen(true)}>
-        <Plus className="h-4 w-4" />
-        New project
-      </Button>
-
-      {/* Content */}
       {isLoading ? (
-        <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-[repeat(auto-fill,minmax(240px,1fr))]">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <div
-              key={i}
-              className="flex flex-col rounded-lg overflow-hidden border border-border"
-            >
-              <div className="aspect-square animate-pulse bg-bg-tertiary" />
-              <div className="px-3 py-2.5">
-                <div className="h-3 w-2/3 animate-pulse rounded bg-bg-tertiary" />
-              </div>
-            </div>
-          ))}
-        </div>
+        <p className="text-[13px] text-text-tertiary">Loading…</p>
       ) : !projects || projects.length === 0 ? (
-        <div className="rounded-xl border border-border bg-bg-secondary">
-          <EmptyState
-            icon={FolderOpen}
-            title="No projects yet"
-            description="Create your first project to start organizing assets."
-            action={{
-              label: "New Project",
-              onClick: () => setDialogOpen(true),
-            }}
-          />
-        </div>
+        <EmptyState
+          title="No projects yet."
+          action={{ label: "New project", onClick: () => setDialogOpen(true) }}
+        />
       ) : (
         <div className="space-y-8">
           <ProjectSection
-            title="My Projects"
-            icon={<FolderOpen className="h-4 w-4 text-text-tertiary" />}
+            title="My projects"
             projects={myProjects}
             viewMode={viewMode}
-            emptyMessage="You haven't created any projects yet."
-            onNewProject={() => setDialogOpen(true)}
-            showNewButton
             userId={user?.id}
             onMutate={() => mutate()}
           />
-          {sharedProjects.length > 0 && (
-            <ProjectSection
-              title="Shared with Me"
-              icon={<Share2 className="h-4 w-4 text-text-tertiary" />}
-              projects={sharedProjects}
-              viewMode={viewMode}
-              emptyMessage=""
-              showRole
-              userId={user?.id}
-              onMutate={() => mutate()}
-            />
-          )}
-          {publicProjects.length > 0 && (
-            <ProjectSection
-              title="Public Projects"
-              icon={<Globe className="h-4 w-4 text-text-tertiary" />}
-              projects={publicProjects}
-              viewMode={viewMode}
-              emptyMessage=""
-              userId={user?.id}
-              onMutate={() => mutate()}
-            />
-          )}
+          <ProjectSection
+            title="Shared with me"
+            projects={sharedProjects}
+            viewMode={viewMode}
+            showRole
+            userId={user?.id}
+            onMutate={() => mutate()}
+          />
         </div>
       )}
     </div>

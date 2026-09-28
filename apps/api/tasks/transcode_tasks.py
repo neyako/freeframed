@@ -65,11 +65,11 @@ def process_asset(self, asset_id: str, version_id: str):
         s3 = get_s3_client()
 
         try:
-            if asset.asset_type in (AssetType.video,):
+            if asset.asset_type == AssetType.video:
                 _process_video(db, asset, version, media_file, s3, output_prefix)
             elif asset.asset_type == AssetType.audio:
                 _process_audio(db, asset, version, media_file, s3, output_prefix)
-            elif asset.asset_type in (AssetType.image, AssetType.image_carousel):
+            elif asset.asset_type == AssetType.image:
                 _process_image(db, asset, version, media_file, s3, output_prefix)
 
             version.processing_status = ProcessingStatus.ready
@@ -81,14 +81,19 @@ def process_asset(self, asset_id: str, version_id: str):
                 "version_id": version_id,
             })
 
-        except Exception as exc:  # noqa  # noqa: BROAD_EXCEPT_OK - task boundary marks failed and retries.
+        except Exception as exc:  # noqa  # noqa: BROAD_EXCEPT_OK - task boundary retries, then marks failed.
+            db.rollback()
+            # Stay "processing" while retries remain: the web stops polling and
+            # the upload panel gives up as soon as it sees "failed".
+            if self.request.retries < self.max_retries:
+                raise self.retry(exc=exc)
             version.processing_status = ProcessingStatus.failed
             db.commit()
             _publish_event(str(asset.project_id), "transcode_failed", {
                 "asset_id": asset_id,
                 "error": str(exc),
             })
-            raise self.retry(exc=exc)
+            raise
 
     finally:
         db.close()
@@ -142,8 +147,6 @@ def _process_audio(db, asset, version, media_file, s3, output_prefix):
     from packages.transcoder.image_processor import process_audio
     result = process_audio(s3, settings.s3_bucket, media_file.s3_key_raw, output_prefix)
     media_file.s3_key_processed = result.get("mp3_key")
-    if result.get("waveform_key"):
-        media_file.s3_key_thumbnail = result["waveform_key"]
     if result.get("duration_seconds"):
         media_file.duration_seconds = result["duration_seconds"]
     db.flush()
@@ -154,6 +157,9 @@ def _process_image(db, asset, version, media_file, s3, output_prefix):
     result = process_image(s3, settings.s3_bucket, media_file.s3_key_raw, output_prefix)
     media_file.s3_key_processed = result.get("webp_key")
     media_file.s3_key_thumbnail = result.get("thumbnail_key")
+    if result.get("width") and result.get("height"):
+        media_file.width = result["width"]
+        media_file.height = result["height"]
     db.flush()
 
 

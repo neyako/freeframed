@@ -13,7 +13,6 @@ def _mock_link(asset_id: uuid.UUID, show_versions: bool) -> MagicMock:
     link.id = uuid.uuid4()
     link.asset_id = asset_id
     link.folder_id = None
-    link.project_id = None
     link.allow_download = False
     link.permission = "view"
     link.show_versions = show_versions
@@ -117,7 +116,6 @@ def test_share_versions_returns_latest_only_when_versions_hidden(
 
 
 @patch("apps.api.routers.share.validate_asset_in_share")
-@patch("apps.api.routers.share._log_share_activity")
 @patch("apps.api.routers.share._get_latest_media_file")
 @patch("apps.api.routers.share._get_asset")
 @patch("apps.api.routers.share.validate_share_link_with_session")
@@ -125,7 +123,6 @@ def test_share_stream_serves_requested_version_when_versions_enabled(
     mock_validate,
     mock_get_asset,
     mock_get_latest_media_file,
-    mock_log_activity,
     mock_validate_in_share,
     client,
     mock_db,
@@ -142,7 +139,6 @@ def test_share_stream_serves_requested_version_when_versions_enabled(
     mock_validate.return_value = _mock_link(asset_id, show_versions=True)
     mock_get_asset.return_value = _mock_asset(asset_id)
     mock_get_latest_media_file.return_value = latest_media
-    mock_log_activity.return_value = None
     mock_validate_in_share.return_value = None
     mock_db.query.side_effect = lambda model: _version_query([older]) if model is AssetVersion else media_query
 
@@ -157,7 +153,6 @@ def test_share_stream_serves_requested_version_when_versions_enabled(
 
 
 @patch("apps.api.routers.share.validate_asset_in_share")
-@patch("apps.api.routers.share._log_share_activity")
 @patch("apps.api.routers.share._get_latest_media_file")
 @patch("apps.api.routers.share._get_asset")
 @patch("apps.api.routers.share.validate_share_link_with_session")
@@ -165,7 +160,6 @@ def test_share_stream_falls_back_to_latest_when_versions_hidden(
     mock_validate,
     mock_get_asset,
     mock_get_latest_media_file,
-    mock_log_activity,
     mock_validate_in_share,
     client,
     mock_db,
@@ -178,7 +172,6 @@ def test_share_stream_falls_back_to_latest_when_versions_hidden(
     mock_validate.return_value = _mock_link(asset_id, show_versions=False)
     mock_get_asset.return_value = _mock_asset(asset_id)
     mock_get_latest_media_file.return_value = latest_media
-    mock_log_activity.return_value = None
     mock_validate_in_share.return_value = None
 
     response = client.get(f"/share/some-token/stream/{asset_id}?version_id={older.id}")
@@ -193,7 +186,6 @@ def test_share_stream_falls_back_to_latest_when_versions_hidden(
 
 
 @patch("apps.api.routers.share.validate_asset_in_share")
-@patch("apps.api.routers.share._log_share_activity")
 @patch("apps.api.routers.share._get_latest_media_file")
 @patch("apps.api.routers.share._get_asset")
 @patch("apps.api.routers.share.validate_share_link_with_session")
@@ -201,7 +193,6 @@ def test_share_stream_falls_back_to_latest_when_requested_version_is_not_found(
     mock_validate,
     mock_get_asset,
     mock_get_latest_media_file,
-    mock_log_activity,
     mock_validate_in_share,
     client,
     mock_db,
@@ -214,7 +205,6 @@ def test_share_stream_falls_back_to_latest_when_requested_version_is_not_found(
     mock_validate.return_value = _mock_link(asset_id, show_versions=True)
     mock_get_asset.return_value = _mock_asset(asset_id)
     mock_get_latest_media_file.return_value = latest_media
-    mock_log_activity.return_value = None
     mock_validate_in_share.return_value = None
     mock_db.query.side_effect = lambda model: _version_query([])
 

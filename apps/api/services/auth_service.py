@@ -7,7 +7,7 @@ import bcrypt
 from fastapi import Response
 from sqlalchemy.orm import Session
 from ..config import settings
-from ..models.user import RefreshToken, User, UserStatus
+from ..models.user import RefreshToken, User
 
 ACCESS_COOKIE = "ff_access_token"
 REFRESH_COOKIE = "ff_refresh_token"

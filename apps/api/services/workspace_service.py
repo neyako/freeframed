@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 
-from ..models.branding import WorkspaceSettings
+from ..models.workspace import WorkspaceSettings
 
 
 DEFAULT_WORKSPACE_NAME = "freeframed"

@@ -3,17 +3,18 @@
 import * as React from "react";
 import useSWR from "swr";
 import Link from "next/link";
-import { Film, Clock, Trash2, UserCheck, type LucideIcon } from "lucide-react";
+import { Film, LayoutGrid, Trash2 } from "lucide-react";
 import { api } from "@/lib/api";
+import { mediaAspect } from "@/lib/aspect";
 import { useAuthStore } from "@/stores/auth-store";
 import { useHomeModeStore } from "@/stores/home-mode-store";
 import { useRouter } from "next/navigation";
-import { LayoutGrid } from "lucide-react";
 import { formatRelativeTime } from "@/lib/utils";
 import { QuickShare } from "@/components/dashboard/quick-share";
 import { StorageMeter } from "@/components/dashboard/storage-meter";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Button } from "@/components/ui/button";
 import type { AssetResponse } from "@/types";
 
 function getGreeting(): string {
@@ -67,50 +68,40 @@ function AssetCard({ asset, onDelete }: AssetCardProps) {
     }
   }
 
+  const aspect = mediaAspect(asset);
   return (
-    <div className="group relative">
-      <Link
-        href={`/assets/${asset.id}`}
-        className="flex flex-col gap-2 rounded-lg border border-border bg-bg-secondary p-3 hover:border-border-strong transition-colors"
-      >
-        <div className="aspect-video w-full rounded-md bg-bg-tertiary overflow-hidden flex items-center justify-center text-text-tertiary">
+    // Justified row item: as wide as the media's shape needs at ROW_HEIGHT
+    <div className="group relative min-w-0" style={{ flexGrow: aspect, flexBasis: aspect * ROW_HEIGHT }}>
+      <Link href={`/projects/${asset.project_id}/assets/${asset.id}`} className="block">
+        <div
+          className="flex w-full items-center justify-center overflow-hidden rounded-sm border border-border bg-bg-tertiary text-text-tertiary transition-colors duration-100 group-hover:border-border-strong"
+          style={{ aspectRatio: aspect }}
+        >
           {asset.thumbnail_url && !imgError ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={asset.thumbnail_url}
               alt={asset.name}
               onError={() => setImgError(true)}
-              className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.02]"
+              className="h-full w-full object-cover"
             />
           ) : (
-            <Film className="h-6 w-6" />
+            <Film className="h-[15px] w-[15px]" />
           )}
         </div>
-
-        <div className="flex flex-col gap-1">
-          <div className="flex items-start justify-between gap-2">
-            <p className="text-sm font-medium text-text-primary line-clamp-1">
-              {asset.name}
-            </p>
-          </div>
-          <p className="text-xs text-text-tertiary">
-            {mounted ? formatRelativeTime(asset.updated_at) : " "}
-          </p>
-          {mounted && asset.due_date && (
-            <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-text-secondary">
-              Due {new Date(asset.due_date).toLocaleDateString()}
-            </p>
-          )}
-        </div>
+        <p className="mt-1.5 truncate text-[12.5px] text-text-primary">{asset.name}</p>
+        <p className="text-[11.5px] text-text-tertiary">
+          {mounted ? formatRelativeTime(asset.updated_at) : "\u00a0"}
+        </p>
       </Link>
       <button
         type="button"
         onClick={handleDeleteClick}
-        className="pointer-events-none absolute right-5 top-5 flex h-7 w-7 items-center justify-center rounded bg-bg-secondary/90 text-text-tertiary opacity-0 shadow-sm transition-colors hover:bg-bg-hover hover:text-accent group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent pointer-coarse:pointer-events-auto pointer-coarse:opacity-100"
+        className="pointer-events-none absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-md bg-black/70 text-text-secondary opacity-0 transition-colors duration-100 hover:text-accent group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-text-primary/60 pointer-coarse:pointer-events-auto pointer-coarse:opacity-100"
         aria-label={`Delete ${asset.name}`}
         title={`Delete ${asset.name}`}
       >
-        <Trash2 className="h-3.5 w-3.5" />
+        <Trash2 className="h-[15px] w-[15px]" />
       </button>
       <ConfirmDialog
         open={confirmOpen}
@@ -119,7 +110,7 @@ function AssetCard({ asset, onDelete }: AssetCardProps) {
         description={
           deleteError
             ? `Could not delete "${asset.name}": ${deleteError}`
-            : "This will move the asset to the trash. You can restore it later from Recently Deleted."
+            : "It moves to the project's trash, where you can restore it."
         }
         confirmLabel="Delete asset"
         variant="danger"
@@ -129,64 +120,42 @@ function AssetCard({ asset, onDelete }: AssetCardProps) {
   );
 }
 
+const ROW_HEIGHT = 180;
+
 interface SectionProps {
   title: string;
-  icon: LucideIcon;
   assets: AssetResponse[] | undefined;
   isLoading: boolean;
   emptyTitle: string;
-  emptyDescription: string;
   onDelete: (asset: AssetResponse) => Promise<void>;
 }
 
-function Section({
-  title,
-  icon: Icon,
-  assets,
-  isLoading,
-  emptyTitle,
-  emptyDescription,
-  onDelete,
-}: SectionProps) {
+function Section({ title, assets, isLoading, emptyTitle, onDelete }: SectionProps) {
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-2">
-        <Icon className="h-4 w-4 text-text-secondary" />
-        <h2 className="font-mono text-[11px] uppercase tracking-[0.16em] text-text-secondary">
-          {title}
-        </h2>
+    <section className="space-y-2">
+      <h2 className="flex items-baseline gap-2 text-[13px] font-medium text-text-primary">
+        {title}
         {assets && assets.length > 0 && (
-          <span className="font-dot text-xs font-bold text-text-tertiary">
+          <span className="font-mono text-[12px] font-normal text-text-tertiary">
             {assets.length}
           </span>
         )}
-      </div>
+      </h2>
 
       {isLoading ? (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div
-              key={i}
-              className="aspect-video animate-pulse rounded-lg bg-bg-tertiary"
-            />
-          ))}
-        </div>
+        <p className="text-[13px] text-text-tertiary">Loading…</p>
       ) : !assets || assets.length === 0 ? (
-        <div className="rounded-lg border border-border bg-bg-secondary">
-          <EmptyState
-            icon={Icon}
-            title={emptyTitle}
-            description={emptyDescription}
-          />
-        </div>
+        <EmptyState title={emptyTitle} />
       ) : (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+        <div className="flex flex-wrap gap-x-3 gap-y-4">
           {assets.slice(0, 8).map((asset) => (
             <AssetCard key={asset.id} asset={asset} onDelete={onDelete} />
           ))}
+          {/* Absorbs the last row's spare width so its cards keep row height */}
+          <div aria-hidden className="h-0" style={{ flexGrow: 1e6, flexBasis: 0 }} />
         </div>
       )}
-    </div>
+    </section>
   );
 }
 
@@ -212,77 +181,44 @@ export default function HomePage() {
     () => api.get<AssetResponse[]>("/me/assets?filter=owned"),
   );
 
-  const {
-    data: assignedAssets,
-    isLoading: loadingAssigned,
-    mutate: mutateAssignedAssets,
-  } = useSWR<AssetResponse[]>(
-    "/me/assets?filter=assigned",
-    () => api.get<AssetResponse[]>("/me/assets?filter=assigned"),
-  );
-
   const handleDeleteAsset = React.useCallback(
     async (asset: AssetResponse) => {
       await api.delete<void>(`/assets/${asset.id}`);
-      await Promise.all([mutateRecentAssets(), mutateAssignedAssets()]);
+      await mutateRecentAssets();
     },
-    [mutateAssignedAssets, mutateRecentAssets],
+    [mutateRecentAssets],
   );
 
   return (
-    <div className="mx-auto w-full max-w-[1360px] px-4 sm:px-8 lg:px-10 pt-6 sm:pt-10 pb-24 space-y-8">
-      {/* Greeting + storage */}
-      <div className="flex items-start justify-between gap-6">
-        <div>
-          <h1 className="text-xl font-semibold text-text-primary">
-            {mounted ? getGreeting() : "Welcome"},{" "}
-            <span className="text-accent">
-              {user?.name?.split(" ")[0] ?? "there"}
-            </span>
-          </h1>
-          <p className="mt-1 text-sm text-text-secondary">
-            Here&apos;s what&apos;s happening with your assets today.
-          </p>
-        </div>
-        <div className="hidden sm:flex items-start gap-3 shrink-0 pt-1">
-          <button
+    <div className="mx-auto w-full max-w-[1200px] space-y-8 px-4 pb-16 pt-6 sm:px-6">
+      <div className="flex items-center justify-between gap-6">
+        <h1 className="text-[18px] font-semibold text-text-primary">
+          {mounted ? getGreeting() : "Welcome"}, {user?.name?.split(" ")[0] ?? "there"}
+        </h1>
+        <div className="hidden shrink-0 items-center gap-4 sm:flex">
+          <Button
             type="button"
+            variant="ghost"
+            size="sm"
             onClick={() => setHomeMode("projects")}
-            title="Use the Frame.io-style projects grid as your home screen"
-            className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-[11px] font-mono uppercase tracking-[0.14em] text-text-secondary hover:text-text-primary hover:border-text-tertiary transition-colors"
+            title="Use the projects grid as your home screen"
           >
-            <LayoutGrid className="h-3.5 w-3.5" />
+            <LayoutGrid />
             Projects home
-          </button>
-          <div className="w-56">
-            <StorageMeter />
-          </div>
+          </Button>
+          <StorageMeter className="w-48" />
         </div>
       </div>
 
-      {/* Sections */}
       <QuickShare />
 
       <Section
         title="Recent"
-        icon={Clock}
         assets={recentAssets}
         isLoading={loadingRecent}
-        emptyTitle="No assets yet"
-        emptyDescription="Assets you create or own will appear here."
+        emptyTitle="No assets yet."
         onDelete={handleDeleteAsset}
       />
-
-      <Section
-        title="Assigned to me"
-        icon={UserCheck}
-        assets={assignedAssets}
-        isLoading={loadingAssigned}
-        emptyTitle="Nothing assigned"
-        emptyDescription="Assets assigned to you for review will appear here."
-        onDelete={handleDeleteAsset}
-      />
-
     </div>
   );
 }

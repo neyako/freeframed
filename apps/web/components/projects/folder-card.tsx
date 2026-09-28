@@ -2,18 +2,24 @@
 
 import React, { useCallback, useState } from 'react'
 import useSWR from 'swr'
-import { Folder, Film, Music, Image as ImageIcon, Images, MoreHorizontal, Pencil, Trash, Share2 } from 'lucide-react'
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
+import { Folder, Film, Music, Image as ImageIcon, MoreHorizontal, Pencil, Trash2, Share2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { api } from '@/lib/api'
 import { NameDialog } from './name-dialog'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import {
+  menuContentClass,
+  menuItemClass,
+  menuItemDangerClass,
+  menuSeparatorClass,
+} from '@/components/ui/surface'
 import type { Folder as FolderType, AssetResponse } from '@/types'
 
 const assetTypeIcons = {
   video: Film,
   audio: Music,
   image: ImageIcon,
-  image_carousel: Images,
 } as const
 
 function ThumbCell({ asset, className }: { asset: AssetResponse; className?: string }) {
@@ -23,7 +29,7 @@ function ThumbCell({ asset, className }: { asset: AssetResponse; className?: str
   if (failed || !asset.thumbnail_url) {
     return (
       <div className={cn('overflow-hidden bg-bg-tertiary flex items-center justify-center', className)}>
-        <TypeIcon className="h-6 w-6 text-text-tertiary/50" />
+        <TypeIcon className="h-[15px] w-[15px] text-text-tertiary" />
       </div>
     )
   }
@@ -49,20 +55,20 @@ function FolderThumbnails({ projectId, folderId, itemCount }: { projectId: strin
   )
 
   // Prefer assets with thumbnails first, fill with any up to 3
-  const sorted = (assets ?? []).sort((a, b) => (b.thumbnail_url ? 1 : 0) - (a.thumbnail_url ? 1 : 0))
+  const sorted = [...(assets ?? [])].sort((a, b) => (b.thumbnail_url ? 1 : 0) - (a.thumbnail_url ? 1 : 0))
   const thumbs = sorted.slice(0, 3)
 
   if (thumbs.length === 0) {
     return (
-      <div className="ff-dotgrid aspect-[4/3] flex items-center justify-center bg-bg-tertiary rounded-t-lg">
-        <Folder className="h-12 w-12 text-text-tertiary/50" />
+      <div className="flex aspect-[4/3] items-center justify-center overflow-hidden rounded-sm border border-border bg-bg-tertiary transition-colors duration-100 group-hover:border-border-strong">
+        <Folder className="h-[15px] w-[15px] text-text-tertiary" />
       </div>
     )
   }
 
   return (
     <div className={cn(
-      'aspect-[4/3] rounded-t-lg overflow-hidden grid gap-px bg-bg-tertiary',
+      'grid aspect-[4/3] gap-px overflow-hidden rounded-sm border border-border bg-bg-tertiary transition-colors duration-100 group-hover:border-border-strong',
       thumbs.length === 1 && 'grid-cols-1',
       thumbs.length >= 2 && 'grid-cols-2',
     )}>
@@ -79,9 +85,7 @@ function FolderThumbnails({ projectId, folderId, itemCount }: { projectId: strin
 
 interface FolderCardProps {
   folder: FolderType
-  selected?: boolean
   onOpen: (folder: FolderType) => void
-  onSelect?: (e: React.MouseEvent) => void
   onRename?: (folderId: string, name: string) => Promise<void>
   onDelete?: (folderId: string) => Promise<void>
   onShare?: (folderId: string, folderName: string) => Promise<void>
@@ -91,32 +95,16 @@ interface FolderCardProps {
 
 export function FolderCard({
   folder,
-  selected,
   onOpen,
-  onSelect,
   onRename,
   onDelete,
   onShare,
   onDropItems,
   className,
 }: FolderCardProps) {
-  const [menuOpen, setMenuOpen] = useState(false)
   const [isDragOver, setIsDragOver] = useState(false)
   const [renameOpen, setRenameOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
-  const menuRef = React.useRef<HTMLDivElement>(null)
-
-  // Close menu on outside click
-  React.useEffect(() => {
-    if (!menuOpen) return
-    function handleClick(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [menuOpen])
 
   // Draggable
   const handleDragStart = useCallback(
@@ -154,78 +142,64 @@ export function FolderCard({
   return (
     <>
       <div
-        className={cn(
-          'group relative rounded-lg border bg-bg-secondary cursor-pointer transition-colors hover:border-border-strong',
-          selected ? 'ring-2 ring-accent border-accent/50' : 'border-border',
-          isDragOver && 'ring-2 ring-accent/50 bg-accent/5',
-          menuOpen && 'z-[60]',
-          className,
-        )}
+        className={cn('group relative cursor-pointer', isDragOver && 'opacity-60', className)}
         draggable
         onDragStart={handleDragStart}
         onDragOver={handleDragOver}
         onDragLeave={() => setIsDragOver(false)}
         onDrop={handleDrop}
-        onDoubleClick={() => onOpen(folder)}
-        onClick={onSelect}
+        onClick={() => onOpen(folder)}
       >
-        {/* Folder thumbnail preview */}
         <FolderThumbnails projectId={folder.project_id} folderId={folder.id} itemCount={folder.item_count} />
 
-        {/* Info */}
-        <div className="px-3 py-2">
-          <div className="flex items-start justify-between gap-1">
-            <p className="text-sm font-medium text-text-primary truncate">{folder.name}</p>
-            <div className="relative" ref={menuRef}>
-              <button
-                className="opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 flex items-center justify-center h-6 w-6 rounded hover:bg-bg-hover transition-opacity shrink-0"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setMenuOpen((p) => !p)
-                }}
-              >
-                <MoreHorizontal className="h-3.5 w-3.5 text-text-tertiary" />
-              </button>
-
-              {menuOpen && (
-                <div className="absolute right-0 top-full mt-1 z-50 w-40 rounded border border-border bg-bg-elevated shadow-xl py-1">
-                  <button
-                    className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-text-secondary hover:bg-bg-hover"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setMenuOpen(false)
-                      setRenameOpen(true)
-                    }}
-                  >
-                    <Pencil className="h-3 w-3" /> Rename
-                  </button>
-                  <button
-                    className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-text-secondary hover:bg-bg-hover"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setMenuOpen(false)
-                      onShare?.(folder.id, folder.name)
-                    }}
-                  >
-                    <Share2 className="h-3 w-3" /> Share
-                  </button>
-                  <button
-                    className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-accent hover:bg-accent-muted"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setMenuOpen(false)
-                      setDeleteOpen(true)
-                    }}
-                  >
-                    <Trash className="h-3 w-3" /> Delete
-                  </button>
-                </div>
-              )}
-            </div>
+        <div className="mt-1.5 flex items-start gap-1">
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[12.5px] text-text-primary">{folder.name}</p>
+            <p className="font-mono text-[11.5px] text-text-tertiary">
+              {folder.item_count} {folder.item_count === 1 ? 'item' : 'items'}
+            </p>
           </div>
-          <p className="font-mono text-[10px] text-text-tertiary mt-0.5">
-            {folder.item_count} {folder.item_count === 1 ? 'Item' : 'Items'}
-          </p>
+          <DropdownMenu.Root>
+            <DropdownMenu.Trigger asChild>
+              <button
+                aria-label={`${folder.name} options`}
+                onClick={(e) => e.stopPropagation()}
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-text-tertiary opacity-0 outline-none transition-colors duration-100 hover:bg-bg-hover hover:text-text-primary group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100 pointer-coarse:opacity-100"
+              >
+                <MoreHorizontal className="h-[15px] w-[15px]" />
+              </button>
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Portal>
+              <DropdownMenu.Content
+                align="end"
+                sideOffset={4}
+                className={menuContentClass}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {onShare && (
+                  <DropdownMenu.Item className={menuItemClass} onSelect={() => onShare(folder.id, folder.name)}>
+                    <Share2 />
+                    Share
+                  </DropdownMenu.Item>
+                )}
+                {onRename && (
+                  <DropdownMenu.Item className={menuItemClass} onSelect={() => setRenameOpen(true)}>
+                    <Pencil />
+                    Rename
+                  </DropdownMenu.Item>
+                )}
+                {onDelete && (
+                  <>
+                    <DropdownMenu.Separator className={menuSeparatorClass} />
+                    <DropdownMenu.Item className={menuItemDangerClass} onSelect={() => setDeleteOpen(true)}>
+                      <Trash2 />
+                      Delete
+                    </DropdownMenu.Item>
+                  </>
+                )}
+              </DropdownMenu.Content>
+            </DropdownMenu.Portal>
+          </DropdownMenu.Root>
         </div>
       </div>
 
@@ -233,7 +207,7 @@ export function FolderCard({
       <NameDialog
         open={renameOpen}
         onOpenChange={setRenameOpen}
-        title="Rename Folder"
+        title="Rename folder"
         placeholder="Folder name"
         defaultValue={folder.name}
         submitLabel="Rename"
@@ -245,7 +219,7 @@ export function FolderCard({
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
         title={`Delete "${folder.name}"?`}
-        description="This folder and all its contents will be moved to trash. You can restore them later."
+        description="The folder and its contents move to trash, where you can restore them."
         confirmLabel="Delete"
         variant="danger"
         onConfirm={() => onDelete?.(folder.id)}

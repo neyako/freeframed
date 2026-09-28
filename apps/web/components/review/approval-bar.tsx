@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import useSWR from 'swr'
-import { CheckCircle2, XCircle, Clock, Loader2 } from 'lucide-react'
+import { CheckCircle2, XCircle, Clock } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Avatar } from '@/components/shared/avatar'
@@ -76,7 +76,7 @@ function RejectNoteDialog({ onConfirm, onCancel }: RejectNoteProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-sm rounded border border-border bg-bg-elevated p-5 animate-slide-up">
+      <div className="w-full max-w-sm rounded border border-border bg-bg-elevated p-5">
         <h3 className="text-sm font-semibold text-text-primary mb-1">Reject with note</h3>
         <p className="text-xs text-text-tertiary mb-3">
           Optionally add a note explaining why this version is being rejected.
@@ -164,6 +164,9 @@ export function ApprovalBar({ assetId, versionId, currentUserId, versionCreatedB
     )
   }
 
+  // Nothing to show or do: no approvals yet and you can't approve your own upload
+  if (!isLoading && !actionError && approvals.length === 0 && (!currentUserId || isUploader)) return null
+
   return (
     <>
       {showRejectDialog && (
@@ -175,29 +178,27 @@ export function ApprovalBar({ assetId, versionId, currentUserId, versionCreatedB
 
       <div
         className={cn(
-          'flex items-center gap-3 px-4 py-2 border-b border-border bg-bg-secondary',
+          'flex h-10 items-center gap-3 px-4 border-b border-border',
           className,
         )}
       >
         {/* Loading */}
         {isLoading && (
           <div className="flex items-center gap-2">
-            <Loader2 className="h-4 w-4 animate-spin text-text-tertiary" />
-            <span className="text-xs text-text-tertiary">Loading approvals…</span>
+            <span className="text-[12.5px] text-text-tertiary">Loading approvals…</span>
           </div>
         )}
 
         {/* Reviewer list */}
         {!isLoading && approvals.length > 0 && (
           <div className="flex items-center gap-2 flex-1 min-w-0 overflow-x-auto">
-            <span className="text-2xs text-text-tertiary shrink-0">Reviews:</span>
             <div className="flex items-center gap-1.5">
               {approvals.map((approval) => {
                 const config = statusConfig[approval.status]
                 return (
                   <div
                     key={approval.id}
-                    className="flex items-center gap-1 rounded-full border border-border bg-bg-tertiary px-2 py-0.5"
+                    className="flex items-center gap-1"
                     title={`${approval.user?.name ?? 'Unknown'}: ${config.label}`}
                   >
                     <Avatar
@@ -216,17 +217,17 @@ export function ApprovalBar({ assetId, versionId, currentUserId, versionCreatedB
             {/* Summary */}
             <div className="flex items-center gap-2 ml-2 shrink-0">
               {approvedCount > 0 && (
-                <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-text-secondary">
+                <span className="text-[12.5px] text-text-secondary">
                   {approvedCount} approved
                 </span>
               )}
               {rejectedCount > 0 && (
-                <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-accent">
+                <span className="text-[12.5px] text-accent">
                   {rejectedCount} rejected
                 </span>
               )}
               {pendingCount > 0 && (
-                <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-text-tertiary">
+                <span className="text-[12.5px] text-text-tertiary">
                   {pendingCount} pending
                 </span>
               )}
@@ -234,9 +235,6 @@ export function ApprovalBar({ assetId, versionId, currentUserId, versionCreatedB
           </div>
         )}
 
-        {!isLoading && approvals.length === 0 && (
-          <span className="text-xs text-text-tertiary flex-1">No review requests yet</span>
-        )}
 
         {/* Error */}
         {actionError && (
@@ -245,14 +243,14 @@ export function ApprovalBar({ assetId, versionId, currentUserId, versionCreatedB
 
         {/* Action buttons */}
         {currentUserId && isUploader && (
-          <span className="ml-auto shrink-0 text-xs text-text-tertiary">Your upload</span>
+          <span className="ml-auto shrink-0 text-[12.5px] text-text-tertiary">Your upload</span>
         )}
 
         {currentUserId && !isUploader && (
           <div className="flex items-center gap-2 shrink-0 ml-auto">
             {myApproval?.status === 'approved' && (
               <span className="inline-flex items-center gap-1 text-xs text-text-primary font-medium">
-                <CheckCircle2 className="h-4 w-4 animate-check-pop" />
+                <CheckCircle2 className="h-4 w-4" />
                 You approved
               </span>
             )}
@@ -275,13 +273,13 @@ export function ApprovalBar({ assetId, versionId, currentUserId, versionCreatedB
                   Reject
                 </Button>
                 <Button
-                  variant="solid"
+                  variant="primary"
                   size="sm"
                   onClick={handleApprove}
-                  loading={approving}
+                  disabled={approving}
                 >
                   <CheckCircle2 className="h-4 w-4" />
-                  Approve
+                  {approving ? 'Approving…' : 'Approve'}
                 </Button>
               </>
             )}

@@ -108,36 +108,21 @@ export function SetupWizard() {
 
   if (success) {
     return (
-      <div className="text-center py-8 animate-fade-in">
-        <div className="mb-4 mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-status-success/15">
-          <svg className="h-6 w-6 text-status-success" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-          </svg>
-        </div>
-        <h2 className="text-lg font-medium tracking-[-0.02em] text-text-primary mb-1">Admin account created</h2>
-        <p className="text-sm text-text-secondary">Redirecting you to your projects…</p>
-      </div>
+      <p className="text-[13px] text-text-secondary">Admin account created. Opening your workspace…</p>
     )
   }
 
   return (
-    <div>
-      <div className="mb-8">
-        <h1 className="text-xl font-medium tracking-[-0.02em] text-text-primary mb-1">Welcome to freeframed</h1>
-        <p className="text-sm text-text-secondary">
-          Create the super admin account to get started. This can only be done once.
-        </p>
-      </div>
+    <div className="space-y-4">
+      <h2 className="text-[18px] font-semibold text-text-primary">Create the admin account</h2>
 
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-3">
         {errors.general && (
-          <div className="animate-shake rounded border border-accent-line bg-accent-muted px-3 py-2.5 font-mono text-[12px] text-accent">
-            {errors.general}
-          </div>
+          <p role="alert" className="text-[12.5px] text-accent">{errors.general}</p>
         )}
 
         <Input
-          label="Full name"
+          label="Name"
           type="text"
           placeholder="Alex Johnson"
           autoComplete="name"
@@ -186,13 +171,8 @@ export function SetupWizard() {
           error={errors.setupToken}
         />
 
-        <Button
-          type="submit"
-          size="lg"
-          loading={loading}
-          className="mt-2 w-full"
-        >
-          Create admin account
+        <Button type="submit" loading={loading} className="mt-1 w-full">
+          {loading ? 'Creating…' : 'Create admin account'}
         </Button>
       </form>
     </div>

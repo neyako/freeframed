@@ -5,7 +5,6 @@ import {
   Pencil,
   Paperclip,
   X,
-  Loader2,
   Send,
   Smile,
   Clock,
@@ -19,8 +18,11 @@ import {
   Trash2,
   Globe,
   Lock,
+  Scissors,
+  Film,
 } from "lucide-react";
 import { cn, formatTime, formatTimecode, formatFrames } from "@/lib/utils";
+import { formatRange, formatSpan } from "@/lib/cuts";
 import { useReviewStore } from "@/stores/review-store";
 import { useReview } from "./review-provider";
 import { useDrawing } from "@/hooks/use-drawing";
@@ -33,22 +35,32 @@ type CommentVisibility = "public" | "internal";
 
 const COMMENT_VISIBILITY_STORAGE_KEY = "ff-comment-visibility";
 
+export interface CommentDraft {
+  body: string;
+  timecodeStart?: number;
+  timecodeEnd?: number;
+  annotation?: Record<string, unknown>;
+  parentId?: string;
+  visibility?: CommentVisibility;
+  mentionUserIds?: string[];
+  attachments?: File[];
+  /** The range should come out of the edit */
+  isCut?: boolean;
+}
+
+// Attachments upload as-is (no transcode); the API enforces the same caps.
+const ATTACHMENT_LIMIT_BYTES: Record<string, number> = {
+  image: 25 * 1024 * 1024,
+  video: 250 * 1024 * 1024,
+};
+
 interface CommentInputProps {
   assetId: string;
   projectId: string;
   assetType?: string;
   replyToId?: string | null;
   annotationData?: Record<string, unknown> | null;
-  onSubmit: (
-    body: string,
-    timecodeStart?: number,
-    timecodeEnd?: number,
-    annotationData?: Record<string, unknown>,
-    parentId?: string,
-    visibility?: CommentVisibility,
-    mentionUserIds?: string[],
-    attachments?: File[],
-  ) => Promise<void>;
+  onSubmit: (draft: CommentDraft) => Promise<void>;
   onCancelReply?: () => void;
   onPauseVideo?: () => void;
   visibilityLocked?: boolean;
@@ -139,9 +151,7 @@ function MentionDropdown({
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-3 px-4">
-        <Loader2 className="h-4 w-4 animate-spin text-text-tertiary" />
-      </div>
+      <div className="px-3 py-2 text-[12px] text-text-tertiary">Loading members…</div>
     );
   }
 
@@ -189,6 +199,14 @@ function AttachmentThumb({ file }: { file: File }) {
     return () => URL.revokeObjectURL(url);
   }, [file]);
   if (!src) return null;
+  if (file.type.startsWith("video/")) {
+    return (
+      <div className="relative h-full w-full bg-black">
+        <video src={src} muted preload="metadata" className="h-full w-full object-cover" />
+        <Film className="absolute left-1 bottom-1 h-3 w-3 text-white/80" />
+      </div>
+    );
+  }
   // eslint-disable-next-line @next/next/no-img-element
   return <img src={src} alt={file.name} className="h-full w-full object-cover" />;
 }
@@ -257,8 +275,18 @@ export function CommentInput({
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   function addFiles(files: FileList | File[]) {
-    const images = Array.from(files).filter((f) => f.type.startsWith("image/"));
-    if (images.length) setPendingFiles((prev) => [...prev, ...images]);
+    const accepted: File[] = [];
+    for (const file of Array.from(files)) {
+      const limit = ATTACHMENT_LIMIT_BYTES[file.type.split("/")[0]];
+      if (!limit) {
+        setError(`${file.name}: attach images or videos only`);
+      } else if (file.size > limit) {
+        setError(`${file.name} is over ${limit / (1024 * 1024)} MB`);
+      } else {
+        accepted.push(file);
+      }
+    }
+    if (accepted.length) setPendingFiles((prev) => [...prev, ...accepted]);
   }
 
   React.useEffect(() => {
@@ -322,6 +350,19 @@ export function CommentInput({
 
   const canAnnotate = assetType !== "audio";
   const hasTimecode = assetType === "video" || assetType === "audio";
+  // Cuts are a member tool on timed media; guests and replies only comment.
+  // The I/O range (either end may follow the playhead until it's marked)
+  const rangeActive = rangeStart !== null || rangeEnd !== null;
+  const markedRange = (() => {
+    if (!hasTimecode || !timecodeAttached || !rangeActive) return null;
+    const inPoint = rangeStart ?? playheadTime;
+    const outPoint = rangeEnd ?? playheadTime;
+    if (inPoint === outPoint) return null;
+    return { start: Math.min(inPoint, outPoint), end: Math.max(inPoint, outPoint) };
+  })();
+  // How we work: an I/O range is a cut (members only; guests and replies just comment)
+  const isCut = markedRange !== null && !visibilityLocked && !replyToId;
+  const canSubmit = isCut || body.trim().length > 0;
 
   function displayTime(seconds: number): string {
     switch (timeFormat) {
@@ -396,7 +437,7 @@ export function CommentInput({
 
   async function handleSubmit() {
     const trimmed = body.trim();
-    if (!trimmed) return;
+    if (!canSubmit) return;
 
     setSubmitting(true);
     setError(null);
@@ -439,35 +480,29 @@ export function CommentInput({
         finalAnnotation = annotationData;
       }
 
-      const rangeActive = rangeStart !== null || rangeEnd !== null;
       const attachTime =
         hasTimecode && timecodeAttached && (playheadTime > 0 || rangeActive);
       let timecodeStart: number | undefined;
       let timecodeEnd: number | undefined;
-      if (attachTime) {
-        timecodeStart = playheadTime;
-        if (rangeActive) {
-          const inPoint = rangeStart ?? playheadTime;
-          const outPoint = rangeEnd ?? playheadTime;
-          if (inPoint !== outPoint) {
-            timecodeStart = Math.min(inPoint, outPoint);
-            timecodeEnd = Math.max(inPoint, outPoint);
-          } else {
-            timecodeStart = inPoint;
-          }
-        }
+      if (markedRange) {
+        timecodeStart = markedRange.start;
+        timecodeEnd = markedRange.end;
+      } else if (attachTime) {
+        // A range collapsed to one point is a point comment at that point
+        timecodeStart = rangeActive ? (rangeStart ?? rangeEnd ?? playheadTime) : playheadTime;
       }
 
-      await onSubmit(
-        trimmed,
+      await onSubmit({
+        body: trimmed,
         timecodeStart,
         timecodeEnd,
-        finalAnnotation,
-        replyToId ?? undefined,
-        commentVisibility,
-        mentionUserIds.length > 0 ? mentionUserIds : undefined,
-        pendingFiles.length > 0 ? pendingFiles : undefined,
-      );
+        annotation: finalAnnotation,
+        parentId: replyToId ?? undefined,
+        visibility: commentVisibility,
+        mentionUserIds: mentionUserIds.length > 0 ? mentionUserIds : undefined,
+        attachments: pendingFiles.length > 0 ? pendingFiles : undefined,
+        isCut: isCut || undefined,
+      });
 
       setBody("");
       setPendingFiles([]);
@@ -521,21 +556,12 @@ export function CommentInput({
                 )}
               >
                 {rangeStart !== null || rangeEnd !== null ? (
-                  // Range mode — compact m:ss so the chip never crowds the textarea
+                  // Range mode: the range is the cut (scissors) for members
                   <>
-                    {formatTime(
-                      Math.min(
-                        rangeStart ?? playheadTime,
-                        rangeEnd ?? playheadTime,
-                      ),
-                    )}
-                    <span className="text-accent/60">→</span>
-                    {formatTime(
-                      Math.max(
-                        rangeStart ?? playheadTime,
-                        rangeEnd ?? playheadTime,
-                      ),
-                    )}
+                    {isCut && <Scissors className="h-3 w-3" aria-label="Cut" />}
+                    {markedRange
+                      ? formatRange(markedRange.start, markedRange.end)
+                      : formatTime(rangeStart ?? rangeEnd ?? playheadTime)}
                     <button
                       onClick={() => clearRange()}
                       className="ml-0.5 text-accent/60 hover:text-accent transition-colors"
@@ -562,7 +588,11 @@ export function CommentInput({
               ref={textareaRef}
               className="flex-1 resize-none bg-transparent px-2.5 py-2.5 text-[13px] text-text-primary placeholder:text-text-tertiary focus:outline-none min-h-[38px] max-h-[120px]"
               placeholder={
-                replyToId ? "Write a reply..." : "Leave your comment..."
+                replyToId
+                  ? "Write a reply..."
+                  : isCut
+                    ? "Why cut this? (optional)"
+                    : "Leave your comment..."
               }
               value={body}
               onChange={handleTextChange}
@@ -583,7 +613,7 @@ export function CommentInput({
 
           {/* Mention dropdown */}
           {mentionQuery !== null && (
-            <div className="absolute bottom-full left-0 right-0 mb-1 z-50 rounded-lg border border-border bg-bg-elevated shadow-xl max-h-48 overflow-y-auto">
+            <div className="absolute bottom-full left-0 right-0 mb-1 z-50 rounded-lg border border-border bg-bg-elevated shadow-xl max-h-48 overflow-y-auto animate-ff-rise-in">
               <MentionDropdown
                 query={mentionQuery}
                 projectId={projectId}
@@ -738,7 +768,7 @@ export function CommentInput({
                   <Smile className="h-4 w-4" />
                 </button>
                 {emojiOpen && (
-                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 rounded-lg border border-border bg-bg-elevated shadow-2xl p-1.5 animate-in fade-in zoom-in-95 duration-100 w-[200px]">
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 rounded-lg border border-border bg-bg-elevated shadow-2xl p-1.5 duration-100 w-[200px] animate-ff-rise-in">
                     <div className="grid grid-cols-8 gap-px">
                       {EMOJIS.map((e) => (
                         <button
@@ -764,7 +794,7 @@ export function CommentInput({
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept="image/*"
+                    accept="image/*,video/*"
                     multiple
                     className="hidden"
                     onChange={(e) => {
@@ -774,7 +804,7 @@ export function CommentInput({
                   />
                   <button
                     className="h-7 w-7 flex items-center justify-center rounded-md text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary transition-colors"
-                    title="Attach image"
+                    title="Attach image or video"
                     onClick={() => fileInputRef.current?.click()}
                   >
                     <Paperclip className="h-4 w-4" />
@@ -807,7 +837,7 @@ export function CommentInput({
                   {!visibilityLocked && <ChevronDown className="h-3 w-3" />}
                 </button>
                 {!visibilityLocked && visDropdownOpen && (
-                  <div className="absolute bottom-full right-0 mb-1 z-50 w-44 rounded-xl border border-border bg-bg-elevated shadow-2xl py-1.5 animate-in fade-in zoom-in-95 duration-100">
+                  <div className="absolute bottom-full right-0 mb-1 z-50 w-44 rounded-xl border border-border bg-bg-elevated shadow-2xl py-1.5 duration-100 animate-ff-rise-in">
                     <button
                       className={cn(
                         "flex w-full items-center gap-2.5 px-3 py-2 text-[13px] transition-colors",
@@ -836,19 +866,25 @@ export function CommentInput({
                 )}
               </div>
 
-              {/* Submit */}
-              <button
-                onClick={handleSubmit}
-                disabled={!body.trim() || submitting}
-                className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-accent text-text-primary hover:bg-accent/90 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                title="Send (Enter)"
-              >
-                {submitting ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
+              {/* Submit: disabled while posting, no spinner */}
+              {isCut ? (
+                <button
+                  onClick={handleSubmit}
+                  disabled={!canSubmit || submitting}
+                  className="inline-flex h-7 items-center rounded-md bg-text-primary px-2.5 text-[12px] font-medium text-text-inverse hover:opacity-90 disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  {submitting ? "Adding…" : "Add cut"}
+                </button>
+              ) : (
+                <button
+                  onClick={handleSubmit}
+                  disabled={!canSubmit || submitting}
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-accent text-text-primary hover:bg-accent/90 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  title="Send (Enter)"
+                >
                   <Send className="h-3.5 w-3.5" />
-                )}
-              </button>
+                </button>
+              )}
             </div>
           </div>
         )}

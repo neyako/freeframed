@@ -16,12 +16,7 @@ from apps.api.models.asset import (
 )
 from apps.api.models.comment import Comment
 from apps.api.models.folder import Folder
-from apps.api.models.share import (
-    ShareLink,
-    ShareLinkItem,
-    SharePermission,
-    ShareVisibility,
-)
+from apps.api.models.share import ShareLink, SharePermission, ShareVisibility
 from apps.api.models.user import User
 from apps.api.routers import share
 
@@ -44,7 +39,6 @@ class SubfolderFact:
 @dataclass(frozen=True, slots=True)
 class ShareListingWorld:
     link: ShareLink
-    multi_link: ShareLink
     assets: tuple[AssetFact, ...]
     subfolders: tuple[SubfolderFact, ...]
 
@@ -250,33 +244,10 @@ def _build_share_listing_world(db, make_project, make_user) -> ShareListingWorld
         visibility=ShareVisibility.public,
         is_enabled=True,
     )
-    multi_link = ShareLink(
-        project_id=project.id,
-        token="multi-listing-batch",
-        created_by=owner.id,
-        title="Multi listing",
-        permission=SharePermission.view,
-        visibility=ShareVisibility.public,
-        is_enabled=True,
-    )
-    db.add_all([link, multi_link])
-    db.flush()
-    db.add_all(
-        [
-            ShareLinkItem(
-                share_link_id=multi_link.id,
-                folder_id=subfolder_facts[0].folder.id,
-            ),
-            ShareLinkItem(
-                share_link_id=multi_link.id,
-                asset_id=asset_facts[0].asset.id,
-            ),
-        ]
-    )
+    db.add(link)
     db.flush()
     return ShareListingWorld(
         link=link,
-        multi_link=multi_link,
         assets=tuple(asset_facts),
         subfolders=tuple(subfolder_facts),
     )
@@ -349,28 +320,3 @@ def test_share_listing_batching_uses_bounded_query_count(
         event.remove(migrated_engine, "before_cursor_execute", count_statement)
 
     assert len(statements) <= 15
-
-
-def test_share_listing_batching_preserves_multi_share_contract(
-    db,
-    make_project,
-    make_user,
-) -> None:
-    world = _build_share_listing_world(db, make_project, make_user)
-    asset_fact = world.assets[0]
-    subfolder_fact = world.subfolders[0]
-
-    response = _get_listing(db, world.multi_link.token)
-
-    assert response.total == 1
-    assert [item.id for item in response.assets] == [asset_fact.asset.id]
-    assert response.assets[0].thumbnail_url == _thumbnail_url(
-        asset_fact.media_file.s3_key_thumbnail
-    )
-    assert response.assets[0].comment_count == asset_fact.comment_count
-    assert response.assets[0].file_size is None
-    assert [item.id for item in response.subfolders] == [subfolder_fact.folder.id]
-    assert response.subfolders[0].item_count == subfolder_fact.item_count
-    assert tuple(response.subfolders[0].thumbnail_urls) == (
-        subfolder_fact.thumbnail_urls
-    )
