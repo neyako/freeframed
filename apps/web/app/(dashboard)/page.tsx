@@ -177,8 +177,9 @@ export default function HomePage() {
     isLoading: loadingRecent,
     mutate: mutateRecentAssets,
   } = useSWR<AssetResponse[]>(
-    "/me/assets?filter=owned",
-    () => api.get<AssetResponse[]>("/me/assets?filter=owned"),
+    // Everything you can see: for the workspace owner that includes editors' uploads
+    "/me/assets",
+    () => api.get<AssetResponse[]>("/me/assets"),
   );
 
   const handleDeleteAsset = React.useCallback(

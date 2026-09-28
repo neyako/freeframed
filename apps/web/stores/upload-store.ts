@@ -414,7 +414,7 @@ const storeCreator: StateCreator<UploadStore, [['zustand/persist', unknown]]> = 
     if (get().historyLoaded) return
     set({ historyLoading: true })
     try {
-      const assets = await api.get<AssetResponse[]>(`/me/assets?skip=0&limit=${HISTORY_PAGE_SIZE}`)
+      const assets = await api.get<AssetResponse[]>(`/me/assets?filter=owned&skip=0&limit=${HISTORY_PAGE_SIZE}`)
       const merged = mergeHistoryAssets(get().files, assets)
       set({
         historyLoaded: true,
@@ -433,7 +433,7 @@ const storeCreator: StateCreator<UploadStore, [['zustand/persist', unknown]]> = 
     if (!historyHasMore || historyLoading) return
     set({ historyLoading: true })
     try {
-      const assets = await api.get<AssetResponse[]>(`/me/assets?skip=${historySkip}&limit=${HISTORY_PAGE_SIZE}`)
+      const assets = await api.get<AssetResponse[]>(`/me/assets?filter=owned&skip=${historySkip}&limit=${HISTORY_PAGE_SIZE}`)
       const merged = mergeHistoryAssets(get().files, assets)
       set((s) => ({
         historyLoading: false,

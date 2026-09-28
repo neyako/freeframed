@@ -130,6 +130,15 @@ def get_or_create_quick_share_project(db: Session = Depends(get_db), current_use
     db.refresh(project)
     return project
 
+def _quick_share_creator_names(db: Session, projects: list[Project], viewer: User) -> dict:
+    """Everyone has a "Quick Shares" project; the owner sees them all, so name
+    the ones created by someone else after their creator."""
+    creator_ids = [p.created_by for p in projects if p.is_quick_share and p.created_by != viewer.id]
+    if not creator_ids:
+        return {}
+    return dict(db.query(User.id, User.name).filter(User.id.in_(creator_ids)).all())
+
+
 @router.get("", response_model=list[ProjectResponse])
 def list_projects(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     memberships = db.query(ProjectMember).filter(
@@ -137,13 +146,14 @@ def list_projects(db: Session = Depends(get_db), current_user: User = Depends(ge
         ProjectMember.deleted_at.is_(None),
     ).all()
     membership_map = {m.project_id: m.role for m in memberships}
-    if not membership_map:
-        return []
-
-    projects = db.query(Project).filter(
-        Project.deleted_at.is_(None),
-        Project.id.in_(list(membership_map.keys())),
-    ).all()
+    # The workspace owner sees every project (e.g. editors' Quick Shares) and
+    # acts as owner on them, matching require_project_role.
+    project_query = db.query(Project).filter(Project.deleted_at.is_(None))
+    if not current_user.is_superadmin:
+        if not membership_map:
+            return []
+        project_query = project_query.filter(Project.id.in_(list(membership_map.keys())))
+    projects = project_query.all()
 
     all_project_ids = [p.id for p in projects]
     if not all_project_ids:
@@ -176,14 +186,18 @@ def list_projects(db: Session = Depends(get_db), current_user: User = Depends(ge
         .all()
     )
 
+    creator_names = _quick_share_creator_names(db, projects, current_user)
+
     result = []
     for p in projects:
         resp = _project_to_response(p)
+        if p.created_by in creator_names:
+            resp.name = f"{creator_names[p.created_by]}'s quick shares"
         resp.poster_url = _resolve_poster_url(p)
         resp.asset_count = asset_counts.get(p.id, 0)
         resp.storage_bytes = storage_map.get(p.id, 0)
         resp.member_count = member_counts.get(p.id, 0)
-        resp.role = membership_map.get(p.id)
+        resp.role = membership_map.get(p.id, ProjectRole.owner if current_user.is_superadmin else None)
         result.append(resp)
 
     return result
@@ -197,6 +211,9 @@ def get_project(
     project = _get_project(db, project_id)
     member = require_project_role(db, project_id, current_user, ProjectRole.editor)
     resp = _project_to_response(project)
+    creator_names = _quick_share_creator_names(db, [project], current_user)
+    if project.created_by in creator_names:
+        resp.name = f"{creator_names[project.created_by]}'s quick shares"
     resp.poster_url = _resolve_poster_url(project)
     resp.role = member.role
     # Calculate storage, asset count, member count
