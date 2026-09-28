@@ -4,34 +4,30 @@ import * as React from "react";
 import {
   CheckCircle2,
   Clock,
+  Scissors,
   ChevronDown,
   ChevronRight,
-  MessageSquare,
   Smile,
   MoreHorizontal,
   Pencil,
   Link2,
   Trash2,
   Globe,
-  ListFilter,
   ArrowUpDown,
   Search,
   X,
   Paperclip,
-  Circle,
-  Mail,
-  AtSign,
-  Hash,
-  User,
   Check,
   Send,
   Lock,
   Download,
 } from "lucide-react";
 import { cn, formatTime, formatRelativeTime } from "@/lib/utils";
+import { formatRange, formatSpan } from "@/lib/cuts";
 import { avatarGray, getInitials } from "@/lib/avatar";
 import { useReviewStore } from "@/stores/review-store";
 import { Linkified } from "@/components/review/linkified";
+import { LinkEmbed, firstEmbeddableUrl } from "@/components/review/link-embed";
 import { CommentAttachment } from "@/components/review/comment-attachment";
 import type { CommentWithReplies } from "@/hooks/use-comments";
 import {
@@ -50,9 +46,12 @@ interface CommentPanelProps {
   currentUserId?: string;
   /** Omit to hide resolve controls (e.g. share viewers can't resolve) */
   onResolve?: (commentId: string) => Promise<void>;
+  /** Mark a range comment as a cut, or back. Omit for guests. */
+  onToggleCut?: (commentId: string) => Promise<void>;
   onDelete: (commentId: string) => Promise<void>;
-  onAddReaction: (commentId: string, emoji: string) => Promise<void>;
-  onRemoveReaction: (commentId: string, emoji: string) => Promise<void>;
+  /** Omit both to hide reaction controls (share viewers can't react) */
+  onAddReaction?: (commentId: string, emoji: string) => Promise<void>;
+  onRemoveReaction?: (commentId: string, emoji: string) => Promise<void>;
   onReply: (parentId: string) => void;
   onSubmitReply?: (parentId: string, body: string) => Promise<void>;
   /** Query string appended to own-comment mutations (share-link auth context) */
@@ -131,7 +130,7 @@ function Dropdown({
     <div
       ref={ref}
       className={cn(
-        "absolute top-full mt-1 z-50 rounded-xl border border-border bg-bg-elevated shadow-2xl py-1.5 animate-in fade-in zoom-in-95 duration-100",
+        "absolute top-full mt-1 z-50 rounded-xl border border-border bg-bg-elevated shadow-2xl py-1.5 duration-100 animate-ff-pop-in",
         align === "right" ? "right-0" : "left-0",
         className,
       )}
@@ -148,6 +147,7 @@ function CommentMenu({
   canEdit,
   commentId,
   assetId,
+  versionId,
   onEdit,
   onDelete,
 }: {
@@ -156,6 +156,7 @@ function CommentMenu({
   canEdit: boolean;
   commentId: string;
   assetId?: string;
+  versionId?: string;
   onEdit: () => void;
   onDelete: (commentId: string) => Promise<void>;
 }) {
@@ -197,6 +198,7 @@ function CommentMenu({
               url = new URL(window.location.href)
             }
             url.searchParams.set('commentId', commentId)
+            if (versionId) url.searchParams.set('versionId', versionId)
             navigator.clipboard.writeText(url.toString())
             setOpen(false)
           }}
@@ -298,7 +300,7 @@ function InlineReplyInput({
               <Smile className="h-4 w-4" />
             </button>
             {emojiOpen && (
-              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 rounded-lg border border-border bg-bg-elevated shadow-2xl p-1.5 animate-in fade-in zoom-in-95 duration-100 w-[200px]">
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 rounded-lg border border-border bg-bg-elevated shadow-2xl p-1.5 duration-100 w-[200px] animate-ff-rise-in">
                 <div className="grid grid-cols-8 gap-px">
                   {REPLY_EMOJIS.map((e) => (
                     <button
@@ -351,9 +353,12 @@ interface CommentItemProps {
   flashCommentId?: string | null;
   /** Omit to hide resolve controls (e.g. share viewers can't resolve) */
   onResolve?: (commentId: string) => Promise<void>;
+  /** Mark a range comment as a cut, or back. Omit for guests. */
+  onToggleCut?: (commentId: string) => Promise<void>;
   onDelete: (commentId: string) => Promise<void>;
-  onAddReaction: (commentId: string, emoji: string) => Promise<void>;
-  onRemoveReaction: (commentId: string, emoji: string) => Promise<void>;
+  /** Omit both to hide reaction controls (share viewers can't react) */
+  onAddReaction?: (commentId: string, emoji: string) => Promise<void>;
+  onRemoveReaction?: (commentId: string, emoji: string) => Promise<void>;
   onReply: (parentId: string) => void;
   onCancelReply: () => void;
   onSubmitReply?: (parentId: string, body: string) => Promise<void>;
@@ -372,6 +377,7 @@ function CommentItem({
   isFocused,
   flashCommentId,
   onResolve,
+  onToggleCut,
   onDelete,
   onAddReaction,
   onRemoveReaction,
@@ -433,16 +439,26 @@ function CommentItem({
     }
   }
 
+  const canReact = Boolean(onAddReaction && onRemoveReaction);
+  const embedUrl = React.useMemo(() => firstEmbeddableUrl(comment.body), [comment.body]);
+  const [togglingCut, setTogglingCut] = React.useState(false);
+  const isRange =
+    depth === 0 &&
+    comment.timecode_start !== null &&
+    comment.timecode_end !== null &&
+    comment.timecode_end !== undefined &&
+    comment.timecode_end > comment.timecode_start;
+
   async function handleReactionClick(emoji: string, userReacted: boolean) {
-    if (userReacted) await onRemoveReaction(comment.id, emoji);
-    else await onAddReaction(comment.id, emoji);
+    if (userReacted) await onRemoveReaction?.(comment.id, emoji);
+    else await onAddReaction?.(comment.id, emoji);
   }
 
   async function handleQuickEmoji(emoji: string) {
     setShowEmojiPicker(false);
     const existing = reactionGroups.find((r) => r.emoji === emoji);
-    if (existing?.userReacted) await onRemoveReaction(comment.id, emoji);
-    else await onAddReaction(comment.id, emoji);
+    if (existing?.userReacted) await onRemoveReaction?.(comment.id, emoji);
+    else await onAddReaction?.(comment.id, emoji);
   }
 
   const flash = flashCommentId === comment.id;
@@ -451,15 +467,13 @@ function CommentItem({
       ref={itemRef}
       data-comment-id={comment.id}
       className={cn(
-        "group/comment relative transition-colors cursor-pointer",
-        flash && "animate-comment-flash",
+        "group/comment relative cursor-pointer",
+        flash && "animate-ff-row-in",
         depth > 0
-          ? "ml-8 pl-3 border-l-2 border-border"
+          ? "ml-8 pl-3 border-l border-border"
           : cn(
-              "rounded-lg border px-3",
-              isFocused
-                ? "border-accent/50 bg-white/[0.04]"
-                : "border-white/[0.06] hover:border-white/15 hover:bg-white/[0.02]",
+              "px-4 border-b border-border",
+              isFocused ? "bg-white/[0.05]" : "hover:bg-white/[0.02]",
             ),
       )}
       onClick={() => {
@@ -475,6 +489,9 @@ function CommentItem({
         );
       }}
     >
+      {comment.is_cut && depth === 0 && (
+        <span className="cut-hatch absolute left-0 inset-y-3 w-[3px]" aria-hidden />
+      )}
       <div className="flex gap-2.5 py-3">
         {/* Avatar — reviewer photo when available, mono initials otherwise */}
         {avatarUrl ? (
@@ -521,7 +538,10 @@ function CommentItem({
             {comment.timecode_start !== null &&
               comment.timecode_start !== undefined && (
                 <button
-                  className="inline-flex items-center gap-1 rounded-md bg-accent/15 px-1.5 py-0.5 text-[11px] font-dot font-bold text-accent hover:bg-accent/25 transition-colors"
+                  className={cn(
+                    "inline-flex items-center gap-1 font-mono text-[11.5px] tabular-nums hover:text-text-primary",
+                    comment.is_cut ? "text-accent" : "text-text-secondary",
+                  )}
                   onClick={() => {
                     seekTo(comment.timecode_start!, true);
                     setFocusedCommentId(comment.id);
@@ -531,17 +551,23 @@ function CommentItem({
                   }}
                   title="Jump to timecode"
                 >
-                  <Clock className="h-2.5 w-2.5" />
-                  {formatTime(comment.timecode_start)}
-                  {comment.timecode_end !== null &&
-                    comment.timecode_end !== undefined && (
-                      <> — {formatTime(comment.timecode_end)}</>
-                    )}
+                  {comment.is_cut ? (
+                    <Scissors className="h-3 w-3" />
+                  ) : (
+                    <Clock className="h-3 w-3" />
+                  )}
+                  {comment.is_cut && "Cut "}
+                  {isRange
+                    ? formatRange(comment.timecode_start, comment.timecode_end!)
+                    : formatTime(comment.timecode_start)}
+                  {comment.is_cut && isRange && (
+                    <> · {formatSpan(comment.timecode_end! - comment.timecode_start)}</>
+                  )}
                 </button>
               )}
             {comment.annotation && (
               <button
-                className="inline-flex items-center justify-center h-5 w-5 rounded text-purple-400/70 hover:text-purple-400 hover:bg-purple-500/15 transition-colors"
+                className="inline-flex items-center justify-center h-5 w-5 rounded text-text-tertiary hover:text-text-primary hover:bg-bg-tertiary"
                 onClick={() => {
                   setActiveAnnotation(comment.annotation!.drawing_data);
                   setFocusedCommentId(comment.id);
@@ -598,9 +624,14 @@ function CommentItem({
               </div>
             </div>
           ) : (
-            <p className="mt-1 text-[13px] text-text-secondary leading-relaxed break-words">
-              <Linkified text={comment.body} />
-            </p>
+            <>
+              {comment.body && (
+                <p className="mt-1 text-[13px] text-text-secondary leading-relaxed break-words">
+                  <Linkified text={comment.body} />
+                </p>
+              )}
+              {embedUrl && <LinkEmbed url={embedUrl} />}
+            </>
           )}
 
           {/* Attachments */}
@@ -628,6 +659,7 @@ function CommentItem({
                       : "border-border bg-bg-tertiary text-text-secondary hover:border-white/20",
                   )}
                   onClick={() => handleReactionClick(r.emoji, r.userReacted)}
+                  disabled={!canReact}
                 >
                   {r.emoji}
                   <span className="text-[10px]">{r.count}</span>
@@ -638,7 +670,7 @@ function CommentItem({
 
           {/* Action row: Reply text + hover icons */}
           <div className="mt-1.5 flex items-center gap-2">
-            {depth === 0 && (
+            {depth === 0 && onSubmitReply && (
               <button
                 className="text-[13px] font-medium text-text-tertiary hover:text-text-secondary transition-colors"
                 onClick={() => onReply(comment.id)}
@@ -649,28 +681,30 @@ function CommentItem({
 
             <div className="ml-auto flex items-center gap-0.5">
               {/* Emoji — hover only */}
-              <div className="relative opacity-0 group-hover/comment:opacity-100 transition-opacity">
-                <button
-                  className="h-7 w-7 flex items-center justify-center rounded-full text-text-tertiary hover:text-text-secondary hover:bg-bg-tertiary transition-colors"
-                  onClick={() => setShowEmojiPicker((p) => !p)}
-                  title="Add reaction"
-                >
-                  <Smile className="h-4 w-4" />
-                </button>
-                {showEmojiPicker && (
-                  <div className="absolute bottom-full right-0 mb-1 z-50 flex gap-0.5 rounded-xl border border-border bg-bg-elevated p-1.5 shadow-2xl animate-in fade-in zoom-in-95 duration-100">
-                    {QUICK_EMOJIS.map((e) => (
-                      <button
-                        key={e}
-                        className="h-8 w-8 rounded-lg text-base hover:bg-bg-hover transition-colors"
-                        onClick={() => handleQuickEmoji(e)}
-                      >
-                        {e}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+              {canReact && (
+                <div className="relative opacity-0 group-hover/comment:opacity-100 transition-opacity">
+                  <button
+                    className="h-7 w-7 flex items-center justify-center rounded-full text-text-tertiary hover:text-text-secondary hover:bg-bg-tertiary transition-colors"
+                    onClick={() => setShowEmojiPicker((p) => !p)}
+                    title="Add reaction"
+                  >
+                    <Smile className="h-4 w-4" />
+                  </button>
+                  {showEmojiPicker && (
+                    <div className="absolute bottom-full right-0 mb-1 z-50 flex gap-0.5 rounded-xl border border-border bg-bg-elevated p-1.5 shadow-2xl duration-100 animate-ff-rise-in">
+                      {QUICK_EMOJIS.map((e) => (
+                        <button
+                          key={e}
+                          className="h-8 w-8 rounded-lg text-base hover:bg-bg-hover transition-colors"
+                          onClick={() => handleQuickEmoji(e)}
+                        >
+                          {e}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Context menu — hover on pointer devices, always visible on touch */}
               <div className="opacity-0 group-hover/comment:opacity-100 pointer-coarse:opacity-100 transition-opacity">
@@ -679,10 +713,37 @@ function CommentItem({
                   canEdit={!!currentUserId && comment.author_id === currentUserId}
                   commentId={comment.id}
                   assetId={comment.asset_id}
+                  versionId={comment.version_id}
                   onEdit={() => { setEditing(true); setEditBody(comment.body); }}
                   onDelete={onDelete}
                 />
               </div>
+
+              {/* Cut toggle: range comments only; always shown once it's a cut */}
+              {onToggleCut && isRange && (
+                <button
+                  className={cn(
+                    "h-6 w-6 flex items-center justify-center rounded-full disabled:opacity-50",
+                    comment.is_cut
+                      ? "text-accent hover:bg-bg-tertiary"
+                      : "text-text-tertiary hover:text-text-primary hover:bg-bg-tertiary opacity-0 group-hover/comment:opacity-100 pointer-coarse:opacity-100",
+                  )}
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    setTogglingCut(true);
+                    try {
+                      await onToggleCut(comment.id);
+                    } finally {
+                      setTogglingCut(false);
+                    }
+                  }}
+                  disabled={togglingCut}
+                  title={comment.is_cut ? "Not a cut" : "Mark as cut"}
+                  aria-label={comment.is_cut ? "Not a cut" : "Mark as cut"}
+                >
+                  <Scissors className="h-3.5 w-3.5" />
+                </button>
+              )}
 
               {/* Resolve — green filled when resolved (clickable to unresolve), outline on hover when unresolved */}
               {comment.resolved ? (
@@ -764,26 +825,8 @@ function CommentItem({
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type CommentVisibility = "all" | "public" | "internal";
 type SortMode = "oldest" | "newest" | "commenter" | "completed";
-
-interface FilterState {
-  annotations: boolean;
-  attachments: boolean;
-  completed: boolean;
-  incomplete: boolean;
-  unread: boolean;
-  mentionsReactions: boolean;
-}
-
-const EMPTY_FILTERS: FilterState = {
-  annotations: false,
-  attachments: false,
-  completed: false,
-  incomplete: false,
-  unread: false,
-  mentionsReactions: false,
-};
+type ListTab = "all" | "cuts" | "open";
 
 // ─── Comment panel ────────────────────────────────────────────────────────────
 
@@ -792,6 +835,7 @@ export function CommentPanel({
   isLoading,
   currentUserId,
   onResolve,
+  onToggleCut,
   onDelete,
   onAddReaction,
   onRemoveReaction,
@@ -809,14 +853,13 @@ export function CommentPanel({
   const currentVersion = useReviewStore((s) => s.currentVersion);
 
   // Toolbar state
-  const [visibility, setVisibility] = React.useState<CommentVisibility>("all");
-  const [visOpen, setVisOpen] = React.useState(false);
-  const [filterOpen, setFilterOpen] = React.useState(false);
+  const [tab, setTab] = React.useState<ListTab>("all");
+  const tabRefs = React.useRef<Record<ListTab, HTMLButtonElement | null>>({ all: null, cuts: null, open: null });
+  const [indicator, setIndicator] = React.useState<{ x: number; width: number } | null>(null);
   const [sortOpen, setSortOpen] = React.useState(false);
   const [searchOpen, setSearchOpen] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState("");
   const [sortMode, setSortMode] = React.useState<SortMode>("oldest");
-  const [filters, setFilters] = React.useState<FilterState>(EMPTY_FILTERS);
   const [replyingTo, setReplyingTo] = React.useState<string | null>(null);
   const [exportOpen, setExportOpen] = React.useState(false);
 
@@ -869,8 +912,6 @@ export function CommentPanel({
     if (searchOpen) searchRef.current?.focus();
   }, [searchOpen]);
 
-  const hasActiveFilters = Object.values(filters).some(Boolean);
-
   // ─── Computed list ──────────────────────────────────────────────────
 
   const topLevel = React.useMemo(
@@ -878,34 +919,26 @@ export function CommentPanel({
     [comments],
   );
 
-  const publicCount = React.useMemo(
-    () => topLevel.filter((c) => c.visibility !== "internal").length,
+  const tabCounts = React.useMemo(
+    () => ({
+      all: topLevel.length,
+      cuts: topLevel.filter((c) => c.is_cut).length,
+      open: topLevel.filter((c) => !c.resolved).length,
+    }),
     [topLevel],
   );
-  const internalCount = React.useMemo(
-    () => topLevel.filter((c) => c.visibility === "internal").length,
-    [topLevel],
-  );
+
+  // Counts change tab widths, so re-measure on those too
+  React.useLayoutEffect(() => {
+    const el = tabRefs.current[tab];
+    if (el) setIndicator({ x: el.offsetLeft, width: el.offsetWidth });
+  }, [tab, tabCounts]);
 
   const filtered = React.useMemo(() => {
     let list = [...topLevel];
+    if (tab === "cuts") list = list.filter((c) => c.is_cut);
+    else if (tab === "open") list = list.filter((c) => !c.resolved);
 
-    // Filter by visibility
-    if (visibility === "public")
-      list = list.filter((c) => c.visibility !== "internal");
-    else if (visibility === "internal")
-      list = list.filter((c) => c.visibility === "internal");
-
-    // Filter by completion
-    if (filters.completed && !filters.incomplete)
-      list = list.filter((c) => c.resolved);
-    else if (filters.incomplete && !filters.completed)
-      list = list.filter((c) => !c.resolved);
-
-    // Filter by annotations
-    if (filters.annotations) list = list.filter((c) => c.annotation !== null);
-
-    // Search
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       list = list.filter(
@@ -914,9 +947,8 @@ export function CommentPanel({
           (c.author?.name ?? "").toLowerCase().includes(q),
       );
     }
-
     return list;
-  }, [topLevel, visibility, filters, searchQuery]);
+  }, [topLevel, tab, searchQuery]);
 
   const sorted = React.useMemo(() => {
     return [...filtered].sort((a, b) => {
@@ -944,17 +976,6 @@ export function CommentPanel({
       );
     });
   }, [filtered, sortMode]);
-
-  const visLabel =
-    visibility === "all"
-      ? "All comments"
-      : visibility === "public"
-        ? "Public comments"
-        : "Internal comments";
-
-  function toggleFilter(key: keyof FilterState) {
-    setFilters((prev) => ({ ...prev, [key]: !prev[key] }));
-  }
 
   function handleReply(parentId: string) {
     setReplyingTo(parentId);
@@ -984,174 +1005,43 @@ export function CommentPanel({
     <>
     <div className={cn("flex flex-col flex-1 min-h-0", className)}>
       {/* ─── Toolbar ──────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between px-4 py-2.5 shrink-0 border-b border-border-secondary">
-        {/* Visibility dropdown */}
-        <div className="relative">
-          <button
-            className={cn(
-              "flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-[0.12em] transition-colors",
-              visOpen
-                ? "text-text-primary"
-                : "text-text-secondary hover:text-text-primary",
-            )}
-            onClick={() => {
-              setVisOpen((p) => !p);
-              setFilterOpen(false);
-              setSortOpen(false);
-            }}
-          >
-            {visLabel}
-            <ChevronDown className="h-3 w-3" />
-          </button>
-          <Dropdown
-            open={visOpen}
-            onClose={() => setVisOpen(false)}
-            className="w-52"
-          >
-            {[
-              {
-                id: "all" as const,
-                label: "All comments",
-                count: topLevel.length,
-              },
-              {
-                id: "public" as const,
-                label: "Public comments",
-                count: publicCount,
-              },
-              {
-                id: "internal" as const,
-                label: "Internal comments",
-                count: internalCount,
-              },
-            ].map((item) => (
-              <button
-                key={item.id}
-                className={cn(
-                  "flex w-full items-center justify-between px-3 py-2 text-[13px] transition-colors",
-                  visibility === item.id
-                    ? "text-text-primary bg-bg-tertiary"
-                    : "text-text-secondary hover:bg-bg-tertiary",
-                )}
-                onClick={() => {
-                  setVisibility(item.id);
-                  setVisOpen(false);
-                }}
-              >
-                {item.label}
-                <span className="text-[12px] text-text-tertiary tabular-nums">
-                  {item.count}
-                </span>
-              </button>
-            ))}
-          </Dropdown>
+      <div className="flex h-10 items-center justify-between px-4 shrink-0 border-b border-border">
+        <div className="relative flex items-center gap-4 self-stretch text-[12.5px]" role="tablist">
+          {(
+            [
+              ["all", "All"],
+              ["cuts", "Cuts"],
+              ["open", "Open"],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              ref={(el) => {
+                tabRefs.current[id] = el;
+              }}
+              role="tab"
+              aria-selected={tab === id}
+              onClick={() => setTab(id)}
+              className={cn(
+                "h-full",
+                tab === id ? "text-text-primary" : "text-text-tertiary hover:text-text-primary",
+              )}
+            >
+              {label} <span className="font-mono text-text-tertiary">{tabCounts[id]}</span>
+            </button>
+          ))}
+          {/* Underline slides between tabs */}
+          {indicator && (
+            <span
+              aria-hidden
+              className="absolute bottom-0 left-0 h-[1.5px] bg-text-primary transition-[translate,width] duration-[130ms] ease-[cubic-bezier(.2,0,0,1)]"
+              style={{ width: indicator.width, translate: `${indicator.x}px 0` }}
+            />
+          )}
         </div>
 
         {/* Right toolbar icons */}
         <div className="flex items-center gap-0.5">
-          {/* Filter */}
-          <div className="relative">
-            <button
-              className={cn(
-                "h-[26px] w-[26px] flex items-center justify-center rounded-none transition-colors",
-                filterOpen || hasActiveFilters
-                  ? "text-accent"
-                  : "text-text-tertiary hover:text-text-primary",
-              )}
-              title="Filter"
-              onClick={() => {
-                setFilterOpen((p) => !p);
-                setVisOpen(false);
-                setSortOpen(false);
-              }}
-            >
-              <ListFilter className="h-4 w-4" />
-            </button>
-            <Dropdown
-              open={filterOpen}
-              onClose={() => setFilterOpen(false)}
-              align="right"
-              className="w-56"
-            >
-              <div className="px-3 py-2 text-[11px] text-text-tertiary uppercase tracking-wider font-medium">
-                Filter by...
-              </div>
-              {[
-                {
-                  key: "annotations" as const,
-                  icon: Pencil,
-                  label: "Annotations",
-                },
-                {
-                  key: "attachments" as const,
-                  icon: Paperclip,
-                  label: "Attachments",
-                },
-                {
-                  key: "completed" as const,
-                  icon: CheckCircle2,
-                  label: "Completed",
-                },
-                {
-                  key: "incomplete" as const,
-                  icon: Circle,
-                  label: "Incomplete",
-                },
-                { key: "unread" as const, icon: Mail, label: "Unread" },
-                {
-                  key: "mentionsReactions" as const,
-                  icon: AtSign,
-                  label: "Mentions and reactions",
-                },
-              ].map(({ key, icon: Icon, label }) => (
-                <button
-                  key={key}
-                  className="flex w-full items-center justify-between px-3 py-2 text-[13px] text-text-secondary hover:bg-bg-tertiary transition-colors"
-                  onClick={() => toggleFilter(key)}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <Icon className="h-4 w-4" />
-                    {label}
-                  </div>
-                  <div
-                    className={cn(
-                      "h-4 w-4 rounded border flex items-center justify-center transition-colors",
-                      filters[key]
-                        ? "bg-accent border-accent"
-                        : "border-white/20",
-                    )}
-                  >
-                    {filters[key] && (
-                      <Check className="h-3 w-3 text-text-inverse" />
-                    )}
-                  </div>
-                </button>
-              ))}
-              <div className="border-t border-border mt-1 pt-1">
-                <button className="flex w-full items-center gap-2.5 px-3 py-2 text-[13px] text-text-secondary hover:bg-bg-tertiary transition-colors">
-                  <Hash className="h-4 w-4" />
-                  Hashtag
-                  <ChevronRight className="h-3.5 w-3.5 ml-auto" />
-                </button>
-                <button className="flex w-full items-center gap-2.5 px-3 py-2 text-[13px] text-text-secondary hover:bg-bg-tertiary transition-colors">
-                  <User className="h-4 w-4" />
-                  Person
-                  <ChevronRight className="h-3.5 w-3.5 ml-auto" />
-                </button>
-              </div>
-              {hasActiveFilters && (
-                <div className="border-t border-border mt-1 pt-1 px-1.5 pb-1">
-                  <button
-                    className="w-full py-1.5 text-[13px] text-text-secondary bg-bg-tertiary hover:bg-bg-hover rounded-lg transition-colors font-medium"
-                    onClick={() => setFilters(EMPTY_FILTERS)}
-                  >
-                    Clear Filters
-                  </button>
-                </div>
-              )}
-            </Dropdown>
-          </div>
-
           {/* Sort */}
           <div className="relative">
             <button
@@ -1164,8 +1054,6 @@ export function CommentPanel({
               title="Sort"
               onClick={() => {
                 setSortOpen((p) => !p);
-                setVisOpen(false);
-                setFilterOpen(false);
               }}
             >
               <ArrowUpDown className="h-4 w-4" />
@@ -1176,7 +1064,7 @@ export function CommentPanel({
               align="right"
               className="w-52"
             >
-              <div className="px-3 py-2 text-[11px] text-text-tertiary uppercase tracking-wider font-medium">
+              <div className="px-3 py-2 text-[12px] text-text-tertiary">
                 Sort thread by...
               </div>
               {[
@@ -1219,8 +1107,6 @@ export function CommentPanel({
                 title="Export comments"
                 onClick={() => {
                   setExportOpen((p) => !p);
-                  setVisOpen(false);
-                  setFilterOpen(false);
                   setSortOpen(false);
                 }}
               >
@@ -1232,7 +1118,7 @@ export function CommentPanel({
                 align="right"
                 className="w-56"
               >
-                <div className="px-3 py-2 text-[11px] text-text-tertiary uppercase tracking-wider font-medium">
+                <div className="px-3 py-2 text-[12px] text-text-tertiary">
                   Export comments
                 </div>
                 {currentAsset?.asset_type === "video" && (
@@ -1324,28 +1210,18 @@ export function CommentPanel({
       {/* ─── Comment list ─────────────────────────────────────────── */}
       <div ref={listRef} className="flex-1 overflow-y-auto">
         {isLoading && (
-          <div className="flex items-center justify-center py-12">
-            <div className="h-5 w-5 animate-spin rounded-full border-2 border-border border-t-accent" />
-          </div>
+          <p className="px-4 py-6 text-[12.5px] text-text-tertiary">Loading comments…</p>
         )}
 
         {!isLoading && sorted.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-16 text-center px-6">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-bg-tertiary text-text-tertiary mb-3">
-              <MessageSquare className="h-6 w-6" />
-            </div>
-            <p className="text-sm text-text-secondary font-medium">
-              No comments yet
-            </p>
-            <p className="text-xs text-text-tertiary mt-1">
-              Leave a comment below to start the review
-            </p>
-          </div>
+          <p className="px-4 py-6 text-[12.5px] text-text-tertiary">
+            {tab === "cuts" ? "No cuts yet. Set a range with I and O, then choose Cut." : tab === "open" ? "Nothing open." : "No comments yet."}
+          </p>
         )}
 
         {!isLoading &&
           sorted.map((comment, index) => (
-            <div key={comment.id} className="px-3 pt-2 first:pt-3">
+            <div key={comment.id}>
               <CommentItem
                 comment={comment}
                 commentNumber={index + 1}
@@ -1354,6 +1230,7 @@ export function CommentPanel({
                 isFocused={focusedCommentId === comment.id}
                 flashCommentId={flashCommentId}
                 onResolve={onResolve}
+                onToggleCut={onToggleCut}
                 onDelete={onDelete}
                 onAddReaction={onAddReaction}
                 onRemoveReaction={onRemoveReaction}

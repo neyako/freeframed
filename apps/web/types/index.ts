@@ -1,52 +1,18 @@
 // ─── Enums ───────────────────────────────────────────────────────────────────
 
-export type AssetType = "image" | "image_carousel" | "audio" | "video";
+export type AssetType = "image" | "audio" | "video";
 
 export type AssetStatus = "draft" | "in_review" | "approved" | "rejected" | "archived";
 
 export type AssetVersionStatus = "uploading" | "processing" | "ready" | "failed";
 
-export type OrgRole = "owner" | "admin" | "member";
+export type ProjectRole = "owner" | "editor";
 
-export type ProjectRole = "owner" | "editor" | "reviewer" | "viewer";
-
-export type ProjectType = "personal" | "team";
-
-export type SharePermission = "view" | "comment" | "approve";
-
-export type FolderAccessGrant = {
-  readonly folder_id: string;
-  readonly permission: SharePermission;
-};
-
-export type FolderDirectAccess = {
-  readonly kind: "folder_direct";
-  readonly accessible_root_ids: readonly string[];
-  readonly grants: readonly FolderAccessGrant[];
-};
-
-export type NotificationType = "mention" | "assignment" | "due_soon" | "comment" | "approval";
+export type SharePermission = "view" | "comment";
 
 export type UserStatus = "active" | "deactivated" | "pending_invite" | "pending_verification";
 
-export type ActivityAction =
-  | "created"
-  | "commented"
-  | "mentioned"
-  | "shared"
-  | "assigned"
-  | "approved"
-  | "rejected";
-
 export type FileType = "image" | "audio" | "video" | "document";
-
-export type MetadataFieldType = "text" | "number" | "date" | "select" | "multi_select";
-
-export type WatermarkPosition = "center" | "corner" | "tiled";
-
-export type WatermarkContent = "email" | "name" | "custom_text";
-
-export type ViewerLayout = "grid" | "reel";
 
 export type ApprovalStatus = "approved" | "rejected" | "pending";
 
@@ -65,20 +31,12 @@ export interface User {
   deleted_at: string | null;
 }
 
-export interface AdminUser extends User {
-  invite_token: string | null;
-}
-
 export interface Project {
   id: string;
   name: string;
   description: string | null;
   created_by: string;
-  org_id?: string;
-  project_type: ProjectType;
-  team_id?: string | null;
   poster_url?: string | null;
-  is_public?: boolean;
   is_quick_share?: boolean;
   created_at: string;
   deleted_at: string | null;
@@ -86,20 +44,7 @@ export interface Project {
   storage_bytes?: number;
   member_count?: number;
   role?: ProjectRole | null;
-  folder_access?: FolderDirectAccess | null;
 }
-
-export interface FolderDirectProject {
-  id: string;
-  name: string;
-  asset_count: number;
-  storage_bytes: number;
-  member_count: 0;
-  role: null;
-  folder_access: FolderDirectAccess;
-}
-
-export type ProjectAccessResponse = Project | FolderDirectProject;
 
 export interface ProjectMember {
   id: string;
@@ -120,11 +65,7 @@ export interface Asset {
   description: string | null;
   asset_type: AssetType;
   status: AssetStatus;
-  rating: number | null;
-  assignee_id: string | null;
   folder_id: string | null;
-  due_date: string | null;
-  keywords: string[];
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -146,6 +87,8 @@ export interface AssetVersion {
 export interface AssetResponse extends Asset {
   latest_version: AssetVersion | null;
   thumbnail_url: string | null;
+  /** Runtime goal (e.g. 180 for Shorts), compared to the after-cut runtime */
+  target_duration_seconds?: number | null;
 }
 
 export interface MediaFile {
@@ -164,13 +107,6 @@ export interface MediaFile {
   fps: number | null;
   sequence_order: number | null;
   created_at: string;
-}
-
-export interface CarouselItem {
-  id: string;
-  version_id: string;
-  media_file_id: string;
-  position: number;
 }
 
 // ─── Comments & Annotations ───────────────────────────────────────────────────
@@ -205,6 +141,8 @@ export interface Comment {
   body: string;
   resolved: boolean;
   visibility: string;
+  /** The range should come out of the edit */
+  is_cut?: boolean;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -217,7 +155,6 @@ export interface Annotation {
   comment_id: string;
   drawing_data: Record<string, unknown>;
   frame_number: number | null;
-  carousel_position: number | null;
 }
 
 export interface CommentAttachment {
@@ -269,7 +206,6 @@ export interface ShareLink {
   id: string;
   asset_id: string | null;
   folder_id: string | null;
-  project_id: string | null;
   token: string;
   title: string;
   description: string | null;
@@ -285,29 +221,6 @@ export interface ShareLink {
   created_at: string;
   deleted_at: string | null;
   has_password: boolean;
-}
-
-export interface AssetShare {
-  id: string;
-  asset_id: string;
-  shared_with_user_id: string | null;
-  permission: SharePermission;
-  shared_by: string;
-  created_at: string;
-  deleted_at: string | null;
-}
-
-export interface ShareLinkListItem {
-  id: string
-  token: string
-  title: string
-  description: string | null
-  is_enabled: boolean
-  permission: SharePermission
-  share_type: "asset" | "folder"
-  target_name: string
-  view_count: number
-  last_viewed_at: string | null
 }
 
 export interface FolderShareAssetItem {
@@ -335,98 +248,6 @@ export interface FolderShareAssetsResponse {
   total: number
   page: number
   per_page: number
-}
-
-// ─── Metadata & Collections ───────────────────────────────────────────────────
-
-export interface MetadataField {
-  id: string;
-  project_id: string;
-  name: string;
-  field_type: MetadataFieldType;
-  options: unknown[] | null;
-  required: boolean;
-  created_at: string;
-  deleted_at: string | null;
-}
-
-export interface AssetMetadata {
-  id: string;
-  asset_id: string;
-  field_id: string;
-  value: unknown;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface Collection {
-  id: string;
-  project_id: string;
-  name: string;
-  description: string | null;
-  filter_rules: Record<string, unknown> | null;
-  created_by: string;
-  created_at: string;
-  deleted_at: string | null;
-}
-
-// ─── Activity, Mentions & Notifications ───────────────────────────────────────
-
-export interface Mention {
-  id: string;
-  comment_id: string;
-  mentioned_user_id: string;
-  created_at: string;
-}
-
-export interface ActivityLog {
-  id: string;
-  user_id: string;
-  asset_id: string;
-  action: ActivityAction;
-  created_at: string;
-}
-
-export interface Notification {
-  id: string;
-  user_id: string;
-  comment_id: string | null;
-  asset_id: string;
-  type: NotificationType;
-  read: boolean;
-  created_at: string;
-  asset_name: string | null;
-  actor_name: string | null;
-  comment_preview: string | null;
-  project_id: string | null;
-}
-
-// ─── Branding & Watermarking ──────────────────────────────────────────────────
-
-export interface ProjectBranding {
-  id: string;
-  project_id: string;
-  logo_s3_key: string | null;
-  primary_color: string | null;
-  secondary_color: string | null;
-  custom_title: string | null;
-  custom_footer: string | null;
-  viewer_layout: ViewerLayout;
-  featured_field: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface WatermarkSettings {
-  id: string;
-  project_id: string;
-  share_link_id: string | null;
-  enabled: boolean;
-  position: WatermarkPosition;
-  content: WatermarkContent;
-  custom_text: string | null;
-  opacity: number;
-  created_at: string;
 }
 
 // ─── Folders ──────────────────────────────────────────────────────────────────

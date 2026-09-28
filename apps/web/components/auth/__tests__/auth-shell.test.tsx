@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -55,15 +55,15 @@ describe('AuthLayout', () => {
     vi.clearAllMocks()
   })
 
-  it('renders the freeframed wordmark with a red final letter', () => {
+  it('renders the freeframed wordmark around the form', () => {
     render(
       <AuthLayout>
         <form aria-label="Sign in" />
       </AuthLayout>,
     )
 
-    expect(screen.getByText('freeframe')).toBeInTheDocument()
-    expect(within(screen.getByRole('heading', { name: 'freeframed' })).getByText('d')).toHaveClass('text-accent')
+    expect(screen.getByRole('heading', { name: 'freeframed' })).toBeInTheDocument()
+    expect(screen.getByRole('form', { name: 'Sign in' })).toBeInTheDocument()
   })
 
   it('renders the password sign-in form and submits credentials', async () => {

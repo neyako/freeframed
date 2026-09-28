@@ -8,24 +8,13 @@ type WorkspaceBrandingResponse = {
   readonly logo_light: string | null
 }
 
-type WorkspaceBrandingPatch = {
-  readonly name?: string
-  readonly logo_dark?: string | null
-  readonly logo_light?: string | null
-}
-
 interface BrandingState {
   orgName: string
   /** Logo for dark theme (shown on dark backgrounds) */
   orgLogoDark: string | null
   /** Logo for light theme (shown on light backgrounds) */
   orgLogoLight: string | null
-  setOrgName: (name: string) => void
-  setOrgLogoDark: (url: string | null) => void
-  setOrgLogoLight: (url: string | null) => void
   hydrateFromServer: () => Promise<void>
-  saveToServer: (patch: WorkspaceBrandingPatch) => Promise<void>
-  resetAll: () => void
 }
 
 function toBrandingState(branding: WorkspaceBrandingResponse) {
@@ -42,9 +31,6 @@ export const useBrandingStore = create<BrandingState>()(
       orgName: 'freeframed',
       orgLogoDark: null,
       orgLogoLight: null,
-      setOrgName: (name) => set({ orgName: name }),
-      setOrgLogoDark: (url) => set({ orgLogoDark: url }),
-      setOrgLogoLight: (url) => set({ orgLogoLight: url }),
       hydrateFromServer: async () => {
         try {
           const branding = await api.get<WorkspaceBrandingResponse>('/workspace')
@@ -53,11 +39,6 @@ export const useBrandingStore = create<BrandingState>()(
           return
         }
       },
-      saveToServer: async (patch) => {
-        const branding = await api.put<WorkspaceBrandingResponse>('/admin/workspace', patch)
-        set(toBrandingState(branding))
-      },
-      resetAll: () => set({ orgName: 'freeframed', orgLogoDark: null, orgLogoLight: null }),
     }),
     {
       name: 'ff-branding',

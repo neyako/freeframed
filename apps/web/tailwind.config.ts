@@ -1,6 +1,5 @@
 import type { Config } from 'tailwindcss'
 import plugin from 'tailwindcss/plugin'
-import animate from 'tailwindcss-animate'
 
 const config: Config = {
   darkMode: 'class',
@@ -72,105 +71,35 @@ const config: Config = {
       fontFamily: {
         sans: ['var(--font-sans)'],
         mono: ['var(--font-mono)'],
-        dot: ['var(--font-dot)'],
       },
       fontSize: {
         '2xs': ['0.625rem', { lineHeight: '0.875rem' }],
       },
+      // Motion ("Snappy"): one-shot, compositor-only (opacity + translate/scale),
+      // 130ms in / 90ms out. Uses the standalone `translate`/`scale` properties
+      // so keyframes never clobber layout transforms (e.g. centered dialogs).
+      // Nothing loops. Reduced-motion users get ~instant states (globals.css).
       animation: {
-        'fade-in': 'fade-in 0.2s ease-out',
-        'fade-in-slow': 'fade-in 0.4s ease-out',
-        'slide-up': 'slide-up 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
-        'slide-down': 'slide-down 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
-        'slide-in-right': 'slide-in-right 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
-        'slide-in-left': 'slide-in-left 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
-        'scale-in': 'scale-in 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
-        'shimmer': 'shimmer 2s linear infinite',
-        'pulse-soft': 'pulse-soft 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-        'blink': 'blink 1.4s steps(1) infinite',
-        'indeterminate-slide': 'indeterminate-slide 1.3s ease-in-out infinite',
-        'shake': 'shake 280ms linear',
-        'check-pop': 'check-pop 450ms cubic-bezier(0.34,1.35,0.64,1)',
-        'comment-flash': 'comment-flash 1.6s ease-out forwards',
+        'ff-pop-in': 'ff-pop-in 130ms cubic-bezier(.2,0,0,1)',
+        'ff-pop-out': 'ff-pop-out 90ms cubic-bezier(.4,0,1,1) forwards',
+        'ff-rise-in': 'ff-rise-in 130ms cubic-bezier(.2,0,0,1)',
+        'ff-rise-out': 'ff-rise-out 90ms cubic-bezier(.4,0,1,1) forwards',
+        'ff-fade-in': 'ff-fade-in 130ms linear',
+        'ff-fade-out': 'ff-fade-out 90ms linear forwards',
+        'ff-slide-in': 'ff-slide-in 130ms cubic-bezier(.2,0,0,1)',
+        'ff-row-in': 'ff-row-in 160ms cubic-bezier(.2,0,0,1)',
+        'ff-grow-x': 'ff-grow-x 160ms cubic-bezier(.2,0,0,1)',
       },
       keyframes: {
-        'fade-in': {
-          from: { opacity: '0' },
-          to: { opacity: '1' },
-        },
-        'slide-up': {
-          from: { opacity: '0', transform: 'translateY(8px)' },
-          to: { opacity: '1', transform: 'translateY(0)' },
-        },
-        'slide-down': {
-          from: { opacity: '0', transform: 'translateY(-8px)' },
-          to: { opacity: '1', transform: 'translateY(0)' },
-        },
-        'slide-in-right': {
-          from: { opacity: '0', transform: 'translateX(8px)' },
-          to: { opacity: '1', transform: 'translateX(0)' },
-        },
-        'slide-in-left': {
-          from: { opacity: '0', transform: 'translateX(-8px)' },
-          to: { opacity: '1', transform: 'translateX(0)' },
-        },
-        'scale-in': {
-          from: { opacity: '0', transform: 'scale(0.95)' },
-          to: { opacity: '1', transform: 'scale(1)' },
-        },
-        'shimmer': {
-          from: { backgroundPosition: '-200% 0' },
-          to: { backgroundPosition: '200% 0' },
-        },
-        'pulse-soft': {
-          '0%, 100%': { opacity: '1' },
-          '50%': { opacity: '0.6' },
-        },
-        blink: {
-          '50%': { opacity: '0.25' },
-        },
-        'indeterminate-slide': {
-          '0%': { transform: 'translateX(-120%)' },
-          '100%': { transform: 'translateX(360%)' },
-        },
-        // transitions.dev error-state-shake, tuned values. Cumulative-duration
-        // %-stops for legs 80/60/80/60ms = 280ms total; per-stop easing shapes
-        // each leg. Recompute stops if durations change.
-        'shake': {
-          '0%': { transform: 'translateX(0)', animationTimingFunction: 'cubic-bezier(0.22,1,0.36,1)' },
-          '28.57%': { transform: 'translateX(6px)', animationTimingFunction: 'cubic-bezier(0.22,1,0.36,1)' },
-          '57.14%': { transform: 'translateX(-6px)', animationTimingFunction: 'cubic-bezier(0.22,1,0.36,1)' },
-          '78.57%': { transform: 'translateX(4px)', animationTimingFunction: 'cubic-bezier(0.22,1,0.36,1)' },
-          '100%': { transform: 'translateX(0)' },
-        },
-        // One-shot accent ring + tint on a just-posted own comment; opacity/
-        // shadow only (no motion), so it is safe without motion-reduce gating.
-        'comment-flash': {
-          '0%': {
-            boxShadow: '0 0 0 2px rgb(var(--accent-rgb) / 0.45)',
-            backgroundColor: 'rgb(var(--accent-rgb) / 0.1)',
-          },
-          '60%': {
-            boxShadow: '0 0 0 2px rgb(var(--accent-rgb) / 0.2)',
-            backgroundColor: 'rgb(var(--accent-rgb) / 0.05)',
-          },
-          '100%': {
-            boxShadow: '0 0 0 2px rgb(var(--accent-rgb) / 0)',
-            backgroundColor: 'transparent',
-          },
-        },
-        // Right-sized success-check: rotate-in + settle overshoot on the
-        // confirmation icon (transitions.dev success-check, minus the SVG
-        // stroke-draw that a lucide line icon can't carry).
-        'check-pop': {
-          '0%': { opacity: '0', transform: 'scale(0.25) rotate(-80deg)' },
-          '60%': { transform: 'scale(1.08) rotate(4deg)' },
-          '100%': { opacity: '1', transform: 'scale(1) rotate(0)' },
-        },
-      },
-      transitionTimingFunction: {
-        'spring': 'cubic-bezier(0.16, 1, 0.3, 1)',
-        'smooth': 'cubic-bezier(0.4, 0, 0.2, 1)',
+        'ff-pop-in': { from: { opacity: '0', translate: '0 -4px', scale: '.98' }, to: { opacity: '1', translate: '0 0', scale: '1' } },
+        'ff-pop-out': { from: { opacity: '1' }, to: { opacity: '0', translate: '0 -4px', scale: '.98' } },
+        'ff-rise-in': { from: { opacity: '0', translate: '0 4px', scale: '.98' }, to: { opacity: '1', translate: '0 0', scale: '1' } },
+        'ff-rise-out': { from: { opacity: '1' }, to: { opacity: '0', translate: '0 4px', scale: '.98' } },
+        'ff-fade-in': { from: { opacity: '0' }, to: { opacity: '1' } },
+        'ff-fade-out': { from: { opacity: '1' }, to: { opacity: '0' } },
+        'ff-slide-in': { from: { opacity: '0', translate: '12px 0' }, to: { opacity: '1', translate: '0 0' } },
+        'ff-row-in': { from: { opacity: '0', translate: '0 -4px' }, to: { opacity: '1', translate: '0 0' } },
+        'ff-grow-x': { from: { scale: '0 1' }, to: { scale: '1 1' } },
       },
     },
   },
@@ -178,7 +107,6 @@ const config: Config = {
     plugin(({ addVariant }) => {
       addVariant('pointer-coarse', '@media (pointer: coarse)')
     }),
-    animate,
   ],
 }
 

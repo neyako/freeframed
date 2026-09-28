@@ -4,8 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ReviewPage from '../page'
 
 const mocks = vi.hoisted(() => ({
-  permission: 'view' as 'view' | 'comment' | 'approve',
-  projectState: 'loaded' as 'loaded' | 'member' | 'loading' | 'denied' | 'denied-stale',
+  projectState: 'loading' as 'loading' | 'denied' | 'denied-stale',
   reviewError: null as string | null,
   swrKeys: [] as string[],
 }))
@@ -20,17 +19,9 @@ vi.mock('swr', () => ({
     if (key) mocks.swrKeys.push(key)
     if (key === '/projects/project-1') {
       return {
-        data: mocks.projectState === 'loaded' || mocks.projectState === 'denied-stale'
-          ? {
-              id: 'project-1', name: 'Scoped project', role: null,
-              folder_access: {
-                kind: 'folder_direct', accessible_root_ids: ['folder-a'],
-                grants: [{ folder_id: 'folder-a', permission: mocks.permission }],
-              },
-            }
-          : mocks.projectState === 'member'
-            ? { id: 'project-1', name: 'Member project', role: 'reviewer', folder_access: null }
-            : undefined,
+        data: mocks.projectState === 'denied-stale'
+          ? { id: 'project-1', name: 'Editor project', role: 'editor' }
+          : undefined,
         error: mocks.projectState === 'denied' || mocks.projectState === 'denied-stale'
           ? { status: 403, detail: 'Access denied' }
           : undefined,
@@ -51,9 +42,8 @@ vi.mock('swr', () => ({
 }))
 
 const asset = {
-  id: 'asset-1', project_id: 'project-1', folder_id: 'folder-a1', name: 'Scoped clip',
-  description: null, asset_type: 'video', status: 'in_review', rating: null,
-  assignee_id: null, due_date: null, keywords: [], created_by: 'owner-1',
+  id: 'asset-1', project_id: 'project-1', folder_id: 'folder-a1', name: 'Clip',
+  description: null, asset_type: 'video', status: 'in_review', created_by: 'owner-1',
   created_at: '2026-07-12T00:00:00Z', updated_at: '2026-07-12T00:00:00Z',
 }
 
@@ -86,7 +76,7 @@ vi.mock('@/stores/review-store', () => ({
     focusedCommentId: null, seekTo: vi.fn(), setFocusedCommentId: vi.fn(), setActiveAnnotation: vi.fn(),
   }),
 }))
-vi.mock('@/stores/auth-store', () => ({ useAuthStore: () => ({ user: { id: 'recipient-1' } }) }))
+vi.mock('@/stores/auth-store', () => ({ useAuthStore: () => ({ user: { id: 'editor-1' } }) }))
 vi.mock('@/stores/upload-store', () => ({ useUploadStore: () => vi.fn() }))
 vi.mock('@/stores/breadcrumb-store', () => ({
   useBreadcrumbStore: (selector: (state: { readonly setLabel: () => void; readonly setExtraCrumbs: () => void }) => unknown) =>
@@ -101,34 +91,16 @@ vi.mock('@/hooks/use-comments', () => ({
 vi.mock('@/hooks/use-page-title', () => ({ usePageTitle: vi.fn() }))
 vi.mock('@/lib/api', () => ({ api: { get: vi.fn() } }))
 
-describe('ReviewPage folder-direct access', () => {
+describe('ReviewPage revoked access', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mocks.projectState = 'loaded'
+    mocks.projectState = 'loading'
     mocks.reviewError = null
     mocks.swrKeys.length = 0
     Object.defineProperty(window, 'matchMedia', {
       configurable: true,
       value: () => ({ matches: true, addListener: vi.fn(), removeListener: vi.fn() }),
     })
-  })
-
-  it.each([
-    ['view', false],
-    ['comment', true],
-    ['approve', true],
-  ] as const)('maps %s grant without member fetch or privileged controls', (permission, canComment) => {
-    mocks.permission = permission
-    render(<ReviewPage params={{ id: 'project-1', assetId: 'asset-1' }} />)
-
-    expect(mocks.swrKeys).not.toContain('/projects/project-1/members')
-    expect(mocks.swrKeys).toContain('/projects/project-1/assets')
-    expect(screen.queryByText('New version')).not.toBeInTheDocument()
-    expect(screen.queryByText('Download')).not.toBeInTheDocument()
-    expect(screen.queryByText('Share asset')).not.toBeInTheDocument()
-    expect(screen.queryByText('Comment input') !== null).toBe(canComment)
-    expect(screen.queryByRole('button', { name: 'Approve' }) !== null).toBe(permission === 'approve')
-    expect(screen.queryByRole('button', { name: 'Reject' }) !== null).toBe(permission === 'approve')
   })
 
   it.each(['loading', 'denied'] as const)(
@@ -159,13 +131,5 @@ describe('ReviewPage folder-direct access', () => {
     expect(screen.getByText(/access denied/i)).toBeInTheDocument()
     expect(mocks.swrKeys).not.toContain('/projects/project-1/folder-tree')
     expect(mocks.swrKeys).not.toContain('/projects/project-1/assets')
-  })
-
-  it('shows approval controls to an eligible project reviewer', () => {
-    mocks.projectState = 'member'
-    render(<ReviewPage params={{ id: 'project-1', assetId: 'asset-1' }} />)
-
-    expect(screen.getByRole('button', { name: 'Approve' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Reject' })).toBeInTheDocument()
   })
 })

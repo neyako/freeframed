@@ -31,8 +31,8 @@ export function Avatar({ src, name, size = 'md', accent = false, className }: Av
   return (
     <RadixAvatar.Root
       className={cn(
-        'relative inline-flex items-center justify-center rounded-full overflow-hidden bg-bg-tertiary border border-border-strong shrink-0',
-        accent && 'bg-accent border-accent',
+        'relative inline-flex items-center justify-center rounded-full overflow-hidden bg-bg-hover shrink-0',
+        accent && 'bg-accent',
         sizeClasses[size],
         className,
       )}
@@ -46,7 +46,7 @@ export function Avatar({ src, name, size = 'md', accent = false, className }: Av
       )}
       <RadixAvatar.Fallback
         className={cn(
-          'flex h-full w-full items-center justify-center font-mono font-normal tracking-[0.04em] text-text-primary',
+          'flex h-full w-full items-center justify-center font-medium text-text-primary',
           accent && 'text-white',
         )}
         delayMs={0}

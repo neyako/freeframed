@@ -11,7 +11,6 @@ import {
   Image as ImageIcon,
   Video,
   Music,
-  Loader2,
   MessageSquare,
   PanelRightClose,
   PanelRightOpen,
@@ -24,7 +23,9 @@ import { useBrandingStore } from '@/stores/branding-store'
 import { VersionSwitcher } from '@/components/review/version-switcher'
 import { Linkified } from '@/components/review/linkified'
 import { fetchShareStreamInfo, resolveStreamUrl } from './share-stream'
+import { ShareWatermark } from './share-watermark'
 import type { CommentWithReplies } from '@/hooks/use-comments'
+import type { CommentDraft } from '@/components/review/comment-input'
 import type {
   SharePermission,
   ShareLinkAppearance,
@@ -54,19 +55,15 @@ interface FolderShareViewerProps {
   allowDownload: boolean
   showVersions: boolean
   appearance: ShareLinkAppearance
-  branding: {
-    logo_url?: string
-    primary_color?: string
-    custom_title?: string
-    custom_footer?: string
-  } | null
+  /** Watermark fallback text (viewer identity or link title); null = off */
+  watermark: string | null
   onAssetClick?: (assetId: string) => void
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function formatFileSize(bytes: number | null): string {
-  if (bytes == null) return '—'
+  if (bytes == null) return '-'
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} kB`
   if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
@@ -100,16 +97,8 @@ function getAssetTypeIcon(assetType: string): React.ElementType {
   switch (assetType) {
     case 'video': return Video
     case 'audio': return Music
-    case 'image':
-    case 'image_carousel': return ImageIcon
+    case 'image': return ImageIcon
     default: return File
-  }
-}
-
-function getAssetTypeBadgeLabel(assetType: string): string {
-  switch (assetType) {
-    case 'image_carousel': return 'Carousel'
-    default: return assetType.charAt(0).toUpperCase() + assetType.slice(1)
   }
 }
 
@@ -127,10 +116,11 @@ function triggerDownload(url: string) {
   setTimeout(() => a.remove(), 1000)
 }
 
-async function fetchDownloadUrl(token: string, assetId: string, shareSession?: string | null): Promise<string | null> {
+async function fetchDownloadUrl(token: string, assetId: string, shareSession?: string | null, versionId?: string): Promise<string | null> {
   const sp = shareSession ? `&share_session=${encodeURIComponent(shareSession)}` : ''
+  const vp = versionId ? `&version_id=${versionId}` : ''
   try {
-    const response = await fetch(`${API_URL}/share/${token}/stream/${assetId}?download=true${sp}`, {
+    const response = await fetch(`${API_URL}/share/${token}/stream/${assetId}?download=true${vp}${sp}`, {
       credentials: 'include',
     })
     if (!response.ok) return null
@@ -141,8 +131,8 @@ async function fetchDownloadUrl(token: string, assetId: string, shareSession?: s
   }
 }
 
-async function handleDownload(token: string, assetId: string, shareSession?: string | null) {
-  const url = await fetchDownloadUrl(token, assetId, shareSession)
+async function handleDownload(token: string, assetId: string, shareSession?: string | null, versionId?: string) {
+  const url = await fetchDownloadUrl(token, assetId, shareSession, versionId)
   if (url) triggerDownload(url)
 }
 
@@ -382,7 +372,7 @@ function SectionHeader({ label, count, totalSize, expanded, onToggle }: SectionH
       <ChevronDown
         className={cn('h-4 w-4 shrink-0 transition-transform text-text-tertiary', !expanded && '-rotate-90')}
       />
-      <span className="text-xs font-semibold uppercase tracking-wider text-text-secondary">
+      <span className="text-[12.5px] font-medium text-text-secondary">
         {count} {label}
       </span>
       {totalSize && (
@@ -397,9 +387,8 @@ function SectionHeader({ label, count, totalSize, expanded, onToggle }: SectionH
 interface RightPanelProps {
   selectedAsset: FolderShareAssetItem | null
   token: string
+  shareSession?: string | null
   permission: SharePermission
-  allowDownload: boolean
-  onOpenAsset?: (asset: FolderShareAssetItem) => void
 }
 
 interface GuestComment {
@@ -414,26 +403,28 @@ interface GuestComment {
   replies?: GuestComment[]
 }
 
-function RightPanel({ selectedAsset, token, permission, allowDownload, onOpenAsset }: RightPanelProps) {
+function RightPanel({ selectedAsset, token, shareSession, permission }: RightPanelProps) {
   const [comments, setComments] = React.useState<GuestComment[]>([])
   const [loadingComments, setLoadingComments] = React.useState(false)
-  const [commentRefresh, setCommentRefresh] = React.useState(0)
-  const canComment = permission === 'comment' || permission === 'approve'
+  const canComment = permission === 'comment'
 
   React.useEffect(() => {
     if (!selectedAsset) {
       setComments([])
       return
     }
+    let cancelled = false
     setLoadingComments(true)
-    fetch(`${API_URL}/share/${token}/comments?asset_id=${selectedAsset.id}`, {
+    const sp = shareSession ? `&share_session=${encodeURIComponent(shareSession)}` : ''
+    fetch(`${API_URL}/share/${token}/comments?asset_id=${selectedAsset.id}${sp}`, {
       credentials: 'include',
     })
       .then((r) => (r.ok ? r.json() : Promise.resolve([])))
-      .then((data) => setComments(Array.isArray(data) ? data : (data.comments ?? [])))
-      .catch(() => setComments([]))
-      .finally(() => setLoadingComments(false))
-  }, [selectedAsset?.id, token, commentRefresh])
+      .then((data) => { if (!cancelled) setComments(Array.isArray(data) ? data : (data.comments ?? [])) })
+      .catch(() => { if (!cancelled) setComments([]) })
+      .finally(() => { if (!cancelled) setLoadingComments(false) })
+    return () => { cancelled = true }
+  }, [selectedAsset?.id, token, shareSession])
 
   if (!selectedAsset) {
     return (
@@ -456,7 +447,7 @@ function RightPanel({ selectedAsset, token, permission, allowDownload, onOpenAss
       {/* Comments section */}
       <div className="flex-1 overflow-y-auto">
         <div className="px-4 py-3 border-b border-border flex items-center justify-between">
-          <h4 className="text-xs font-semibold text-text-tertiary uppercase tracking-wider">
+          <h4 className="text-[12.5px] font-medium">
             Comments ({comments.length})
           </h4>
         </div>
@@ -491,9 +482,7 @@ interface ShareCommentListProps {
 function ShareCommentList({ comments, loading, canComment, onReply }: ShareCommentListProps) {
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-5 w-5 animate-spin text-text-tertiary" />
-      </div>
+      <p className="px-4 py-6"><span className="text-[13px] text-text-tertiary">Loading…</span></p>
     )
   }
 
@@ -578,10 +567,11 @@ interface AssetViewerProps {
   viewerName?: string | null
   permission: SharePermission
   allowDownload: boolean
+  watermark: string | null
   onBack: () => void
 }
 
-function AssetViewer({ token, shareSession, asset, viewerName, permission, allowDownload, onBack }: AssetViewerProps) {
+function AssetViewer({ token, shareSession, asset, viewerName, permission, allowDownload, watermark, onBack }: AssetViewerProps) {
   // Use the same ReviewProvider as the project review page, but with shareToken
   // This gives us the same video player, image viewer, comment panel, etc.
   return (
@@ -594,6 +584,7 @@ function AssetViewer({ token, shareSession, asset, viewerName, permission, allow
         viewerName={viewerName}
         permission={permission}
         allowDownload={allowDownload}
+        watermark={watermark}
         onBack={onBack}
       />
     </div>
@@ -602,9 +593,9 @@ function AssetViewer({ token, shareSession, asset, viewerName, permission, allow
 
 /** Lazy-imported review components to avoid circular deps */
 export function ShareReviewScreen({
-  token, shareSession, assetId, assetName, viewerName, permission, allowDownload, onBack,
+  token, shareSession, assetId, assetName, viewerName, permission, allowDownload, watermark, onBack,
 }: {
-  token: string; shareSession?: string | null; assetId: string; assetName: string; viewerName?: string | null; permission: SharePermission; allowDownload: boolean; onBack?: () => void
+  token: string; shareSession?: string | null; assetId: string; assetName: string; viewerName?: string | null; permission: SharePermission; allowDownload: boolean; watermark: string | null; onBack?: () => void
 }) {
   const [ReviewProvider, setProvider] = React.useState<any>(null)
   const [VideoPlayer, setVideoPlayer] = React.useState<any>(null)
@@ -640,7 +631,7 @@ export function ShareReviewScreen({
   }, [])
 
   if (!loaded || !ReviewProvider || !useReviewHook || !useReviewStoreHook) {
-    return <div className="flex items-center justify-center h-dvh bg-bg-primary"><Loader2 className="h-8 w-8 animate-spin text-text-tertiary" /></div>
+    return <div className="flex items-center justify-center h-dvh bg-bg-primary"><span className="text-[13px] text-text-tertiary">Loading…</span></div>
   }
 
   return (
@@ -652,6 +643,7 @@ export function ShareReviewScreen({
         viewerName={viewerName}
         permission={permission}
         allowDownload={allowDownload}
+        watermark={watermark}
         onBack={onBack}
         VideoPlayer={VideoPlayer}
         ImageViewer={ImageViewer}
@@ -666,7 +658,7 @@ export function ShareReviewScreen({
 }
 
 function ShareReviewInner({
-  token, shareSession, assetName, viewerName, permission, allowDownload, onBack,
+  token, shareSession, assetName, viewerName, permission, allowDownload, watermark, onBack,
   VideoPlayer, ImageViewer, AudioPlayer, CommentPanel, CommentInput,
   useReviewHook, useReviewStoreHook,
 }: any) {
@@ -687,7 +679,7 @@ function ShareReviewInner({
     })
   }, [])
 
-  const canComment = permission === 'comment' || permission === 'approve'
+  const canComment = permission === 'comment'
   const versionReady = currentVersion?.processing_status === 'ready'
   React.useEffect(() => {
     if (autoOpenedRef.current) return
@@ -725,7 +717,7 @@ function ShareReviewInner({
   // Guest identity flow for non-authenticated users
   const [guestIdentity, setGuestIdentity] = React.useState<{ name: string; email: string } | null>(null)
   const [showGuestPrompt, setShowGuestPrompt] = React.useState(false)
-  const pendingCommentRef = React.useRef<{ body: string; timecodeStart?: number; timecodeEnd?: number; annotationData?: Record<string, unknown> } | null>(null)
+  const pendingCommentRef = React.useRef<{ body: string; timecodeStart?: number; timecodeEnd?: number; annotationData?: Record<string, unknown>; parentId?: string } | null>(null)
   React.useEffect(() => {
     try {
       const stored = localStorage.getItem('ff_guest_identity')
@@ -733,6 +725,11 @@ function ShareReviewInner({
     } catch {}
   }, [])
   const isLoggedIn = Boolean(viewerName)
+  // Guests are identified by the name/email they gave when commenting.
+  const watermarkText = watermark && (isLoggedIn
+    ? watermark
+    : guestIdentity?.email || guestIdentity?.name || watermark)
+  const watermarkOverlay = watermarkText ? <ShareWatermark text={watermarkText} /> : null
 
   // Resolve viewer's user id so own comments get edit/delete controls
   const authUser = useAuthStore((s) => s.user)
@@ -795,8 +792,9 @@ function ShareReviewInner({
     refetchComments().catch(() => {})
   }, [findComment, guestIdentity, mutationQuery, refetchComments, shareSession, token])
 
-  const submitComment = React.useCallback(async (body: string, timecodeStart?: number, timecodeEnd?: number, annotationData?: Record<string, unknown>) => {
+  const submitComment = React.useCallback(async (body: string, timecodeStart?: number, timecodeEnd?: number, annotationData?: Record<string, unknown>, parentId?: string) => {
     const payload: Record<string, unknown> = { body }
+    if (parentId) payload.parent_id = parentId
     if (currentVersion?.id) payload.version_id = currentVersion.id
     if (timecodeStart != null) payload.timecode_start = timecodeStart
     if (timecodeEnd != null) payload.timecode_end = timecodeEnd
@@ -815,14 +813,14 @@ function ShareReviewInner({
 
     // Auto-submit the pending comment
     if (pendingCommentRef.current) {
-      const { body, timecodeStart, timecodeEnd, annotationData } = pendingCommentRef.current
+      const { body, timecodeStart, timecodeEnd, annotationData, parentId } = pendingCommentRef.current
       pendingCommentRef.current = null
-      setTimeout(() => submitComment(body, timecodeStart, timecodeEnd, annotationData), 50)
+      setTimeout(() => submitComment(body, timecodeStart, timecodeEnd, annotationData, parentId), 50)
     }
   }, [submitComment])
 
   if (isLoading || !asset) {
-    return <div className="flex items-center justify-center h-dvh bg-bg-primary"><Loader2 className="h-8 w-8 animate-spin text-text-tertiary" /></div>
+    return <div className="flex items-center justify-center h-dvh bg-bg-primary"><span className="text-[13px] text-text-tertiary">Loading…</span></div>
   }
 
   return (
@@ -842,7 +840,7 @@ function ShareReviewInner({
             <VersionSwitcher versions={versions} />
           )}
           {allowDownload && (
-            <button className="flex items-center gap-1.5 h-7 px-3 rounded-md text-xs font-medium text-text-inverse bg-accent hover:bg-accent-hover transition-colors" onClick={() => handleDownload(token, asset.id, shareSession)}>
+            <button className="flex items-center gap-1.5 h-7 px-3 rounded-md text-xs font-medium text-text-inverse bg-accent hover:bg-accent-hover transition-colors" onClick={() => handleDownload(token, asset.id, shareSession, currentVersion?.id)}>
               <Download className="h-3 w-3" /> Download
             </button>
           )}
@@ -864,17 +862,21 @@ function ShareReviewInner({
               className="flex-1"
               initialStreamUrl={streamInfo.url}
               poster={streamInfo.poster}
-              onDownload={allowDownload ? () => handleDownload(token, asset.id, shareSession) : undefined}
+              onDownload={allowDownload ? () => handleDownload(token, asset.id, shareSession, currentVersion?.id) : undefined}
               overlay={
                 <>
                   {AnnotationOverlay && <AnnotationOverlay key={focusedCommentId ?? 'none'} />}
                   {isDrawingMode && AnnotationCanvas && <AnnotationCanvas />}
+                  {watermarkOverlay}
                 </>
               }
             />
           ) : asset.asset_type === 'audio' && versionReady && AudioPlayer ? (
-            <AudioPlayer asset={asset} version={currentVersion} comments={comments} className="flex-1" />
-          ) : (asset.asset_type === 'image' || asset.asset_type === 'image_carousel') && versionReady && ImageViewer ? (
+            <div className="relative flex-1 flex flex-col">
+              <AudioPlayer asset={asset} version={currentVersion} comments={comments} className="flex-1" />
+              {watermarkOverlay}
+            </div>
+          ) : asset.asset_type === 'image' && versionReady && ImageViewer ? (
             <div className="relative flex-1 flex items-center justify-center p-4 overflow-hidden">
               <ImageViewer
                 asset={asset}
@@ -886,10 +888,11 @@ function ShareReviewInner({
                   </>
                 }
               />
+              {watermarkOverlay}
             </div>
           ) : (
             <div className="flex-1 flex items-center justify-center">
-              <Loader2 className="h-8 w-8 animate-spin text-text-tertiary" />
+              <span className="text-[13px] text-text-tertiary">Loading…</span>
             </div>
           )}
         </div>
@@ -906,7 +909,7 @@ function ShareReviewInner({
 
         {/* Right sidebar — reuses project comment panel */}
         {sidebarOpen && (
-          <div className="w-full h-[55vh] md:h-auto md:w-[360px] flex flex-col border-t md:border-t-0 border-l-0 md:border-l border-border bg-bg-secondary shrink-0 animate-in slide-in-from-bottom-2 md:slide-in-from-right-2 duration-150">
+          <div className="w-full h-[55vh] md:h-auto md:w-[360px] flex flex-col border-t md:border-t-0 border-l-0 md:border-l border-border bg-bg-secondary shrink-0 animate-ff-rise-in md:animate-ff-slide-in">
             <button
               onClick={() => setSidebarOpen(false)}
               className="md:hidden flex items-center justify-center w-full py-2 border-b border-border"
@@ -922,10 +925,16 @@ function ShareReviewInner({
                   mutationQuery={mutationQuery}
                   ownGuestCommentIds={ownGuestCommentIds}
                   onDelete={handleDeleteComment}
-                  onAddReaction={() => {}}
-                  onRemoveReaction={() => {}}
                   onReply={() => {}}
-                  onSubmitReply={async () => {}}
+                  onSubmitReply={canComment ? async (parentId: string, body: string) => {
+                    const hasIdentity = isLoggedIn || Boolean(localStorage.getItem('ff_guest_identity'))
+                    if (!hasIdentity) {
+                      pendingCommentRef.current = { body, parentId }
+                      setShowGuestPrompt(true)
+                      return
+                    }
+                    await submitComment(body, undefined, undefined, undefined, parentId)
+                  } : undefined}
                 />
                 {canComment && CommentInput && (
                   <CommentInput
@@ -933,7 +942,7 @@ function ShareReviewInner({
                     projectId=""
                     assetType={asset.asset_type}
                     visibilityLocked
-                    onSubmit={async (body: string, timecodeStart?: number, timecodeEnd?: number, annotationData?: Record<string, unknown>) => {
+                    onSubmit={async ({ body, timecodeStart, timecodeEnd, annotation: annotationData }: CommentDraft) => {
                       const hasIdentity = isLoggedIn || Boolean(localStorage.getItem('ff_guest_identity'))
                       if (!hasIdentity) {
                         pendingCommentRef.current = { body, timecodeStart, timecodeEnd, annotationData }
@@ -1020,7 +1029,7 @@ export function FolderShareViewer({
   allowDownload,
   showVersions: _showVersions,
   appearance,
-  branding,
+  watermark,
   onAssetClick,
 }: FolderShareViewerProps) {
   // Build share_session query param for all API calls
@@ -1069,7 +1078,7 @@ export function FolderShareViewer({
   const [loadingMore, setLoadingMore] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
 
-  const accentColor = appearance.accent_color ?? branding?.primary_color
+  const accentColor = appearance.accent_color
   const isDark = appearance.theme !== 'light'
   const cardSize = appearance.card_size ?? 'm'
   const aspectRatio = appearance.aspect_ratio ?? 'landscape'
@@ -1263,6 +1272,7 @@ export function FolderShareViewer({
         viewerName={viewerName}
         permission={permission}
         allowDownload={allowDownload}
+        watermark={watermark}
         onBack={() => setViewingAsset(null)}
       />
     )
@@ -1311,13 +1321,6 @@ export function FolderShareViewer({
                 </button>
               </div>
             </div>
-          ) : branding?.logo_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={branding.logo_url}
-              alt=""
-              className="h-7 w-7 rounded-full object-cover shrink-0"
-            />
           ) : (
             <div className="flex items-center gap-2 shrink-0">
               <span className="h-2 w-2 rounded-full bg-accent" />
@@ -1414,9 +1417,7 @@ export function FolderShareViewer({
           {/* Main scrollable content */}
           <div className="flex-1 overflow-y-auto px-5 py-5">
             {loading ? (
-              <div className="flex items-center justify-center py-24">
-                <Loader2 className="h-8 w-8 animate-spin text-text-tertiary" />
-              </div>
+              <p className="py-6"><span className="text-[13px] text-text-tertiary">Loading…</span></p>
             ) : error ? (
               <div className="flex items-center justify-center py-24">
                 <p className="text-sm text-text-tertiary">{error}</p>
@@ -1491,7 +1492,7 @@ export function FolderShareViewer({
                         ) : (
                           <div className="mt-2 rounded-lg border border-border overflow-hidden">
                             {/* Column headers */}
-                            <div className="flex items-center gap-4 px-1 py-2 border-b border-border bg-bg-secondary/50 text-[10px] text-text-tertiary font-medium uppercase tracking-wider">
+                            <div className="flex items-center gap-4 px-1 py-2 border-b border-border text-[12px] text-text-tertiary">
                               <div className="h-14 w-14 shrink-0" />
                               <div className="flex-1 min-w-0">Name</div>
                               <div className="hidden sm:block w-24 text-right shrink-0">Size</div>
@@ -1526,7 +1527,7 @@ export function FolderShareViewer({
                                   </div>
                                   {/* File size */}
                                   <span className="hidden sm:block w-24 text-right text-sm text-text-tertiary tabular-nums shrink-0">
-                                    {asset.file_size != null ? formatFileSize(asset.file_size) : '—'}
+                                    {asset.file_size != null ? formatFileSize(asset.file_size) : '-'}
                                   </span>
                                   {/* Date */}
                                   <span className="hidden sm:block w-28 text-xs text-text-tertiary shrink-0">
@@ -1556,7 +1557,6 @@ export function FolderShareViewer({
                               disabled={loadingMore}
                               className="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium border border-border text-text-primary hover:bg-bg-tertiary hover:border-border-focus disabled:opacity-50 transition-colors"
                             >
-                              {loadingMore && <Loader2 className="h-4 w-4 animate-spin" />}
                               {loadingMore ? 'Loading…' : 'Load more'}
                             </button>
                           </div>
@@ -1571,12 +1571,7 @@ export function FolderShareViewer({
 
           {/* Footer */}
           <footer className="border-t border-border px-5 py-3 shrink-0">
-            <div className="flex items-center justify-between">
-              {branding?.custom_footer ? (
-                <p className="text-xs text-text-tertiary">{branding.custom_footer}</p>
-              ) : (
-                <span />
-              )}
+            <div className="flex items-center justify-end">
               {!loading && (
                 <p className="text-xs tabular-nums text-text-tertiary">
                   {assets.length + subfolders.length} item{assets.length + subfolders.length === 1 ? '' : 's'}
@@ -1592,9 +1587,8 @@ export function FolderShareViewer({
             <RightPanel
               selectedAsset={selectedAsset}
               token={token}
+              shareSession={shareSession}
               permission={permission}
-              allowDownload={allowDownload}
-              onOpenAsset={setViewingAsset}
             />
           </div>
         )}

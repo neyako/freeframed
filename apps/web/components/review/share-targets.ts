@@ -4,14 +4,7 @@ export type { ShareVisibility } from "@/types";
 
 export type ShareTarget =
   | { readonly kind: "asset"; readonly id: string }
-  | { readonly kind: "folder"; readonly id: string }
-  | { readonly kind: "project"; readonly id: string; readonly name?: string };
-
-export type PeopleShareTarget = ShareTarget;
-
-export interface ShareListEnvelope {
-  readonly share_links: readonly ShareLinkCandidate[];
-}
+  | { readonly kind: "folder"; readonly id: string };
 
 export interface ShareLinkCandidate {
   readonly id: string;
@@ -29,7 +22,6 @@ export interface ShareLinkCandidate {
   readonly url?: string;
   readonly asset_id?: string | null;
   readonly folder_id?: string | null;
-  readonly project_id?: string | null;
 }
 
 export interface ManagedShareLink extends ShareLinkCandidate {
@@ -56,14 +48,4 @@ export function previewShareLinkPatch(
     ...linkUpdates,
     ...(password !== undefined ? { has_password: password.length > 0 } : {}),
   };
-}
-
-export interface DirectShare {
-  readonly id: string;
-  readonly asset_id?: string | null;
-  readonly folder_id?: string | null;
-  readonly project_id?: string | null;
-  readonly shared_with_user_id: string;
-  readonly permission: SharePermission;
-  readonly created_at?: string;
 }

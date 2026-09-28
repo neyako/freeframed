@@ -1,74 +1,42 @@
 "use client";
 
 import * as React from "react";
-import { ChevronDown, Share2, Users } from "lucide-react";
+import { Share2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { DirectTab } from "./share-direct-panel";
 import { SingleLinkSection } from "./share-link-section";
-import type { PeopleShareTarget, ShareTarget } from "./share-targets";
-
-export { BulkSharePanel } from "./share-bulk-panel";
-export type { ShareTarget } from "./share-targets";
-
-interface SharePanelProps {
-  readonly target: ShareTarget;
-  readonly projectId?: string;
-  readonly withPeople?: boolean;
-}
-
-export function SharePanel({
-  target,
-  withPeople = false,
-}: SharePanelProps) {
-  const [showPeople, setShowPeople] = React.useState(false);
-  const peopleTarget: PeopleShareTarget = target;
-
-  return (
-    <SingleLinkSection target={target}>
-      {withPeople && (
-        <>
-          <button
-            type="button"
-            onClick={() => setShowPeople((v) => !v)}
-            className="flex w-full items-center justify-between gap-3 border-b border-border-secondary px-5 py-[15px] font-mono text-[11px] uppercase tracking-[0.16em] text-text-secondary transition-colors hover:text-text-primary"
-          >
-            <span className="inline-flex items-center gap-2">
-              <Users className="h-3.5 w-3.5" />
-              Invite people
-            </span>
-            <ChevronDown
-              className={cn(
-                "h-3.5 w-3.5 transition-transform",
-                showPeople && "rotate-180",
-              )}
-            />
-          </button>
-          {showPeople && (
-            <div className="border-b border-border-secondary px-5 py-4">
-              <DirectTab target={peopleTarget} />
-            </div>
-          )}
-        </>
-      )}
-    </SingleLinkSection>
-  );
-}
+import { loadLink } from "./share-link-requests";
+import type { ManagedShareLink } from "./share-targets";
 
 interface ShareDialogProps {
   readonly assetId: string;
-  readonly assetName?: string;
-  readonly projectId?: string;
-  readonly asset?: unknown;
 }
 
-export function ShareDialog({
-  assetId,
-  projectId,
-}: ShareDialogProps) {
+export function ShareDialog({ assetId }: ShareDialogProps) {
   const [dropdownOpen, setDropdownOpen] = React.useState(false);
   const dropdownRef = React.useRef<HTMLDivElement>(null);
+  // Load the link before opening (prefetched on hover/focus) so the panel
+  // animates in once at its final height. Refetched each time it opens.
+  const [link, setLink] = React.useState<ManagedShareLink | null | undefined>(undefined);
+  const pending = React.useRef<Promise<ManagedShareLink | null | undefined> | null>(null);
+  const prefetch = React.useCallback(() => {
+    pending.current ??= loadLink({ kind: "asset", id: assetId }).catch(() => undefined);
+    return pending.current;
+  }, [assetId]);
+
+  async function toggle() {
+    if (dropdownOpen) {
+      setDropdownOpen(false);
+      return;
+    }
+    setLink(await prefetch());
+    setDropdownOpen(true);
+  }
+
+  React.useEffect(() => {
+    if (!dropdownOpen) pending.current = null;
+  }, [dropdownOpen]);
 
   React.useEffect(() => {
     if (!dropdownOpen) return;
@@ -105,10 +73,12 @@ export function ShareDialog({
   return (
     <div className="relative" ref={dropdownRef}>
       <Button
-        variant="secondary"
+        variant="primary"
         size="sm"
-        onClick={() => setDropdownOpen(!dropdownOpen)}
-        className={cn(dropdownOpen && "bg-bg-hover")}
+        onClick={() => void toggle()}
+        onPointerEnter={() => void prefetch()}
+        onFocus={() => void prefetch()}
+        className={cn(dropdownOpen && "bg-text-primary/85")}
         title="Share"
       >
         <Share2 className="h-4 w-4" />
@@ -129,26 +99,21 @@ export function ShareDialog({
 
       {dropdownOpen && (
         <>
-        {/* Unmounts on close with an enter-only animation, matching the
-            notification drawer — no exit keyframes means no unmount race. */}
+        {/* Unmounts on close with an enter-only animation — no exit
+            keyframes means no unmount race. */}
         <div
           className={cn(
             "fixed left-2 right-2 top-16 z-50 w-auto sm:left-auto sm:right-2 sm:w-[460px]",
             "max-h-[calc(100dvh-4.5rem)] sm:max-h-[min(calc(100dvh-8rem),42rem)] overflow-y-auto overscroll-contain",
-            "rounded-xl border border-border bg-bg-elevated shadow-xl overflow-x-hidden",
-            "animate-scale-in",
+            "rounded-xl border border-border bg-bg-elevated shadow-xl overflow-x-hidden animate-ff-pop-in",
           )}
         >
           <div className="flex items-center justify-between gap-3 border-b border-border bg-bg-tertiary px-5 py-3.5">
-            <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-text-primary">
+            <span className="text-[12.5px] text-text-primary">
               Share
             </span>
           </div>
-          <SharePanel
-            target={{ kind: "asset", id: assetId }}
-            projectId={projectId}
-            withPeople
-          />
+          <SingleLinkSection target={{ kind: "asset", id: assetId }} initialLink={link} />
         </div>
         </>
       )}

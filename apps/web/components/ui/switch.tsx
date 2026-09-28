@@ -28,7 +28,7 @@ const Switch = React.forwardRef<
   <RadixSwitch.Root
     ref={ref}
     className={cn(
-      'relative inline-flex shrink-0 cursor-pointer items-center rounded-full border border-border-strong bg-bg-tertiary transition-colors duration-200 data-[state=checked]:border-accent data-[state=checked]:bg-accent-muted disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent',
+      'relative inline-flex shrink-0 cursor-pointer items-center rounded-full border border-border-strong bg-bg-tertiary transition-colors duration-100 data-[state=checked]:border-accent data-[state=checked]:bg-accent-muted disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent',
       rootClasses[size],
       className,
     )}
@@ -36,7 +36,7 @@ const Switch = React.forwardRef<
   >
     <RadixSwitch.Thumb
       className={cn(
-        'block translate-x-[2px] rounded-full bg-text-secondary transition-transform duration-200 ease-spring data-[state=checked]:bg-accent',
+        'block translate-x-[2px] rounded-full bg-text-secondary transition-transform duration-100 data-[state=checked]:bg-accent',
         thumbClasses[size],
       )}
     />

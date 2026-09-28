@@ -21,7 +21,6 @@ import { VisibilitySelect } from "./share-visibility-select";
 const SHARE_PERMISSION_OPTIONS = [
   { value: "view", label: "View" },
   { value: "comment", label: "Comment" },
-  { value: "approve", label: "Approve" },
 ] satisfies readonly {
   readonly value: SharePermission;
   readonly label: string;
@@ -56,9 +55,7 @@ interface LinkControlsProps {
   readonly saving: boolean;
   readonly error: string | null;
   readonly onPatch: (updates: ShareLinkPatch) => void;
-  readonly onRevoke?: () => void;
-  readonly showAdvancedControls?: boolean;
-  readonly beforeFooter?: React.ReactNode;
+  readonly onRevoke: () => void;
 }
 
 export function LinkControls({
@@ -67,8 +64,6 @@ export function LinkControls({
   error,
   onPatch,
   onRevoke,
-  showAdvancedControls = false,
-  beforeFooter,
 }: LinkControlsProps) {
   const [passphraseEnabled, setPassphraseEnabled] = React.useState(
     Boolean(link.has_password),
@@ -120,121 +115,114 @@ export function LinkControls({
             className={saving ? "pointer-events-none opacity-50" : undefined}
           />
         ) : (
-          <span className="select-none font-mono text-[11px] uppercase tracking-[0.08em] text-text-secondary">
+          <span className="select-none text-[12.5px] text-text-secondary">
             {link.permission}
           </span>
         )}
       </ControlRow>
 
-      {showAdvancedControls && (
-        <ControlRow label="Visibility">
-          <VisibilitySelect
-            value={visibility}
-            onChange={(nextVisibility) => onPatch({ visibility: nextVisibility })}
-            disabled={saving}
-          />
-        </ControlRow>
-      )}
+      <ControlRow label="Visibility">
+        <VisibilitySelect
+          value={visibility}
+          onChange={(nextVisibility) => onPatch({ visibility: nextVisibility })}
+          disabled={saving}
+        />
+      </ControlRow>
 
+      {/* Watermarked links never allow downloads (the API rejects the combo). */}
       <ControlRow label="Allow download">
         <SwitchControl
           label="Allow download"
           checked={link.allow_download}
-          disabled={saving}
+          disabled={saving || Boolean(link.show_watermark)}
           onChange={(allowDownload) => onPatch({ allow_download: allowDownload })}
         />
       </ControlRow>
 
-      {showAdvancedControls && (
-        <ControlRow
+      <ControlRow
+        label="Passphrase"
+        footer={
+          passphraseEnabled ? (
+            <input
+              type="password"
+              aria-label="Link passphrase"
+              value={passphrase}
+              onChange={(event) => setPassphrase(event.target.value)}
+              onBlur={handlePassphraseBlur}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") event.currentTarget.blur();
+              }}
+              disabled={saving}
+              placeholder="Passphrase"
+              className="h-[38px] w-full rounded border border-border-strong bg-bg-primary px-3 font-mono text-xs text-text-primary placeholder:text-text-tertiary focus:border-accent focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+            />
+          ) : null
+        }
+      >
+        <SwitchControl
           label="Passphrase"
-          footer={
-            passphraseEnabled ? (
-              <input
-                type="password"
-                aria-label="Link passphrase"
-                value={passphrase}
-                onChange={(event) => setPassphrase(event.target.value)}
-                onBlur={handlePassphraseBlur}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") event.currentTarget.blur();
-                }}
-                disabled={saving}
-                placeholder="Passphrase"
-                className="h-[38px] w-full rounded border border-border-strong bg-bg-primary px-3 font-mono text-xs text-text-primary placeholder:text-text-tertiary focus:border-accent focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-              />
-            ) : null
+          checked={passphraseEnabled}
+          disabled={saving}
+          onChange={handlePassphraseToggle}
+        />
+      </ControlRow>
+
+      <ControlRow label="Watermark">
+        <SwitchControl
+          label="Watermark"
+          checked={Boolean(link.show_watermark)}
+          disabled={saving}
+          onChange={(showWatermark) =>
+            onPatch(
+              showWatermark
+                ? { show_watermark: true, allow_download: false }
+                : { show_watermark: false },
+            )
           }
-        >
-          <SwitchControl
-            label="Passphrase"
-            checked={passphraseEnabled}
-            disabled={saving}
-            onChange={handlePassphraseToggle}
-          />
-        </ControlRow>
-      )}
+        />
+      </ControlRow>
 
-      {showAdvancedControls && (
-        <ControlRow label="Watermark">
-          <SwitchControl
-            label="Watermark"
-            checked={Boolean(link.show_watermark)}
-            disabled={saving}
-            onChange={(showWatermark) =>
-              onPatch({ show_watermark: showWatermark })
-            }
-          />
-        </ControlRow>
-      )}
-
-      {showAdvancedControls && (
-        <ControlRow label="Expiration" group>
-          <input
-            type="date"
-            aria-label="Expiration date"
-            value={formatDateInput(link.expires_at)}
-            onChange={(event) =>
-              onPatch({ expires_at: toExpirationValue(event.target.value) })
-            }
-            disabled={saving}
-            className="h-[38px] rounded border border-border-strong bg-bg-primary px-3 font-mono text-xs text-text-primary focus:border-accent focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-          />
-        </ControlRow>
-      )}
+      <ControlRow label="Expiration" group>
+        <input
+          type="date"
+          aria-label="Expiration date"
+          value={formatDateInput(link.expires_at)}
+          onChange={(event) =>
+            onPatch({ expires_at: toExpirationValue(event.target.value) })
+          }
+          disabled={saving}
+          className="h-[38px] rounded border border-border-strong bg-bg-primary px-3 font-mono text-xs text-text-primary focus:border-accent focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+        />
+      </ControlRow>
 
       {error && <p className="px-5 py-3 text-xs text-status-error">{error}</p>}
 
-      {beforeFooter}
-
-      {showAdvancedControls && onRevoke && (
-        <div className="flex items-center justify-between gap-4 px-5 py-[15px]">
-          <div className="min-w-0">
-            <p className="text-sm font-medium text-text-primary">Revoke link</p>
-            <p className="mt-0.5 text-xs text-text-secondary">
-              Revoke this link immediately
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setConfirmOpen(true)}
-            disabled={saving}
-            className="inline-flex h-[34px] items-center rounded border border-accent-line bg-transparent px-3.5 font-mono text-[11px] uppercase tracking-[0.08em] text-accent transition-colors hover:border-accent hover:bg-accent-muted disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Revoke
-          </button>
-          <ConfirmDialog
-            open={confirmOpen}
-            onOpenChange={setConfirmOpen}
-            title="Revoke share link?"
-            description="Anyone using this link will lose access until you create a new share link."
-            confirmLabel="Revoke link"
-            variant="danger"
-            loading={saving}
-            onConfirm={onRevoke}
-          />
+      <div className="flex items-center justify-between gap-4 px-5 py-[15px]">
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-text-primary">Revoke link</p>
+          <p className="mt-0.5 text-xs text-text-secondary">
+            Revoke this link immediately
+          </p>
         </div>
-      )}
+        <button
+          type="button"
+          onClick={() => setConfirmOpen(true)}
+          disabled={saving}
+          className="inline-flex h-[34px] items-center rounded border border-accent-line bg-transparent px-3.5 text-[12.5px] text-accent transition-colors hover:border-accent hover:bg-accent-muted disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Revoke
+        </button>
+        <ConfirmDialog
+          open={confirmOpen}
+          onOpenChange={setConfirmOpen}
+          title="Revoke share link?"
+          description="Anyone using this link will lose access until you create a new share link."
+          confirmLabel="Revoke link"
+          variant="danger"
+          loading={saving}
+          onConfirm={onRevoke}
+        />
+      </div>
     </div>
   );
 }

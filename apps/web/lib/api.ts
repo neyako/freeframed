@@ -154,4 +154,3 @@ export const api = {
     uploadRequest<T>(path, formData),
 }
 
-export type { ApiError as ApiErrorType }

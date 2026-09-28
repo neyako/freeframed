@@ -13,7 +13,6 @@ export interface SegmentedProps<T extends string> {
   readonly options: readonly SegmentedOption<T>[]
   readonly value: T
   readonly onChange: (value: T) => void
-  readonly accent?: boolean
   readonly stretch?: boolean
   readonly className?: string
   readonly optionClassName?: string
@@ -23,7 +22,6 @@ export function Segmented<T extends string>({
   options,
   value,
   onChange,
-  accent = false,
   stretch = false,
   className,
   optionClassName,
@@ -31,7 +29,7 @@ export function Segmented<T extends string>({
   return (
     <div
       className={cn(
-        'inline-flex gap-[3px] rounded bg-bg-tertiary border border-border p-[3px]',
+        'inline-flex rounded-md border border-border-strong p-0.5',
         stretch && 'flex w-full',
         className,
       )}
@@ -47,10 +45,9 @@ export function Segmented<T extends string>({
             data-active={active ? 'true' : undefined}
             onClick={() => onChange(option.value)}
             className={cn(
-              'inline-flex items-center justify-center rounded-none px-[15px] py-2 font-mono text-[11px] uppercase tracking-[0.1em] text-text-secondary transition-colors hover:text-text-primary',
+              'inline-flex h-7 items-center justify-center rounded px-2.5 text-[12.5px] transition-colors duration-100',
+              active ? 'bg-bg-hover text-text-primary' : 'text-text-secondary hover:text-text-primary',
               stretch && 'flex-1',
-              active && 'border border-border-strong bg-bg-primary text-text-primary',
-              active && accent && 'bg-accent text-white border-accent',
               optionClassName,
             )}
           >

@@ -7,7 +7,6 @@ import {
   Pause,
   Volume2,
   VolumeX,
-  Loader2,
   Repeat,
   ChevronUp,
   Check,
@@ -62,6 +61,9 @@ export function AudioPlayer({ asset, version, comments = [], className }: AudioP
   const [muted, setMuted] = React.useState(false)
   const [speed, setSpeed] = React.useState<number>(1)
   const [loop, setLoop] = React.useState(false)
+  // WaveSurfer's finish handler is bound once per instance, so read loop via a ref
+  const loopRef = React.useRef(loop)
+  loopRef.current = loop
   const [audioUrl, setAudioUrl] = React.useState<string | null>(null)
 
   // Access share context for share-mode stream fetching
@@ -106,7 +108,7 @@ export function AudioPlayer({ asset, version, comments = [], className }: AudioP
       setDuration(0)
 
       try {
-        const data = await api.get<StreamResponse>(`/assets/${asset.id}/stream`)
+        const data = await api.get<StreamResponse>(`/assets/${asset.id}/stream?version_id=${version.id}`)
         if (!cancelled) setAudioUrl(data.url)
       } catch (err) {
         if (!cancelled) {
@@ -118,7 +120,7 @@ export function AudioPlayer({ asset, version, comments = [], className }: AudioP
 
     fetchUrl()
     return () => { cancelled = true }
-  }, [asset.id, shareToken, version])
+  }, [asset.id, shareToken, version?.id])
 
   // Initialize WaveSurfer
   React.useEffect(() => {
@@ -173,7 +175,7 @@ export function AudioPlayer({ asset, version, comments = [], className }: AudioP
     ws.on('finish', () => {
       setIsPlaying(false)
       setCurrentTime(ws.getDuration())
-      if (loop) {
+      if (loopRef.current) {
         ws.seekTo(0)
         ws.play()
       }
@@ -247,7 +249,6 @@ export function AudioPlayer({ asset, version, comments = [], className }: AudioP
         {/* Loading */}
         {isLoading && !error && (
           <div className="flex flex-col items-center gap-3">
-            <Loader2 className="h-8 w-8 animate-spin text-text-tertiary" />
             <span className="text-xs text-text-tertiary">Loading waveform...</span>
           </div>
         )}
@@ -346,8 +347,8 @@ export function AudioPlayer({ asset, version, comments = [], className }: AudioP
             <ChevronUp className={cn('h-3 w-3 text-text-tertiary transition-transform', timeFormatOpen && 'rotate-180')} />
           </button>
           {timeFormatOpen && (
-            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 w-48 rounded-xl border border-white/10 bg-[#2a2a30] shadow-2xl py-1.5 animate-in fade-in zoom-in-95 duration-100">
-              <div className="px-3 py-2 text-[11px] text-text-tertiary uppercase tracking-wider font-medium">
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 w-48 rounded-xl border border-white/10 bg-[#2a2a30] shadow-2xl py-1.5 duration-100 animate-ff-rise-in">
+              <div className="px-3 py-2 text-[12px] text-text-tertiary">
                 Time Format
               </div>
               {([

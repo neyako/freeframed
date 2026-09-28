@@ -1,35 +1,26 @@
 import type { Metadata, Viewport } from "next";
-import { Space_Grotesk, Space_Mono } from "next/font/google";
-import localFont from "next/font/local";
+import { Inter, JetBrains_Mono } from "next/font/google";
 import { ToastProvider } from "@/components/shared/toast";
 import { ThemeInitializer } from "@/components/shared/theme-initializer";
 import { BrandingInitializer } from "@/components/shared/branding-initializer";
 import "./globals.css";
 
-const spaceGrotesk = Space_Grotesk({
+const inter = Inter({
   subsets: ["latin", "vietnamese"],
   display: "swap",
-  variable: "--font-space-grotesk",
+  variable: "--font-inter",
 });
 
-const spaceMono = Space_Mono({
+// Timecodes, sizes, counts
+const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin", "vietnamese"],
-  weight: ["400", "700"],
   display: "swap",
-  variable: "--font-space-mono",
-});
-
-const doto = localFont({
-  src: "./fonts/doto-variable.woff2",
-  weight: "100 900",
-  display: "swap",
-  variable: "--font-doto",
-  preload: false,
+  variable: "--font-jetbrains-mono",
 });
 
 export const metadata: Metadata = {
   title: "freeframed",
-  description: "Collaborative media review and approval platform",
+  description: "Self-hosted media review",
 };
 
 export const viewport: Viewport = {
@@ -47,7 +38,7 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${spaceGrotesk.variable} ${spaceMono.variable} ${doto.variable}`}
+      className={`${inter.variable} ${jetbrainsMono.variable}`}
     >
       <head>
         {/* Inline script to apply theme BEFORE paint — prevents flash */}

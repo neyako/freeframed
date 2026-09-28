@@ -32,18 +32,11 @@ describe("ShareDialog dropdown", () => {
 
     mockedApi.get.mockImplementation(async (path: string) => {
       if (path === "/assets/asset-1/shares") return [link];
-      if (path === "/assets/asset-1/direct-shares") return [];
       return [];
     });
     mockedApi.delete.mockResolvedValue(undefined);
 
-    render(
-      <ShareDialog
-        assetId="asset-1"
-        projectId="project-1"
-        assetName="Hero.mov"
-      />,
-    );
+    render(<ShareDialog assetId="asset-1" />);
 
     await user.click(screen.getByRole("button", { name: /^share$/i }));
     expect(await screen.findByText("Anyone with the link")).toBeInTheDocument();

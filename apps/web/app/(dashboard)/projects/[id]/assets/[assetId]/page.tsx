@@ -10,27 +10,24 @@ import { ImageViewer } from '@/components/review/image-viewer'
 import { AnnotationCanvas } from '@/components/review/annotation-canvas'
 import { AnnotationOverlay } from '@/components/review/annotation-overlay'
 import { CommentPanel } from '@/components/review/comment-panel'
-import { CommentInput } from '@/components/review/comment-input'
+import { CommentInput, type CommentDraft } from '@/components/review/comment-input'
 import { ApprovalBar } from '@/components/review/approval-bar'
 import { VersionSwitcher } from '@/components/review/version-switcher'
-import { Linkified } from '@/components/review/linkified'
+import { CutSummary } from '@/components/review/cut-summary'
+import { Button } from '@/components/ui/button'
 import { ShareDialog } from '@/components/review/share-dialog'
 import { useReviewStore } from '@/stores/review-store'
 import { useAuthStore } from '@/stores/auth-store'
 import { useComments, uploadCommentAttachments } from '@/hooks/use-comments'
 import { api } from '@/lib/api'
 import { canGoBackInApp } from '@/lib/navigation'
-import { isFolderDirectProject, resolveFolderPermission } from '@/lib/project-access'
 import { useUploadStore } from '@/stores/upload-store'
 import { useBreadcrumbStore } from '@/stores/breadcrumb-store'
 import {
   ArrowLeft,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Download,
-  Info,
-  Loader2,
   Columns2,
   MessageSquare,
   Upload,
@@ -38,21 +35,34 @@ import {
 import { cn } from '@/lib/utils'
 import { usePageTitle } from '@/hooks/use-page-title'
 import type { ApiError } from '@/lib/api'
-import type { AssetResponse, FolderTreeNode, ProjectAccessResponse } from '@/types'
+import type { AssetResponse, FolderTreeNode, Project } from '@/types'
 
 const acceptByType: Record<string, string> = {
   video: 'video/*',
   audio: 'audio/*',
   image: 'image/*',
-  image_carousel: 'image/*',
+}
+
+function findPath(
+  nodes: FolderTreeNode[],
+  targetId: string,
+  trail: { id: string; name: string }[] = [],
+): { id: string; name: string }[] | null {
+  for (const node of nodes) {
+    const next = [...trail, { id: node.id, name: node.name }]
+    if (node.id === targetId) return next
+    const found = findPath(node.children, targetId, next)
+    if (found) return found
+  }
+  return null
 }
 
 function ReviewScreenInner({ projectId }: { projectId: string }) {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { asset, versions, isLoading, error: reviewError, refetchComments, refetchVersions } = useReview()
-  const { currentVersion, isDrawingMode, focusedCommentId, seekTo, setFocusedCommentId, setActiveAnnotation } = useReviewStore()
-  const { user, isSuperAdmin } = useAuthStore()
+  const { asset, versions, isLoading, error: reviewError, refetchVersions } = useReview()
+  const { currentVersion, isDrawingMode, focusedCommentId, seekTo, setCurrentVersion, setFocusedCommentId, setActiveAnnotation } = useReviewStore()
+  const { user } = useAuthStore()
   const startVersionUpload = useUploadStore((s) => s.startVersionUpload)
   const versionFileInputRef = useRef<HTMLInputElement>(null)
   const setExtraCrumbs = useBreadcrumbStore((s) => s.setExtraCrumbs)
@@ -61,17 +71,20 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
   const [annotationData, setAnnotationData] = useState<Record<string, unknown> | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [downloading, setDownloading] = useState(false)
+  const [targetOverride, setTargetOverride] = useState<{ assetId: string; seconds: number | null } | null>(null)
 
-  const { data: project, error: projectError } = useSWR<ProjectAccessResponse, ApiError>(
+  const { data: project, error: projectError } = useSWR<Project, ApiError>(
     `/projects/${projectId}`,
-    () => api.get<ProjectAccessResponse>(`/projects/${projectId}`),
+    () => api.get<Project>(`/projects/${projectId}`),
   )
 
   async function handleDownload() {
-    if (!asset || downloading) return
+    if (!asset || !currentVersion || downloading) return
     setDownloading(true)
     try {
-      const res = await api.get<{ url: string }>(`/assets/${asset.id}/stream?download=true`)
+      const res = await api.get<{ url: string }>(
+        `/assets/${asset.id}/stream?download=true&version_id=${currentVersion.id}`,
+      )
       // Let the server's Content-Disposition filename win — don't set `a.download`
       const a = document.createElement('a')
       a.href = res.url
@@ -102,20 +115,6 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
   useEffect(() => {
     if (!asset?.name) return
 
-    function findPath(
-      nodes: FolderTreeNode[],
-      targetId: string,
-      trail: { id: string; name: string }[],
-    ): { id: string; name: string }[] | null {
-      for (const node of nodes) {
-        const next = [...trail, { id: node.id, name: node.name }]
-        if (node.id === targetId) return next
-        const found = findPath(node.children, targetId, next)
-        if (found) return found
-      }
-      return null
-    }
-
     const folderPath = asset.folder_id && folderTree
       ? (findPath(folderTree, asset.folder_id, []) ?? [])
       : []
@@ -135,23 +134,6 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
     if (project?.name) setLabel(projectId, project.name)
   }, [project?.name, projectId, setLabel])
 
-  const folderDirect = isFolderDirectProject(project)
-  const folderPermission = folderDirect && asset?.folder_id
-    ? resolveFolderPermission(project.folder_access, asset.folder_id, folderTree ?? [])
-    : null
-  const currentRole = project?.role ?? 'viewer'
-  const canComment = currentRole !== 'viewer' || folderPermission === 'comment' || folderPermission === 'approve'
-  const canApprove = folderDirect
-    ? folderPermission === 'approve'
-    : currentRole === 'owner' || currentRole === 'editor' || currentRole === 'reviewer'
-  const canResolve = Boolean(user && asset && (
-    isSuperAdmin
-    || asset.created_by === user.id
-    || asset.assignee_id === user.id
-    || currentRole === 'owner'
-    || currentRole === 'editor'
-  ))
-
   // Fetch all assets for navigation (1 of N)
   const { data: allAssets } = useSWR<AssetResponse[]>(
     project && !reviewError && projectError === undefined ? `/projects/${projectId}/assets` : null,
@@ -162,9 +144,11 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
     comments,
     createComment,
     resolveComment,
+    toggleCut,
     deleteComment,
     addReaction,
     removeReaction,
+    mutate: mutateComments,
   } = useComments(asset?.id || '', currentVersion?.id || '')
 
   // Open the comments panel by default on desktop; on mobile keep it hidden
@@ -180,7 +164,17 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
     }
   }, [comments.length])
 
-  // Deep-link to a specific comment from notification (?commentId=...)
+  // Comment links carry the comment's version (?versionId=...) — open that one
+  const deepLinkVersionApplied = useRef(false)
+  useEffect(() => {
+    const versionId = searchParams.get('versionId')
+    if (!versionId || deepLinkVersionApplied.current || versions.length === 0) return
+    deepLinkVersionApplied.current = true
+    const target = versions.find((v) => v.id === versionId)
+    if (target && target.id !== currentVersion?.id) setCurrentVersion(target)
+  }, [versions, searchParams, currentVersion?.id, setCurrentVersion])
+
+  // Deep-link to a specific comment (?commentId=...)
   // Runs once after comments are loaded — seeks to timecode, focuses comment, shows annotation
   useEffect(() => {
     const commentId = searchParams.get('commentId')
@@ -208,8 +202,8 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
   }
 
   const handleBack = () => {
-    // Return the viewer to wherever they opened the asset from — dashboard,
-    // command palette, notifications — instead of a project they may never
+    // Return the viewer to wherever they opened the asset from — dashboard
+    // or command palette — instead of a project they may never
     // have visited. History also restores the exact folder query, which
     // reconstructing the URL by hand did not.
     if (canGoBackInApp(window.history, document.referrer, window.location.origin)) {
@@ -227,6 +221,8 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      // Video and audio players use the arrow keys to seek
+      if (asset?.asset_type === 'video' || asset?.asset_type === 'audio') return
       if (e.key === 'ArrowLeft' && prevAsset) {
         e.preventDefault()
         navigateAsset(prevAsset.id)
@@ -238,7 +234,7 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
     }
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [prevAsset, nextAsset])
+  }, [asset?.asset_type, prevAsset, nextAsset])
 
   if (reviewError || projectError) {
     return (
@@ -253,45 +249,34 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
 
   if (isLoading || !asset || !project) {
     return (
-      <div className="flex flex-1 items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
-          <span className="text-xs text-text-tertiary">Loading asset...</span>
-        </div>
-      </div>
+      <div className="flex flex-1 items-center justify-center text-[13px] text-text-tertiary">Loading…</div>
     )
   }
 
-  const handleSubmitComment = async (
-    body: string,
-    timecodeStart?: number,
-    timecodeEnd?: number,
-    annotation?: Record<string, unknown>,
-    parentId?: string,
-    visibility?: string,
-    mentionUserIds?: string[],
-    attachments?: File[],
-  ) => {
-    const created = await createComment(
-      body,
-      timecodeStart,
-      timecodeEnd,
-      annotation || annotationData || undefined,
-      parentId,
-      visibility,
-      mentionUserIds,
-    )
-    if (attachments?.length) {
-      await uploadCommentAttachments(created.id, attachments)
+  const handleSubmitComment = async (draft: CommentDraft) => {
+    const created = await createComment({
+      ...draft,
+      annotation: draft.annotation || annotationData || undefined,
+    })
+    if (draft.attachments?.length) {
+      await uploadCommentAttachments(created.id, draft.attachments)
+      await mutateComments()
     }
     setAnnotationData(null)
-    refetchComments()
   }
 
   const handleSubmitReply = async (parentId: string, body: string) => {
-    await createComment(body, undefined, undefined, undefined, parentId)
-    refetchComments()
+    await createComment({ body, parentId })
   }
+
+  // Runtime goal lives on the asset; show the pick immediately, save in the background
+  const target =
+    targetOverride?.assetId === asset.id ? targetOverride.seconds : (asset.target_duration_seconds ?? null)
+  const handleTargetChange = async (seconds: number | null) => {
+    setTargetOverride({ assetId: asset.id, seconds })
+    await api.patch(`/assets/${asset.id}`, { target_duration_seconds: seconds })
+  }
+  const runtime = currentVersion?.files?.find((f) => f.duration_seconds)?.duration_seconds ?? null
 
   const versionReady = currentVersion?.processing_status === 'ready'
   const versionProcessing =
@@ -300,46 +285,16 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
 
   const renderMediaViewer = () => {
     if (!currentVersion || !versionReady) {
+      const failed = currentVersion?.processing_status === 'failed'
       return (
-        <div className="flex-1 flex items-center justify-center">
-          <div className="flex flex-col items-center gap-4 text-center px-6">
-            {versionProcessing ? (
-              <>
-                <div className="h-12 w-12 rounded-full bg-accent/10 flex items-center justify-center">
-                  <Loader2 className="h-6 w-6 animate-spin text-accent" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-text-primary">Processing asset</p>
-                  <p className="text-xs text-text-tertiary mt-1">
-                    This may take a few minutes depending on file size.
-                  </p>
-                </div>
-              </>
-            ) : currentVersion?.processing_status === 'failed' ? (
-              <>
-                <div className="h-12 w-12 rounded-full bg-status-error/10 flex items-center justify-center">
-                  <Info className="h-6 w-6 text-status-error" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-text-primary">Processing failed</p>
-                  <p className="text-xs text-text-tertiary mt-1">
-                    Try uploading a new version of this asset.
-                  </p>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="h-12 w-12 rounded-full bg-bg-tertiary flex items-center justify-center">
-                  <Info className="h-6 w-6 text-text-tertiary" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-text-primary">Version not ready</p>
-                  <p className="text-xs text-text-tertiary mt-1">
-                    This version is still being prepared.
-                  </p>
-                </div>
-              </>
-            )}
+        <div className="flex flex-1 items-center justify-center px-6 text-center">
+          <div>
+            <p className={cn('text-[13px] font-medium', failed ? 'text-accent' : 'text-text-primary')}>
+              {failed ? 'Processing failed' : versionProcessing ? 'Processing…' : 'Not ready yet'}
+            </p>
+            <p className="mt-1 text-[12.5px] text-text-tertiary">
+              {failed ? 'Upload a new version to try again.' : 'This page updates when the version is ready.'}
+            </p>
           </div>
         </div>
       )
@@ -374,7 +329,6 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
           />
         )
       case 'image':
-      case 'image_carousel':
         return (
           <div className="relative flex-1 flex items-center justify-center p-4 overflow-hidden">
             <ImageViewer
@@ -400,53 +354,34 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
 
   return (
     <div className="absolute inset-0 flex flex-col overflow-hidden">
-      <div className="flex items-center justify-between border-b border-border px-3 sm:px-5 h-14 bg-bg-primary shrink-0">
-        {/* Left: back + breadcrumb */}
-        <div className="flex items-center gap-1 min-w-0 flex-1">
-          <button
-            type="button"
-            onClick={handleBack}
-            className="flex items-center justify-center h-8 w-8 rounded border border-transparent text-text-secondary hover:text-text-primary hover:border-border transition-colors shrink-0"
-            aria-label="Back"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </button>
-
-          {/* Asset name only */}
-          <span className="text-sm font-semibold tracking-[-0.01em] text-text-primary truncate">
-            {asset.name}
-          </span>
-        </div>
-
-        {/* Center: asset navigation */}
-        {totalAssets > 1 && (
-          <div className="flex items-center gap-1 shrink-0">
-            <button
-              onClick={() => prevAsset && navigateAsset(prevAsset.id)}
-              disabled={!prevAsset}
-              className="flex items-center justify-center h-8 w-8 rounded border border-transparent text-text-secondary hover:text-text-primary hover:border-border transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-              title="Previous asset (←)"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-            <span className="hidden sm:inline font-dot text-xs text-text-secondary tabular-nums px-1">
-              {currentIndex + 1} of {totalAssets}
-            </span>
-            <button
-              onClick={() => nextAsset && navigateAsset(nextAsset.id)}
-              disabled={!nextAsset}
-              className="flex items-center justify-center h-8 w-8 rounded border border-transparent text-text-secondary hover:text-text-primary hover:border-border transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-              title="Next asset (→)"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </button>
+      <div className="flex h-12 shrink-0 items-center gap-3 border-b border-border bg-bg-primary px-3 sm:px-4">
+        <Button variant="ghost" size="sm" className="w-[30px] px-0" onClick={handleBack} aria-label="Back">
+          <ArrowLeft />
+        </Button>
+        <div className="min-w-0">
+          <div className="truncate text-[13px] font-medium leading-tight text-text-primary">{asset.name}</div>
+          <div className="truncate text-[11.5px] leading-tight text-text-tertiary">
+            {[project.name, ...(asset.folder_id && folderTree ? (findPath(folderTree, asset.folder_id) ?? []).map((f) => f.name) : [])].join(' / ')}
           </div>
-        )}
+        </div>
+        <VersionSwitcher versions={versions} className="ml-1 hidden sm:flex" />
 
-        {/* Right: version, share, sidebar toggle */}
-        <div className="flex items-center gap-2 shrink-0 flex-1 justify-end">
+        <div className="flex flex-1 items-center justify-end gap-1">
+          {totalAssets > 1 && (
+            <div className="mr-1 hidden items-center md:flex">
+              <Button variant="ghost" size="sm" className="w-[30px] px-0" onClick={() => prevAsset && navigateAsset(prevAsset.id)} disabled={!prevAsset} title="Previous asset">
+                <ChevronLeft />
+              </Button>
+              <span className="px-1 font-mono text-[11.5px] tabular-nums text-text-tertiary">
+                {currentIndex + 1}/{totalAssets}
+              </span>
+              <Button variant="ghost" size="sm" className="w-[30px] px-0" onClick={() => nextAsset && navigateAsset(nextAsset.id)} disabled={!nextAsset} title="Next asset">
+                <ChevronRight />
+              </Button>
+            </div>
+          )}
           {/* Hidden file input for new version upload */}
-          {!folderDirect && <input
+          <input
             ref={versionFileInputRef}
             type="file"
             className="hidden"
@@ -459,42 +394,29 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
               // Refetch versions after a short delay to show the new uploading version
               setTimeout(() => refetchVersions(), 800)
             }}
-          />}
-          <VersionSwitcher versions={versions} />
-          {!folderDirect && <button
-            onClick={() => versionFileInputRef.current?.click()}
-            className="hidden md:inline-flex h-[34px] items-center gap-2 rounded border border-border-strong px-3.5 font-mono text-[11px] uppercase tracking-[0.08em] text-text-primary hover:border-text-primary hover:bg-bg-hover transition-colors"
-            title="Upload new version"
-          >
-            <Upload className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">New version</span>
-          </button>}
-          {!folderDirect && <button
-            onClick={handleDownload}
-            disabled={downloading}
-            className="inline-flex h-[34px] items-center gap-2 rounded border border-border-strong px-3.5 font-mono text-[11px] uppercase tracking-[0.08em] text-text-primary hover:border-text-primary hover:bg-bg-hover transition-colors disabled:opacity-50"
-            title="Download original file"
-          >
-            {downloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-            <span className="hidden sm:inline">Download</span>
-          </button>}
-          {!folderDirect && <ShareDialog assetId={asset.id} assetName={asset.name} projectId={projectId} asset={asset} />}
-          <button
+          />
+          <Button variant="ghost" size="sm" className="hidden md:inline-flex" onClick={() => versionFileInputRef.current?.click()}>
+            <Upload />
+            New version
+          </Button>
+          <Button variant="ghost" size="sm" onClick={handleDownload} disabled={downloading} title="Download original file">
+            <Download />
+            <span className="hidden sm:inline">{downloading ? 'Preparing…' : 'Download'}</span>
+          </Button>
+          <ShareDialog assetId={asset.id} />
+          <Button
+            variant="ghost"
+            size="sm"
+            className={cn('hidden w-[30px] px-0 md:inline-flex', sidebarOpen && 'text-text-primary')}
             onClick={() => setSidebarOpen((p) => !p)}
-            className={cn(
-              'hidden md:flex items-center justify-center h-[34px] w-[34px] rounded border transition-colors',
-              sidebarOpen
-                ? 'border-border-strong text-text-primary'
-                : 'border-border text-text-secondary hover:text-text-primary hover:border-border-strong',
-            )}
-            title="Toggle sidebar"
+            title="Toggle comments"
           >
-            <Columns2 className="h-4 w-4" />
-          </button>
+            <Columns2 />
+          </Button>
         </div>
       </div>
 
-      {canApprove && currentVersion && (
+      {currentVersion && (
         <ApprovalBar
           assetId={asset.id}
           versionId={currentVersion.id}
@@ -506,7 +428,7 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
       {/* ─── Main content: viewer + sidebar ────────────────────────────── */}
       <div className="flex flex-col md:flex-row flex-1 overflow-hidden min-h-0">
         {/* Left: viewer column */}
-        <div className="ff-dotgrid flex-1 flex flex-col bg-bg-primary overflow-hidden min-w-0">
+        <div className="flex-1 flex flex-col bg-bg-primary overflow-hidden min-w-0">
           {/* Media viewer */}
           {renderMediaViewer()}
         </div>
@@ -525,7 +447,7 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
         {sidebarOpen && (
           <div
             className={cn(
-              'w-full flex flex-col border-t md:border-t-0 border-l-0 md:border-l border-border bg-bg-secondary shrink-0 animate-in slide-in-from-bottom-2 md:slide-in-from-right-2 duration-150 md:h-auto md:w-[372px]',
+              'w-full flex flex-col border-t md:border-t-0 border-l-0 md:border-l border-border bg-bg-secondary shrink-0 animate-ff-rise-in md:animate-ff-slide-in md:h-auto md:w-[372px]',
               isDrawingMode ? 'h-auto' : 'h-[55vh]',
             )}
           >
@@ -543,40 +465,34 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
             {/* Content */}
             <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
               <div className={cn('flex-1 flex flex-col min-h-0 overflow-hidden', isDrawingMode && 'hidden md:flex')}>
-                {folderDirect && !canComment ? (
-                  <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                    {comments.length === 0 ? (
-                      <p className="text-xs text-text-tertiary">No comments yet</p>
-                    ) : comments.map((comment) => (
-                      <div key={comment.id} className="rounded border border-border bg-bg-primary p-3">
-                        <p className="text-xs font-medium text-text-secondary">
-                          {comment.author?.name ?? comment.guest_author?.name ?? 'Reviewer'}
-                        </p>
-                        <p className="mt-1 text-sm text-text-primary whitespace-pre-wrap"><Linkified text={comment.body} /></p>
-                      </div>
-                    ))}
-                  </div>
-                ) : <CommentPanel
+                {runtime !== null && (asset.asset_type === 'video' || asset.asset_type === 'audio') && (
+                  <CutSummary
+                    comments={comments as any}
+                    duration={runtime}
+                    target={target}
+                    onTargetChange={handleTargetChange}
+                  />
+                )}
+                <CommentPanel
                   comments={comments as any}
                   currentUserId={user?.id}
-                  onResolve={canResolve ? resolveComment : undefined}
+                  onResolve={resolveComment}
+                  onToggleCut={toggleCut}
                   onDelete={deleteComment}
                   onAddReaction={addReaction}
                   onRemoveReaction={removeReaction}
                   onReply={() => {}}
                   onSubmitReply={handleSubmitReply}
                   showExport
-                />}
-              </div>
-              {canComment && (
-                <CommentInput
-                  assetId={asset.id}
-                  projectId={asset.project_id}
-                  assetType={asset.asset_type}
-                  onSubmit={handleSubmitComment}
-                  annotationData={annotationData}
                 />
-              )}
+              </div>
+              <CommentInput
+                assetId={asset.id}
+                projectId={asset.project_id}
+                assetType={asset.asset_type}
+                onSubmit={handleSubmitComment}
+                annotationData={annotationData}
+              />
             </div>
           </div>
         )}

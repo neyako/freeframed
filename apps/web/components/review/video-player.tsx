@@ -145,6 +145,7 @@ export function VideoPlayer({
 
   const { isDrawingMode, timeFormat, setTimeFormat, setPlayheadTime } =
     useReviewStore();
+  const versionId = useReviewStore((s) => s.currentVersion?.id);
   const { registerPauseHandler } = useReview();
   const [timeFormatOpen, setTimeFormatOpen] = useState(false);
   const timeFormatRef = useRef<HTMLDivElement>(null);
@@ -188,24 +189,29 @@ export function VideoPlayer({
     }
   }
 
-  // Load the stream URL — reset immediately on asset change so the old video
-  // doesn't keep playing while the new URL is being fetched.
+  // Load the stream URL — reset immediately on asset/version change so the old
+  // video doesn't keep playing while the new URL is being fetched.
   useEffect(() => {
     setStreamUrl(null);
     if (initialStreamUrl) {
       setStreamUrl(resolveStreamUrl(initialStreamUrl));
       return;
     }
+    let cancelled = false;
+    const query = versionId ? `?version_id=${versionId}` : "";
     api
-      .get<StreamUrlResponse>(`/assets/${assetId}/stream`)
+      .get<StreamUrlResponse>(`/assets/${assetId}/stream${query}`)
       .then((data) => {
         // HLS proxy returns relative paths — prepend API URL
-        setStreamUrl(resolveStreamUrl(data.url));
+        if (!cancelled) setStreamUrl(resolveStreamUrl(data.url));
       })
       .catch(() => {
         /* stream URL errors handled by player error state */
       });
-  }, [assetId, initialStreamUrl]);
+    return () => {
+      cancelled = true;
+    };
+  }, [assetId, versionId, initialStreamUrl]);
 
   const player = useVideoPlayer(streamUrl);
 
@@ -425,7 +431,7 @@ export function VideoPlayer({
         {/* Loading spinner */}
         {isLoading && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div className="w-10 h-10 border-4 border-white/20 border-t-white rounded-full animate-spin" />
+            <span className="rounded bg-black/60 px-2 py-1 text-[12px] text-white/80">Loading…</span>
           </div>
         )}
 
@@ -536,7 +542,7 @@ export function VideoPlayer({
             onClick={() => setTimeFormatOpen((p) => !p)}
             className="flex items-center gap-1.5 rounded-md border border-border bg-bg-tertiary px-3.5 py-1 hover:border-border-strong transition-colors"
           >
-            <span className="font-dot text-xs sm:text-[15px] font-bold text-text-primary tracking-[0.02em]">
+            <span className="font-mono tabular-nums text-xs sm:text-[15px] font-bold text-text-primary tracking-[0.02em]">
               {timeFormat === "timecode" ? (
                 displayTime(currentTime)
               ) : (
@@ -555,8 +561,8 @@ export function VideoPlayer({
             />
           </button>
           {timeFormatOpen && (
-            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 w-48 rounded border border-border bg-bg-elevated py-1.5 animate-in fade-in zoom-in-95 duration-100">
-              <div className="px-3 py-2 text-[11px] text-text-tertiary uppercase font-mono tracking-[0.16em]">
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 w-48 rounded border border-border bg-bg-elevated py-1.5 duration-100 animate-ff-rise-in">
+              <div className="px-3 py-2 text-[12px] text-text-tertiary">
                 Time Format
               </div>
               {(
@@ -596,7 +602,7 @@ export function VideoPlayer({
             <div className="relative shrink-0" ref={qualityRef}>
               <button
                 onClick={() => setQualityOpen((p) => !p)}
-                className="flex items-center gap-1 rounded border border-border px-2 py-1 font-mono text-[11px] uppercase tracking-[0.08em] text-text-secondary hover:border-border-strong hover:text-text-primary transition-colors"
+                className="flex items-center gap-1 rounded border border-border px-2 py-1 text-[12.5px] text-text-secondary hover:border-border-strong hover:text-text-primary transition-colors"
                 aria-label="Quality"
               >
                 {currentQuality === -1
@@ -611,7 +617,7 @@ export function VideoPlayer({
                 />
               </button>
               {qualityOpen && (
-                <div className="absolute bottom-full right-0 mb-2 z-50 w-36 rounded border border-border bg-bg-elevated py-1.5 animate-in fade-in zoom-in-95 duration-100">
+                <div className="absolute bottom-full right-0 mb-2 z-50 w-36 rounded border border-border bg-bg-elevated py-1.5 duration-100 animate-ff-rise-in">
                   <button
                     className={cn(
                       "flex w-full items-center justify-between px-3 py-2 text-[13px] transition-colors",

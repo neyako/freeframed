@@ -58,13 +58,13 @@ vi.mock("@/components/review/audio-player", () => ({ AudioPlayer: () => null }))
 vi.mock("@/components/review/comment-panel", () => ({ CommentPanel: () => null }));
 vi.mock("@/components/review/comment-input", () => ({
   CommentInput: ({ onSubmit, visibilityLocked }: {
-    readonly onSubmit: (body: string) => Promise<void>;
+    readonly onSubmit: (draft: { body: string }) => Promise<void>;
     readonly visibilityLocked?: boolean;
   }) => (
     <button
       type="button"
       data-visibility-locked={visibilityLocked ? "true" : "false"}
-      onClick={() => void onSubmit("Looks good")}
+      onClick={() => void onSubmit({ body: "Looks good" })}
     >
       Submit comment
     </button>
@@ -106,6 +106,7 @@ describe("ShareReviewScreen identity", () => {
         viewerName="Pat Reviewer"
         permission="comment"
         allowDownload={false}
+        watermark={null}
       />,
     );
 
@@ -132,6 +133,7 @@ describe("ShareReviewScreen identity", () => {
         viewerName={null}
         permission="comment"
         allowDownload={false}
+        watermark={null}
       />,
     );
 
@@ -140,5 +142,68 @@ describe("ShareReviewScreen identity", () => {
     expect(await screen.findByText("Leave a comment")).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
     expect(mocks.addComment).not.toHaveBeenCalled();
+  });
+});
+
+describe("ShareReviewScreen watermark", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: vi.fn(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() })),
+    });
+  });
+
+  it("tiles the guest's email over the media, falling back to the link text", async () => {
+    localStorage.setItem("ff_guest_identity", JSON.stringify({ name: "Sam", email: "sam@brand.co" }));
+    const { unmount } = render(
+      <ShareReviewScreen
+        token="token"
+        assetId="asset-1"
+        assetName="Still.png"
+        viewerName={null}
+        permission="view"
+        allowDownload={false}
+        watermark="Launch cut"
+      />,
+    );
+
+    const overlay = await screen.findByTestId("share-watermark");
+    expect(overlay).toHaveClass("pointer-events-none");
+    expect(decodeURIComponent(overlay.style.backgroundImage)).toContain("sam@brand.co");
+    unmount();
+
+    localStorage.clear();
+    render(
+      <ShareReviewScreen
+        token="token"
+        assetId="asset-1"
+        assetName="Still.png"
+        viewerName={null}
+        permission="view"
+        allowDownload={false}
+        watermark="Launch cut"
+      />,
+    );
+    expect(
+      decodeURIComponent((await screen.findByTestId("share-watermark")).style.backgroundImage),
+    ).toContain("Launch cut");
+  });
+
+  it("renders no overlay when the link is not watermarked", async () => {
+    render(
+      <ShareReviewScreen
+        token="token"
+        assetId="asset-1"
+        assetName="Still.png"
+        viewerName={null}
+        permission="view"
+        allowDownload={false}
+        watermark={null}
+      />,
+    );
+
+    await screen.findByText("Image viewer");
+    expect(screen.queryByTestId("share-watermark")).not.toBeInTheDocument();
   });
 });

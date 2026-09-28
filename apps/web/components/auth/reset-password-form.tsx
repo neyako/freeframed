@@ -68,18 +68,14 @@ export function ResetPasswordForm({ token }: ResetPasswordFormProps) {
   }
 
   return (
-    <div className="animate-fade-in">
-      <div className="mb-6">
-        <h1 className="text-xl font-medium tracking-[-0.02em] text-text-primary mb-1">Choose a new password</h1>
-      </div>
+    <div className="space-y-4">
+      <h2 className="text-[18px] font-semibold text-text-primary">Choose a new password</h2>
 
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-3">
         {errors.general && (
           <>
-            <div className="animate-shake rounded border border-accent-line bg-accent-muted px-3 py-2.5 font-mono text-[12px] text-accent">
-              {errors.general}
-            </div>
-            <Link href="/forgot-password" className="text-sm text-text-secondary hover:text-text-primary underline">
+            <p role="alert" className="text-[12.5px] text-accent">{errors.general}</p>
+            <Link href="/forgot-password" className="text-[12.5px] text-text-secondary transition-colors duration-100 hover:text-text-primary">
               Request a new link
             </Link>
           </>
@@ -105,8 +101,8 @@ export function ResetPasswordForm({ token }: ResetPasswordFormProps) {
           error={errors.confirmPassword}
         />
 
-        <Button type="submit" size="lg" loading={submitting} className="mt-2 w-full">
-          Reset password
+        <Button type="submit" loading={submitting} className="mt-1 w-full">
+          {submitting ? 'Saving…' : 'Reset password'}
         </Button>
       </form>
     </div>

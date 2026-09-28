@@ -1,43 +1,23 @@
 'use client'
 
 import * as React from 'react'
-import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
-import { AlertCircle, Loader2, CheckCircle2, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useReviewStore } from '@/stores/review-store'
-import type { AssetVersion, AssetVersionStatus } from '@/types'
-
-const versionStatusConfig: Record<
-  AssetVersionStatus,
-  { label: string; className: string; icon: React.ReactNode }
-> = {
-  uploading: {
-    label: 'Uploading',
-    className: 'text-status-info',
-    icon: <Loader2 className="h-2.5 w-2.5 animate-spin" />,
-  },
-  processing: {
-    label: 'Processing',
-    className: 'text-status-warning',
-    icon: <Loader2 className="h-2.5 w-2.5 animate-spin" />,
-  },
-  ready: {
-    label: 'Ready',
-    className: 'text-status-success',
-    icon: <CheckCircle2 className="h-2.5 w-2.5" />,
-  },
-  failed: {
-    label: 'Failed',
-    className: 'text-status-error',
-    icon: <AlertCircle className="h-2.5 w-2.5" />,
-  },
-}
+import type { AssetVersion } from '@/types'
 
 interface VersionSwitcherProps {
   versions: AssetVersion[]
   className?: string
 }
 
+const STATUS_TITLE: Record<AssetVersion['processing_status'], string> = {
+  uploading: 'Uploading',
+  processing: 'Processing',
+  ready: 'Ready',
+  failed: 'Processing failed',
+}
+
+/** Inline version tabs: every version one click away. Not-ready versions can't be opened. */
 export function VersionSwitcher({ versions, className }: VersionSwitcherProps) {
   const currentVersion = useReviewStore((s) => s.currentVersion)
   const setCurrentVersion = useReviewStore((s) => s.setCurrentVersion)
@@ -47,59 +27,40 @@ export function VersionSwitcher({ versions, className }: VersionSwitcherProps) {
     [versions],
   )
 
-  if (sorted.length === 0) return null
+  if (sorted.length < 2) return null
 
   return (
-    <div className={cn('flex items-center gap-1.5', className)}>
-      <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-text-tertiary shrink-0">Version:</span>
-      <DropdownMenu.Root>
-        <DropdownMenu.Trigger asChild>
-          <button className="inline-flex h-[26px] items-center gap-1 rounded-sm bg-accent px-2.5 font-mono text-[11px] tracking-[0.08em] text-white hover:bg-accent-hover transition-colors outline-none">
-            v{currentVersion?.version_number ?? sorted[sorted.length - 1].version_number}
-            {sorted.length > 1 && <ChevronDown className="h-3 w-3 opacity-70" />}
+    <div
+      role="tablist"
+      aria-label="Version"
+      className={cn(
+        'flex max-w-[40vw] items-center overflow-x-auto rounded-md border border-border-strong p-0.5 font-mono text-[12px]',
+        className,
+      )}
+    >
+      {sorted.map((version) => {
+        const active = currentVersion?.id === version.id
+        const ready = version.processing_status === 'ready'
+        return (
+          <button
+            key={version.id}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            disabled={!ready}
+            title={`v${version.version_number} · ${STATUS_TITLE[version.processing_status]}`}
+            onClick={() => setCurrentVersion(version)}
+            className={cn(
+              'h-6 shrink-0 rounded px-2',
+              active ? 'bg-bg-hover text-text-primary' : 'text-text-tertiary hover:text-text-primary',
+              !ready && 'cursor-not-allowed opacity-40',
+              version.processing_status === 'failed' && 'line-through',
+            )}
+          >
+            v{version.version_number}
           </button>
-        </DropdownMenu.Trigger>
-        {sorted.length > 1 && (
-          <DropdownMenu.Portal>
-            <DropdownMenu.Content
-              align="end"
-              sideOffset={6}
-              className="z-[100] min-w-[160px] rounded-lg border border-border bg-bg-elevated shadow-xl py-1.5 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
-            >
-              {sorted.map((version) => {
-                const isActive = currentVersion?.id === version.id
-                const statusCfg = versionStatusConfig[version.processing_status]
-                const isDisabled =
-                  version.processing_status === 'uploading' ||
-                  version.processing_status === 'processing'
-                return (
-                  <DropdownMenu.Item
-                    key={version.id}
-                    disabled={isDisabled}
-                    onSelect={() => setCurrentVersion(version)}
-                    className={cn(
-                      'flex items-center justify-between gap-3 mx-1 px-2.5 py-2 rounded-lg text-sm cursor-pointer outline-none transition-colors',
-                      isActive
-                        ? 'bg-accent/10 text-accent font-medium'
-                        : 'text-text-secondary hover:bg-bg-hover hover:text-text-primary',
-                      isDisabled && 'opacity-50 cursor-not-allowed',
-                    )}
-                  >
-                    <span>v{version.version_number}</span>
-                    <span
-                      className={cn('inline-flex items-center gap-1 text-[11px]', statusCfg.className)}
-                      title={statusCfg.label}
-                    >
-                      {statusCfg.icon}
-                      {statusCfg.label}
-                    </span>
-                  </DropdownMenu.Item>
-                )
-              })}
-            </DropdownMenu.Content>
-          </DropdownMenu.Portal>
-        )}
-      </DropdownMenu.Root>
+        )
+      })}
     </div>
   )
 }

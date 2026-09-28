@@ -47,17 +47,12 @@ export function LoginForm() {
   }
 
   return (
-    <div className="animate-slide-up">
-      <div className="mb-8">
-        <h1 className="text-xl font-medium tracking-[-0.02em] text-text-primary mb-1">Sign in to freeframed</h1>
-        <p className="text-sm text-text-secondary">Enter your email and password.</p>
-      </div>
+    <div className="space-y-4">
+      <h2 className="text-[18px] font-semibold text-text-primary">Sign in</h2>
 
-      <form onSubmit={handleClassicLogin} className="flex flex-col gap-4">
+      <form onSubmit={handleClassicLogin} className="flex flex-col gap-3">
         {classicError && (
-          <div className="animate-shake rounded border border-accent-line bg-accent-muted px-3 py-2.5 font-mono text-[12px] text-accent">
-            {classicError}
-          </div>
+          <p role="alert" className="text-[12.5px] text-accent">{classicError}</p>
         )}
 
         <Input
@@ -78,15 +73,13 @@ export function LoginForm() {
           onChange={(e) => { setClassicPassword(e.target.value); setClassicError('') }}
         />
 
-        <div className="flex justify-end">
-          <Link href="/forgot-password" className="text-xs text-text-secondary hover:text-text-primary">
-            Forgot password?
-          </Link>
-        </div>
-
-        <Button type="submit" size="lg" loading={loading} className="mt-2 w-full">
-          Sign in
+        <Button type="submit" loading={loading} className="mt-1 w-full">
+          {loading ? 'Signing in…' : 'Sign in'}
         </Button>
+
+        <Link href="/forgot-password" className="text-[12.5px] text-text-secondary transition-colors duration-100 hover:text-text-primary">
+          Forgot password?
+        </Link>
       </form>
     </div>
   )

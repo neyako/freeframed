@@ -1,6 +1,6 @@
 import { create, type StateCreator } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { api } from '@/lib/api'
+import { api, ApiError } from '@/lib/api'
 import type { AssetResponse } from '@/types'
 
 const CHUNK_SIZE = 10 * 1024 * 1024 // 10 MB
@@ -144,8 +144,7 @@ function mimeFromAssetType(assetType: string): string {
   switch (assetType) {
     case 'video': return 'video/mp4'
     case 'audio': return 'audio/mpeg'
-    case 'image':
-    case 'image_carousel': return 'image/jpeg'
+    case 'image': return 'image/jpeg'
     default: return 'application/octet-stream'
   }
 }
@@ -483,7 +482,10 @@ const storeCreator: StateCreator<UploadStore, [['zustand/persist', unknown]]> = 
     try {
       const results = await Promise.all(
         processingFiles.map((f) =>
-          api.get<AssetResponse>(`/assets/${f.assetId}`).catch(() => null),
+          api.get<AssetResponse>(`/assets/${f.assetId}`).catch((err) =>
+            // Deleted asset: stop polling it. Other errors: retry next tick.
+            err instanceof ApiError && err.status === 404 ? ('gone' as const) : null,
+          ),
         ),
       )
       set((s) => ({
@@ -491,6 +493,7 @@ const storeCreator: StateCreator<UploadStore, [['zustand/persist', unknown]]> = 
           if (f.status !== 'processing' || !f.assetId) return f
           const idx = processingFiles.findIndex((pf) => pf.assetId === f.assetId)
           const asset = idx >= 0 ? results[idx] : null
+          if (asset === 'gone') return { ...f, status: 'failed' as const, error: 'Asset was deleted' }
           if (!asset?.latest_version) return f
           const status = mapProcessingStatus(asset.latest_version.processing_status)
           if (status === 'processing') return f

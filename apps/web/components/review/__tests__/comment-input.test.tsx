@@ -40,10 +40,9 @@ function setPlayhead(time: number) {
 }
 
 async function typeAndSend(text: string) {
-  fireEvent.change(screen.getByPlaceholderText("Leave your comment..."), {
-    target: { value: text },
-  });
-  fireEvent.click(screen.getByTitle("Send (Enter)"));
+  fireEvent.change(screen.getByRole("textbox"), { target: { value: text } });
+  // A marked range posts as a cut ("Add cut"); otherwise it's a plain send
+  fireEvent.click(screen.queryByRole("button", { name: "Add cut" }) ?? screen.getByTitle("Send (Enter)"));
 }
 
 describe("CommentInput range comments", () => {
@@ -64,7 +63,7 @@ describe("CommentInput range comments", () => {
     await typeAndSend("point note");
     await waitFor(() =>
       expect(onSubmit).toHaveBeenCalledWith(
-        "point note", 12, undefined, undefined, undefined, "internal", undefined, undefined,
+        expect.objectContaining({ body: "point note", timecodeStart: 12, timecodeEnd: undefined, visibility: "internal" }),
       ),
     );
   });
@@ -77,7 +76,7 @@ describe("CommentInput range comments", () => {
     await typeAndSend("cut this section");
     await waitFor(() =>
       expect(onSubmit).toHaveBeenCalledWith(
-        "cut this section", 12, 18, undefined, undefined, "internal", undefined, undefined,
+        expect.objectContaining({ body: "cut this section", timecodeStart: 12, timecodeEnd: 18, visibility: "internal", isCut: true }),
       ),
     );
     // range resets after submit — chip back in point mode
@@ -94,7 +93,7 @@ describe("CommentInput range comments", () => {
     await typeAndSend("cut this");
     await waitFor(() =>
       expect(onSubmit).toHaveBeenCalledWith(
-        "cut this", 12, 18, undefined, undefined, "internal", undefined, undefined,
+        expect.objectContaining({ body: "cut this", timecodeStart: 12, timecodeEnd: 18, visibility: "internal", isCut: true }),
       ),
     );
   });
@@ -106,7 +105,7 @@ describe("CommentInput range comments", () => {
     await typeAndSend("same spot");
     await waitFor(() =>
       expect(onSubmit).toHaveBeenCalledWith(
-        "same spot", 12, undefined, undefined, undefined, "internal", undefined, undefined,
+        expect.objectContaining({ body: "same spot", timecodeStart: 12, timecodeEnd: undefined, visibility: "internal" }),
       ),
     );
   });
@@ -120,7 +119,7 @@ describe("CommentInput range comments", () => {
     await typeAndSend("just here");
     await waitFor(() =>
       expect(onSubmit).toHaveBeenCalledWith(
-        "just here", 18, undefined, undefined, undefined, "internal", undefined, undefined,
+        expect.objectContaining({ body: "just here", timecodeStart: 18, timecodeEnd: undefined, visibility: "internal" }),
       ),
     );
   });
@@ -136,7 +135,7 @@ describe("CommentInput range comments", () => {
     await typeAndSend("frozen out");
     await waitFor(() =>
       expect(onSubmit).toHaveBeenCalledWith(
-        "frozen out", 12, 18, undefined, undefined, "internal", undefined, undefined,
+        expect.objectContaining({ body: "frozen out", timecodeStart: 12, timecodeEnd: 18, visibility: "internal", isCut: true }),
       ),
     );
   });
@@ -151,7 +150,7 @@ describe("CommentInput range comments", () => {
     await typeAndSend("o first");
     await waitFor(() =>
       expect(onSubmit).toHaveBeenCalledWith(
-        "o first", 8, 20, undefined, undefined, "internal", undefined, undefined,
+        expect.objectContaining({ body: "o first", timecodeStart: 8, timecodeEnd: 20, visibility: "internal", isCut: true }),
       ),
     );
   });
@@ -164,7 +163,7 @@ describe("CommentInput range comments", () => {
     await typeAndSend("no time");
     await waitFor(() =>
       expect(onSubmit).toHaveBeenCalledWith(
-        "no time", undefined, undefined, undefined, undefined, "internal", undefined, undefined,
+        expect.objectContaining({ body: "no time", timecodeStart: undefined, timecodeEnd: undefined, visibility: "internal" }),
       ),
     );
   });
@@ -180,8 +179,31 @@ describe("CommentInput range comments", () => {
     await typeAndSend("team note");
     await waitFor(() =>
       expect(onSubmit).toHaveBeenCalledWith(
-        "team note", undefined, undefined, undefined, undefined, "internal", undefined, undefined,
+        expect.objectContaining({ body: "team note", timecodeStart: undefined, timecodeEnd: undefined, visibility: "internal" }),
       ),
+    );
+  });
+
+  it("posts an I/O range as a cut; the note is optional", async () => {
+    const onSubmit = setup();
+    act(() => {
+      useReviewStore.setState({ rangeStart: 6.8, rangeEnd: 9 });
+    });
+    expect(screen.getByText("0:06.8 → 0:09.0")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Add cut" }));
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({ body: "", timecodeStart: 6.8, timecodeEnd: 9, isCut: true }),
+      ),
+    );
+  });
+
+  it("a point comment is never a cut", async () => {
+    const onSubmit = setup();
+    setPlayhead(12);
+    await typeAndSend("nice");
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ body: "nice", isCut: undefined })),
     );
   });
 });

@@ -91,27 +91,23 @@ export function useToast(): Omit<ToastContextValue, 'toasts'> & {
 
 const TOAST_CONFIG: Record<
   ToastType,
-  { icon: React.ElementType; containerClass: string; iconClass: string }
+  { icon: React.ElementType; iconClass: string }
 > = {
   success: {
     icon: CheckCircle,
-    containerClass: 'border-status-success/30 bg-status-success/10',
     iconClass: 'text-status-success',
   },
   error: {
     icon: XCircle,
-    containerClass: 'border-status-error/30 bg-status-error/10',
     iconClass: 'text-status-error',
   },
   warning: {
     icon: AlertCircle,
-    containerClass: 'border-status-warning/30 bg-status-warning/10',
     iconClass: 'text-status-warning',
   },
   info: {
     icon: Info,
-    containerClass: 'border-border bg-bg-elevated',
-    iconClass: 'text-accent',
+    iconClass: 'text-text-secondary',
   },
 }
 
@@ -152,17 +148,13 @@ function ToastTile({ toast, onDismiss }: ToastTileProps) {
   return (
     <div
       role="alert"
-      className={cn(
-        'pointer-events-auto flex w-80 items-start gap-3 rounded-xl border px-4 py-3 shadow-xl',
-        'animate-slide-up',
-        config.containerClass,
-      )}
+      className="pointer-events-auto flex w-80 items-start gap-2.5 rounded-md border border-border-strong bg-bg-elevated px-3 py-2.5 shadow-xl animate-ff-rise-in"
     >
-      <Icon className={cn('mt-0.5 h-4 w-4 shrink-0', config.iconClass)} />
-      <p className="flex-1 text-sm text-text-primary">{toast.message}</p>
+      <Icon className={cn('mt-px h-[15px] w-[15px] shrink-0', config.iconClass)} />
+      <p className="flex-1 text-[13px] text-text-primary">{toast.message}</p>
       <button
         onClick={() => onDismiss(toast.id)}
-        className="mt-0.5 shrink-0 rounded p-0.5 text-text-tertiary transition-colors hover:bg-bg-hover hover:text-text-primary"
+        className="mt-px shrink-0 rounded p-0.5 text-text-tertiary transition-colors duration-100 hover:bg-bg-hover hover:text-text-primary"
         aria-label="Dismiss notification"
       >
         <X className="h-3.5 w-3.5" />

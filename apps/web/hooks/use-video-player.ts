@@ -194,7 +194,10 @@ export function useVideoPlayer(src: string | null): UseVideoPlayerReturn {
           index,
           height: level.height,
           bitrate: level.bitrate,
-          label: level.height ? `${level.height}p` : `${Math.round(level.bitrate / 1000)}kbps`,
+          // Label by the short edge so vertical renditions read 1080p, not 1920p
+          label: level.height
+            ? `${Math.min(level.width || level.height, level.height)}p`
+            : `${Math.round(level.bitrate / 1000)}kbps`,
         }))
         setQualityLevels(levels)
         setCurrentQuality(-1) // start on auto
@@ -234,6 +237,11 @@ export function useVideoPlayer(src: string | null): UseVideoPlayerReturn {
       if (hlsRef.current) {
         hlsRef.current.destroy()
         hlsRef.current = null
+      } else {
+        // Native playback (Safari HLS / direct URL): stop the old source so it
+        // doesn't keep playing while the next one loads
+        video.removeAttribute('src')
+        video.load()
       }
     }
   }, [src, setPlayheadTime])

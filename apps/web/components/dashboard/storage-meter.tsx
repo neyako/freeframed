@@ -30,29 +30,22 @@ export function StorageMeter({ usedBytes, className }: { usedBytes?: number; cla
   const pct = total ? Math.min((used / total) * 100, 100) : 0
 
   return (
-    <div className={cn('flex flex-col gap-1', className)}>
-      <div className="flex items-center justify-between">
-        <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-text-tertiary">Storage</span>
-        <span
-          className={cn(
-            'font-mono text-[10px] tracking-[0.02em] tabular-nums',
-            pct >= 90 ? 'text-accent' : 'text-text-secondary',
-          )}
-        >
+    <div className={cn('flex flex-col gap-1 text-[12px]', className)}>
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-text-secondary">Storage</span>
+        <span className={cn('whitespace-nowrap font-mono tabular-nums', pct >= 90 ? 'text-accent' : 'text-text-tertiary')}>
           {formatBytes(used)}
           {total !== null && ` / ${formatBytes(total)}`}
         </span>
       </div>
-      <div className="h-1 w-full rounded-full bg-bg-hover overflow-hidden">
+      <div className="h-1 w-full overflow-hidden rounded-full bg-bg-hover">
         <div
-          className="h-full rounded-full bg-accent transition-all duration-300"
+          className={cn('h-full rounded-full', pct >= 90 ? 'bg-accent' : 'bg-text-primary')}
           style={{ width: `${Math.max(pct, 1)}%` }}
         />
       </div>
       {free !== null && (
-        <span className="font-mono text-[10px] tracking-[0.02em] text-text-tertiary tabular-nums">
-          {formatBytes(free)} free
-        </span>
+        <span className="font-mono tabular-nums text-text-tertiary">{formatBytes(free)} free</span>
       )}
     </div>
   )

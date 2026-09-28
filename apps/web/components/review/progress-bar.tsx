@@ -187,7 +187,7 @@ function CommentMarker({
   return (
     <div
       ref={markerRef}
-      className="absolute top-0 -translate-x-1/2 cursor-pointer animate-in zoom-in-50 fade-in duration-300 ease-out"
+      className="absolute top-0 -translate-x-1/2 cursor-pointer duration-300 ease-out"
       style={{ left: `${leftPercent}%` }}
       onMouseEnter={onHover}
       onMouseLeave={onLeave}
@@ -246,7 +246,7 @@ function CommentMarker({
               )}
               <span className="text-xs font-medium text-text-primary truncate">{authorName}</span>
               {comment.timecode_start !== null && (
-                <span className="ml-auto text-[10px] font-dot font-bold text-accent bg-accent-muted px-1.5 py-0.5 rounded whitespace-nowrap">
+                <span className="ml-auto text-[10px] font-mono tabular-nums text-accent bg-accent-muted px-1.5 py-0.5 rounded whitespace-nowrap">
                   {formatTimecode(comment.timecode_start)}
                   {comment.timecode_end != null &&
                     ` – ${formatTimecode(comment.timecode_end)}`}
@@ -288,6 +288,20 @@ export function ProgressBar({
   const setFocusedCommentId = useReviewStore((s) => s.setFocusedCommentId)
   const rangeStart = useReviewStore((s) => s.rangeStart)
   const rangeEnd = useReviewStore((s) => s.rangeEnd)
+
+  // Cuts added after first render grow in; ones already there on load don't.
+  // Kept for the animation's length: the bar re-renders on every playhead tick.
+  const seenCutIds = useRef<Set<string> | null>(null)
+  const growingCutIds = useRef<Set<string>>(new Set())
+  const cutIds = comments.filter((c) => c.is_cut).map((c) => c.id)
+  if (seenCutIds.current) {
+    for (const id of cutIds) {
+      if (seenCutIds.current.has(id)) continue
+      growingCutIds.current.add(id)
+      setTimeout(() => growingCutIds.current.delete(id), 400)
+    }
+  }
+  seenCutIds.current = new Set(cutIds)
 
   const { previewImage, seekPreview, clearPreview } = useFramePreview(streamUrl)
 
@@ -395,7 +409,7 @@ export function ProgressBar({
       {/* Track area */}
       <div
         ref={trackRef}
-        className="relative w-full h-1 group-hover/progress:h-1.5 transition-all duration-150 cursor-pointer bg-border rounded-full"
+        className="relative w-full h-1.5 group-hover/progress:h-2 cursor-pointer bg-border rounded-full"
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
         onMouseDown={handleMouseDown}
@@ -406,13 +420,10 @@ export function ProgressBar({
           style={{ width: `${bufferedPercent}%` }}
         />
 
-        {/* Playback progress */}
+        {/* Playback progress: neutral, so red stays reserved for cuts */}
         <div
-          className="absolute inset-y-0 left-0 rounded-full"
-          style={{
-            width: `${playPercent}%`,
-            background: 'var(--accent)',
-          }}
+          className="absolute inset-y-0 left-0 rounded-full bg-text-primary/35"
+          style={{ width: `${playPercent}%` }}
         />
 
         {/* Time-range comment spans — above the fill so they stay visible in the played region */}
@@ -425,10 +436,10 @@ export function ProgressBar({
             <div
               key={c.id}
               className={cn(
-                'absolute -inset-y-[1px] rounded-full border cursor-pointer transition-colors',
-                isActive
-                  ? 'border-white/90 bg-white/40'
-                  : 'border-white/60 bg-white/20 hover:bg-white/40',
+                'absolute -inset-y-[1px] rounded-full cursor-pointer',
+                c.is_cut
+                  ? cn('cut-hatch origin-left', growingCutIds.current.has(c.id) && 'animate-ff-grow-x', isActive && 'ring-1 ring-white/80')
+                  : cn('border', isActive ? 'border-white/90 bg-white/40' : 'border-white/60 bg-white/20 hover:bg-white/40'),
               )}
               style={{
                 left: `${left}%`,
@@ -463,7 +474,7 @@ export function ProgressBar({
 
         {/* Playhead thumb */}
         <div
-          className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-accent opacity-0 group-hover/progress:opacity-100 transition-opacity pointer-events-none z-10"
+          className="absolute top-1/2 -translate-y-1/2 w-1 h-3.5 rounded-full bg-text-primary pointer-events-none z-10"
           style={{ left: `${playPercent}%`, transform: 'translateX(-50%) translateY(-50%)' }}
         />
       </div>
@@ -507,7 +518,7 @@ export function ProgressBar({
           )}
           {/* Time label */}
           <div className="flex justify-center">
-            <span className="bg-bg-elevated border border-border text-text-primary text-[11px] font-dot font-bold px-2 py-0.5 rounded-md">
+            <span className="bg-bg-elevated border border-border text-text-primary text-[11px] font-mono tabular-nums px-2 py-0.5 rounded-md">
               {formatTimecode(hoverTime)}
             </span>
           </div>

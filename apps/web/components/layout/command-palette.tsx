@@ -6,19 +6,24 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import {
-  LayoutDashboard,
+  Home,
   Layers,
   FolderOpen,
   Settings,
-  Bell,
   FolderPlus,
-  Upload,
   Search,
+  Film,
+  Music,
+  Image as ImageIcon,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
-import { Film, Music, Image as ImageIcon } from "lucide-react";
 import type { Project, AssetResponse } from "@/types";
+
+const groupClass =
+  "[&>[cmdk-group-heading]]:px-2 [&>[cmdk-group-heading]]:pb-1 [&>[cmdk-group-heading]]:pt-2 [&>[cmdk-group-heading]]:text-[12px] [&>[cmdk-group-heading]]:text-text-tertiary";
+
+const itemClass =
+  "flex h-8 cursor-pointer items-center gap-2.5 rounded px-2 text-[13px] text-text-secondary data-[selected=true]:bg-bg-hover data-[selected=true]:text-text-primary";
 
 interface CommandPaletteProps {
   open: boolean;
@@ -30,8 +35,6 @@ interface CommandItem {
   label: string;
   icon: React.ElementType;
   href?: string;
-  action?: () => void;
-  shortcut?: string;
   group: "navigation" | "actions";
 }
 
@@ -94,24 +97,15 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
     {
       id: "home",
       label: "Home",
-      icon: LayoutDashboard,
+      icon: Home,
       href: "/",
       group: "navigation",
-      shortcut: "G H",
     },
     {
       id: "projects",
       label: "Projects",
       icon: Layers,
       href: "/projects",
-      group: "navigation",
-      shortcut: "G P",
-    },
-    {
-      id: "notifications",
-      label: "Notifications",
-      icon: Bell,
-      href: "/notifications",
       group: "navigation",
     },
     {
@@ -123,29 +117,16 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
     },
     {
       id: "new-project",
-      label: "New Project",
+      label: "New project",
       icon: FolderPlus,
       href: "/projects?new=1",
       group: "actions",
-      shortcut: "N P",
-    },
-    {
-      id: "upload-asset",
-      label: "Upload Asset",
-      icon: Upload,
-      href: "/assets/upload",
-      group: "actions",
-      shortcut: "N A",
     },
   ];
 
   function handleSelect(item: CommandItem) {
     onOpenChange(false);
-    if (item.action) {
-      item.action();
-    } else if (item.href) {
-      router.push(item.href);
-    }
+    if (item.href) router.push(item.href);
   }
 
   function handleProjectSelect(project: Project) {
@@ -182,58 +163,46 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/60 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:duration-200" />
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/60" />
         <Dialog.Content className="fixed left-1/2 top-[20%] z-50 w-full max-w-lg -translate-x-1/2 -translate-y-0">
-          <Dialog.Title className="sr-only">Command Palette</Dialog.Title>
+          <Dialog.Title className="sr-only">Search</Dialog.Title>
+          <Dialog.Description className="sr-only">Search projects, folders and assets, or jump to a page.</Dialog.Description>
           <Command
-            className="overflow-hidden rounded border border-border bg-bg-elevated shadow-2xl animate-scale-in"
+            className="overflow-hidden rounded-md border border-border-strong bg-bg-elevated shadow-2xl"
             loop
             shouldFilter={true}
           >
             <div className="flex items-center border-b border-border px-3 gap-2">
-              <Search className="h-4 w-4 text-text-tertiary shrink-0" />
+              <Search className="h-[15px] w-[15px] shrink-0 text-text-tertiary" />
               <Command.Input
-                placeholder="Search projects, assets, or jump to..."
+                placeholder="Search or jump to…"
                 value={query}
                 onValueChange={setQuery}
-                className="h-12 w-full bg-transparent text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none"
+                className="h-11 w-full bg-transparent text-[13px] text-text-primary placeholder:text-text-tertiary focus:outline-none"
               />
             </div>
-            <Command.List className="max-h-80 overflow-y-auto p-1.5">
-              <Command.Empty className="py-8 text-center text-sm text-text-tertiary">
-                No results found
+            <Command.List className="max-h-80 overflow-y-auto p-1">
+              <Command.Empty className="px-2 py-3 text-[13px] text-text-tertiary">
+                No results.
               </Command.Empty>
 
               {/* Projects — show when searching */}
               {hasQuery && projects && projects.length > 0 && (
                 <Command.Group
                   heading="Projects"
-                  className="[&>[cmdk-group-heading]]:px-2 [&>[cmdk-group-heading]]:py-1.5 [&>[cmdk-group-heading]]:font-mono [&>[cmdk-group-heading]]:text-[10px] [&>[cmdk-group-heading]]:font-normal [&>[cmdk-group-heading]]:text-text-tertiary [&>[cmdk-group-heading]]:uppercase [&>[cmdk-group-heading]]:tracking-[0.16em]"
+                  className={groupClass}
                 >
                   {projects.map((project) => (
                     <Command.Item
                       key={`project-${project.id}`}
                       value={`project ${project.name} ${project.description || ""}`}
                       onSelect={() => handleProjectSelect(project)}
-                      className={cn(
-                        "flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 text-sm text-text-secondary",
-                        "data-[selected=true]:bg-bg-hover data-[selected=true]:text-text-primary",
-                        "transition-colors",
-                      )}
+                      className={itemClass}
                     >
-                      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-gradient-to-br from-violet-600 to-fuchsia-500">
-                        <FolderOpen className="h-3 w-3 text-white" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <span className="block truncate">{project.name}</span>
-                        {project.description && (
-                          <span className="block text-2xs text-text-tertiary truncate">
-                            {project.description}
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-2xs text-text-tertiary shrink-0">
-                        {project.asset_count ?? 0} items
+                      <FolderOpen className="h-[15px] w-[15px] shrink-0" />
+                      <span className="min-w-0 flex-1 truncate">{project.name}</span>
+                      <span className="shrink-0 font-mono text-[11.5px] text-text-tertiary">
+                        {project.asset_count ?? 0}
                       </span>
                     </Command.Item>
                   ))}
@@ -244,30 +213,22 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
               {hasQuery && folders && folders.length > 0 && (
                 <Command.Group
                   heading="Folders"
-                  className="[&>[cmdk-group-heading]]:px-2 [&>[cmdk-group-heading]]:py-1.5 [&>[cmdk-group-heading]]:font-mono [&>[cmdk-group-heading]]:text-[10px] [&>[cmdk-group-heading]]:font-normal [&>[cmdk-group-heading]]:text-text-tertiary [&>[cmdk-group-heading]]:uppercase [&>[cmdk-group-heading]]:tracking-[0.16em]"
+                  className={groupClass}
                 >
                   {folders.map((folder) => (
                     <Command.Item
                       key={`folder-${folder.id}`}
                       value={`folder ${folder.name} ${folder.project_name || ""}`}
                       onSelect={() => handleFolderSelect(folder)}
-                      className={cn(
-                        "flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 text-sm text-text-secondary",
-                        "data-[selected=true]:bg-bg-hover data-[selected=true]:text-text-primary",
-                        "transition-colors",
-                      )}
+                      className={itemClass}
                     >
-                      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-bg-tertiary">
-                        <FolderOpen className="h-3 w-3 text-text-tertiary" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <span className="block truncate">{folder.name}</span>
-                        {folder.project_name && (
-                          <span className="block text-2xs text-text-tertiary truncate">
-                            in {folder.project_name}
-                          </span>
-                        )}
-                      </div>
+                      <FolderOpen className="h-[15px] w-[15px] shrink-0" />
+                      <span className="min-w-0 flex-1 truncate">{folder.name}</span>
+                      {folder.project_name && (
+                        <span className="shrink-0 truncate text-[12px] text-text-tertiary">
+                          {folder.project_name}
+                        </span>
+                      )}
                     </Command.Item>
                   ))}
                 </Command.Group>
@@ -277,7 +238,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
               {hasQuery && assets && assets.length > 0 && (
                 <Command.Group
                   heading="Assets"
-                  className="[&>[cmdk-group-heading]]:px-2 [&>[cmdk-group-heading]]:py-1.5 [&>[cmdk-group-heading]]:font-mono [&>[cmdk-group-heading]]:text-[10px] [&>[cmdk-group-heading]]:font-normal [&>[cmdk-group-heading]]:text-text-tertiary [&>[cmdk-group-heading]]:uppercase [&>[cmdk-group-heading]]:tracking-[0.16em]"
+                  className={groupClass}
                 >
                   {assets.map((asset) => {
                     const Icon = getAssetIcon(asset.asset_type);
@@ -286,30 +247,19 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
                         key={`asset-${asset.id}`}
                         value={`asset ${asset.name} ${asset.asset_type}`}
                         onSelect={() => handleAssetSelect(asset)}
-                        className={cn(
-                          "flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 text-sm text-text-secondary",
-                          "data-[selected=true]:bg-bg-hover data-[selected=true]:text-text-primary",
-                          "transition-colors",
-                        )}
+                        className={itemClass}
                       >
                         {asset.thumbnail_url ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
                             src={asset.thumbnail_url}
                             alt=""
-                            className="h-6 w-6 rounded object-cover shrink-0"
+                            className="h-5 w-5 shrink-0 rounded-sm object-cover"
                           />
                         ) : (
-                          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-bg-tertiary">
-                            <Icon className="h-3 w-3 text-text-tertiary" />
-                          </div>
+                          <Icon className="h-[15px] w-[15px] shrink-0" />
                         )}
-                        <div className="flex-1 min-w-0">
-                          <span className="block truncate">{asset.name}</span>
-                        </div>
-                        <span className="text-2xs text-text-tertiary shrink-0 capitalize">
-                          {asset.asset_type.replace("_", " ")}
-                        </span>
+                        <span className="min-w-0 flex-1 truncate">{asset.name}</span>
                       </Command.Item>
                     );
                   })}
@@ -319,7 +269,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
               {/* Navigation */}
               <Command.Group
                 heading="Navigation"
-                className="[&>[cmdk-group-heading]]:px-2 [&>[cmdk-group-heading]]:py-1.5 [&>[cmdk-group-heading]]:font-mono [&>[cmdk-group-heading]]:text-[10px] [&>[cmdk-group-heading]]:font-normal [&>[cmdk-group-heading]]:text-text-tertiary [&>[cmdk-group-heading]]:uppercase [&>[cmdk-group-heading]]:tracking-[0.16em]"
+                className={groupClass}
               >
                 {navItems.map((item) => (
                   <CommandItemRow
@@ -330,11 +280,11 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
                 ))}
               </Command.Group>
 
-              <Command.Separator className="my-1 h-px bg-border-secondary" />
+              <Command.Separator className="my-1 h-px bg-border" />
 
               <Command.Group
                 heading="Actions"
-                className="[&>[cmdk-group-heading]]:px-2 [&>[cmdk-group-heading]]:py-1.5 [&>[cmdk-group-heading]]:font-mono [&>[cmdk-group-heading]]:text-[10px] [&>[cmdk-group-heading]]:font-normal [&>[cmdk-group-heading]]:text-text-tertiary [&>[cmdk-group-heading]]:uppercase [&>[cmdk-group-heading]]:tracking-[0.16em]"
+                className={groupClass}
               >
                 {actionItems.map((item) => (
                   <CommandItemRow
@@ -346,22 +296,6 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
               </Command.Group>
             </Command.List>
 
-            <div className="border-t border-border px-3 py-2">
-              <p className="text-2xs text-text-tertiary">
-                <kbd className="rounded border border-border px-1 py-0.5 font-mono text-2xs">
-                  ↑↓
-                </kbd>{" "}
-                navigate{" "}
-                <kbd className="rounded border border-border px-1 py-0.5 font-mono text-2xs">
-                  ↵
-                </kbd>{" "}
-                select{" "}
-                <kbd className="rounded border border-border px-1 py-0.5 font-mono text-2xs">
-                  esc
-                </kbd>{" "}
-                close
-              </p>
-            </div>
           </Command>
         </Dialog.Content>
       </Dialog.Portal>
@@ -381,17 +315,10 @@ function CommandItemRow({
     <Command.Item
       value={item.label}
       onSelect={onSelect}
-      className={cn(
-        "flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 text-sm text-text-secondary",
-        "data-[selected=true]:bg-bg-hover data-[selected=true]:text-text-primary",
-        "transition-colors",
-      )}
+      className={itemClass}
     >
-      <Icon className="h-4 w-4 shrink-0" />
+      <Icon className="h-[15px] w-[15px] shrink-0" />
       <span className="flex-1">{item.label}</span>
-      {item.shortcut && (
-        <span className="text-2xs text-text-tertiary">{item.shortcut}</span>
-      )}
     </Command.Item>
   );
 }

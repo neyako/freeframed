@@ -39,7 +39,6 @@ vi.mock('swr', () => ({
           name: 'Launch Film',
           description: null,
           created_by: 'user-1',
-          project_type: 'personal',
           created_at: '2026-06-30T08:00:00Z',
           deleted_at: null,
           role: 'owner',
@@ -82,16 +81,12 @@ vi.mock('@/stores/upload-store', () => ({
   }),
 }))
 
-vi.mock('@/stores/auth-store', () => ({
-  useAuthStore: () => ({
-    user: { id: 'user-1', name: 'Neya', email: 'neya@example.com' },
-  }),
+vi.mock('@/stores/view-store', () => ({
+  useViewStore: () => ({ leftPanelOpen: false, toggleLeftPanel: vi.fn() }),
 }))
 
-vi.mock('@/stores/view-store', () => ({
-  useViewStore: () => ({
-    rightPanelOpen: false,
-  }),
+vi.mock('@/components/shared/toast', () => ({
+  useToast: () => ({ error: vi.fn() }),
 }))
 
 vi.mock('@/stores/breadcrumb-store', () => ({
@@ -109,16 +104,6 @@ vi.mock('@/stores/breadcrumb-store', () => ({
 
 vi.mock('@/hooks/use-page-title', () => ({
   usePageTitle: vi.fn(),
-}))
-
-vi.mock('@/hooks/use-comments', () => ({
-  useComments: () => ({
-    comments: [],
-    resolveComment: vi.fn(),
-    deleteComment: vi.fn(),
-    addReaction: vi.fn(),
-    removeReaction: vi.fn(),
-  }),
 }))
 
 vi.mock('@/hooks/use-folders', () => ({
@@ -148,21 +133,12 @@ vi.mock('@/components/projects/folder-tree', () => ({
   FolderTree: () => <nav>Folder tree</nav>,
 }))
 
-vi.mock('@/components/review/comment-panel', () => ({
-  CommentPanel: () => <aside>Comments</aside>,
-}))
-
-vi.mock('@/components/upload/upload-zone', () => ({
-  UploadZone: () => <div>Upload zone</div>,
-}))
-
 vi.mock('@/components/projects/name-dialog', () => ({
   NameDialog: () => null,
 }))
 
-vi.mock('@/components/review/share-dialog', () => ({
-  BulkSharePanel: () => null,
-  SharePanel: () => null,
+vi.mock('@/components/review/share-link-section', () => ({
+  SingleLinkSection: () => null,
 }))
 
 vi.mock('@/components/projects/project-members-dialog', () => ({

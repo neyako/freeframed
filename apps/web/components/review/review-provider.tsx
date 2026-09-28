@@ -34,8 +34,6 @@ interface ReviewContextValue {
   isLoading: boolean;
   error: string | null;
   addComment: (payload: CreateCommentPayload) => Promise<Comment>;
-  resolveComment: (commentId: string) => Promise<void>;
-  seekTo: (time: number) => void;
   refetchComments: () => Promise<void>;
   refetchVersions: () => Promise<void>;
   pauseVideo: () => void;
@@ -137,7 +135,7 @@ export function ReviewProvider({
   const [error, setError] = useState<string | null>(null);
   const pauseHandlerRef = useRef<(() => void) | null>(null);
 
-  const { currentVersion, setCurrentAsset, setCurrentVersion, setPlayheadTime } =
+  const { currentVersion, setCurrentAsset, setCurrentVersion } =
     useReviewStore();
 
   // Track whether component is still mounted to avoid state updates after unmount
@@ -181,11 +179,7 @@ export function ReviewProvider({
           description: null,
           asset_type: streamData?.asset_type || "image",
           status: "in_review",
-          rating: null,
-          assignee_id: null,
           folder_id: null,
-          due_date: null,
-          keywords: [],
           project_id: "",
           created_by: "",
           created_at: "",
@@ -263,32 +257,30 @@ export function ReviewProvider({
     }
   }, [assetId, shareToken, shareSessionParam, shareSessionQuery, setCurrentAsset, setCurrentVersion]);
 
+  // Share mode only: the dashboard review page loads comments via useComments.
+  const currentVersionId =
+    currentVersion?.asset_id === assetId ? currentVersion.id : undefined;
+  // Only the latest request may set state, so a slow response for a version
+  // the viewer already switched away from can't overwrite the current one.
+  const commentsRequestRef = useRef(0);
   const fetchComments = useCallback(async () => {
+    if (!shareToken || !currentVersionId) return;
+    const request = ++commentsRequestRef.current;
     try {
-      let data: Comment[];
-      if (shareToken) {
-        const API_URL =
-          process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-        const res = await fetch(
-          `${API_URL}/share/${shareToken}/comments?asset_id=${assetId}${shareSessionParam}`,
-          { credentials: "include" },
-        );
-        if (res.ok) {
-          const json = await res.json();
-          // Handle both formats: array directly or {comments: [...]}
-          data = Array.isArray(json) ? json : (json.comments ?? []);
-        } else {
-          data = [];
-        }
-      } else {
-        data = await api.get<Comment[]>(`/assets/${assetId}/comments`);
-      }
-      if (!mountedRef.current) return;
-      setComments(data ?? []);
+      const API_URL =
+        process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const res = await fetch(
+        `${API_URL}/share/${shareToken}/comments?asset_id=${assetId}&version_id=${currentVersionId}${shareSessionParam}`,
+        { credentials: "include" },
+      );
+      const json = res.ok ? await res.json() : [];
+      if (!mountedRef.current || request !== commentsRequestRef.current) return;
+      // Handle both formats: array directly or {comments: [...]}
+      setComments(Array.isArray(json) ? json : (json.comments ?? []));
     } catch {
       // Comments failing silently — asset is still viewable
     }
-  }, [assetId, shareToken, shareSessionParam]);
+  }, [assetId, currentVersionId, shareToken, shareSessionParam]);
 
   const refetchComments = useCallback(async () => {
     await fetchComments();
@@ -330,10 +322,15 @@ export function ReviewProvider({
   useEffect(() => {
     setIsLoading(true);
     setError(null);
-    Promise.all([fetchAsset(), fetchComments()]).finally(() => {
+    fetchAsset().finally(() => {
       if (mountedRef.current) setIsLoading(false);
     });
-  }, [fetchAsset, fetchComments]);
+  }, [fetchAsset]);
+
+  // Refetches when the viewer switches version — comments are per version.
+  useEffect(() => {
+    void fetchComments();
+  }, [fetchComments]);
 
   useEffect(() => {
     const pollProcessing =
@@ -385,30 +382,13 @@ export function ReviewProvider({
         );
       }
       if (mountedRef.current) {
-        setComments((prev) => [...prev, comment]);
+        // Replies nest under their parent, so refetch the tree instead of appending.
+        if (payload.parent_id) void fetchComments();
+        else setComments((prev) => [...prev, comment]);
       }
       return comment;
     },
-    [assetId, shareSessionParam, shareToken],
-  );
-
-  const resolveComment = useCallback(
-    async (commentId: string): Promise<void> => {
-      await api.post(`/comments/${commentId}/resolve`);
-      if (mountedRef.current) {
-        setComments((prev) =>
-          prev.map((c) => (c.id === commentId ? { ...c, resolved: true } : c)),
-        );
-      }
-    },
-    [],
-  );
-
-  const seekTo = useCallback(
-    (time: number) => {
-      setPlayheadTime(time);
-    },
-    [setPlayheadTime],
+    [assetId, fetchComments, shareSessionParam, shareToken],
   );
 
   const pauseVideo = useCallback(() => {
@@ -432,8 +412,6 @@ export function ReviewProvider({
       isLoading,
       error,
       addComment,
-      resolveComment,
-      seekTo,
       refetchComments,
       refetchVersions,
       pauseVideo,
@@ -449,8 +427,6 @@ export function ReviewProvider({
       isLoading,
       error,
       addComment,
-      resolveComment,
-      seekTo,
       refetchComments,
       refetchVersions,
       pauseVideo,

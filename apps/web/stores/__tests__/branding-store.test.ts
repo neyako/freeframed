@@ -4,7 +4,6 @@ import { useBrandingStore } from '../branding-store'
 vi.mock('@/lib/api', () => ({
   api: {
     get: vi.fn(),
-    put: vi.fn(),
   },
 }))
 

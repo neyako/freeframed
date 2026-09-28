@@ -6,7 +6,8 @@ import { useDrawing } from '@/hooks/use-drawing'
 import { useReviewStore } from '@/stores/review-store'
 
 interface AnnotationCanvasProps {
-  onSave?: (drawingData: Record<string, unknown>) => void
+  /** Called with null once the canvas is emptied (e.g. toolbar Clear) */
+  onSave?: (drawingData: Record<string, unknown> | null) => void
   className?: string
 }
 
@@ -21,7 +22,9 @@ export function AnnotationCanvas({ onSave, className }: AnnotationCanvasProps) {
   const onSaveRef = useRef(onSave)
   onSaveRef.current = onSave
 
-  const saveAnnotation = useCallback((data: Record<string, unknown>) => {
+  const saveAnnotation = useCallback((data: Record<string, unknown> | null) => {
+    // The empty canvas is polled every 500ms; don't re-notify store subscribers
+    if (data === null && useReviewStore.getState().pendingAnnotation === null) return
     onSaveRef.current?.(data)
     setPendingAnnotation(data)
   }, [setPendingAnnotation])
@@ -69,9 +72,7 @@ export function AnnotationCanvas({ onSave, className }: AnnotationCanvasProps) {
         checkInterval = setInterval(() => {
           const data = getJSON()
           const objs = (data as any)?.objects
-          if (objs && Array.isArray(objs) && objs.length > 0) {
-            saveAnnotation(data)
-          }
+          if (Array.isArray(objs)) saveAnnotation(objs.length > 0 ? data : null)
         }, 500)
       } catch {
         // canvas not ready
@@ -91,9 +92,7 @@ export function AnnotationCanvas({ onSave, className }: AnnotationCanvasProps) {
       // Just exited drawing mode — save final canvas state
       const json = getJSON()
       const objects = (json as any)?.objects
-      if (objects && Array.isArray(objects) && objects.length > 0) {
-        saveAnnotation(json)
-      }
+      if (Array.isArray(objects)) saveAnnotation(objects.length > 0 ? json : null)
     }
     prevDrawingMode.current = isDrawingMode
   }, [isDrawingMode, getJSON, saveAnnotation])

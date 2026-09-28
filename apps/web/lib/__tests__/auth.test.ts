@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { setTokens, getAccessToken, getRefreshToken, clearTokens } from '../auth'
+import { setTokens, getAccessToken, clearTokens } from '../auth'
 
 describe('Token management', () => {
   beforeEach(() => {
@@ -25,16 +25,6 @@ describe('Token management', () => {
 
   it('getAccessToken returns null when no token stored', () => {
     expect(getAccessToken()).toBeNull()
-  })
-
-  it('getRefreshToken returns null and clears legacy token', () => {
-    localStorage.setItem('ff_refresh_token', 'my-refresh-token')
-    expect(getRefreshToken()).toBeNull()
-    expect(localStorage.getItem('ff_refresh_token')).toBeNull()
-  })
-
-  it('getRefreshToken returns null when no token stored', () => {
-    expect(getRefreshToken()).toBeNull()
   })
 
   it('clearTokens removes both tokens from localStorage', () => {

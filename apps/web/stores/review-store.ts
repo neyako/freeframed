@@ -55,7 +55,7 @@ const initialState = {
   brushSize: 4,
 }
 
-export const useReviewStore = create<ReviewState>()((set) => ({
+export const useReviewStore = create<ReviewState>()((set, get) => ({
   ...initialState,
 
   setCurrentAsset: (asset: Asset) => {
@@ -63,7 +63,10 @@ export const useReviewStore = create<ReviewState>()((set) => ({
   },
 
   setCurrentVersion: (version: AssetVersion) => {
-    set({ currentVersion: version })
+    // Polling refreshes the same version; only a real switch drops the old
+    // version's focused comment and annotation overlay.
+    if (get().currentVersion?.id === version.id) set({ currentVersion: version })
+    else set({ currentVersion: version, focusedCommentId: null, activeAnnotation: null })
   },
 
   setPlayheadTime: (time: number) => {

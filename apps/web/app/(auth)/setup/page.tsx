@@ -28,11 +28,7 @@ export default function SetupPage() {
   }, [router])
 
   if (checking) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="h-5 w-5 animate-spin rounded-full border-2 border-border border-t-accent" />
-      </div>
-    )
+    return <p className="text-[13px] text-text-tertiary">Loading…</p>
   }
 
   return <SetupWizard />

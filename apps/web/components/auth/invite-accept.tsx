@@ -100,56 +100,40 @@ export function InviteAccept({ token }: InviteAcceptProps) {
 
   if (inviteLoading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <div className="h-5 w-5 animate-spin rounded-full border-2 border-border border-t-accent" />
-      </div>
+      <p className="text-[13px] text-text-tertiary">Loading…</p>
     )
   }
 
   if (inviteError) {
     return (
-      <div className="text-center py-8">
-        <div className="mb-4 mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-accent-muted">
-          <svg className="h-6 w-6 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </div>
-        <h2 className="text-lg font-medium tracking-[-0.02em] text-text-primary mb-2">Invalid invite</h2>
-        <p className="text-sm text-text-secondary">{inviteError}</p>
+      <div className="space-y-1 text-[13px]">
+        <h2 className="text-[18px] font-semibold text-text-primary">Invalid invite</h2>
+        <p className="text-text-secondary">{inviteError}</p>
       </div>
     )
   }
 
   return (
-    <div className="animate-fade-in">
-      {/* Invite card */}
-      {invite && (
-        <div className="mb-8 rounded-lg border border-border bg-bg-secondary p-4">
-          <p className="text-xs text-text-tertiary uppercase tracking-wider mb-2">You&apos;ve been invited to</p>
-          <p className="text-base font-medium tracking-[-0.02em] text-text-primary mb-1">{invite.org_name}</p>
-          {invite.inviter_name && (
-            <p className="text-sm text-text-secondary">
-              Invited by <span className="text-text-primary">{invite.inviter_name}</span>
-            </p>
-          )}
-          <p className="text-sm text-text-tertiary mt-1">{invite.email}</p>
-        </div>
-      )}
-
-      <div className="mb-6">
-        <h1 className="text-xl font-medium tracking-[-0.02em] text-text-primary mb-1">Accept invite</h1>
-        <p className="text-sm text-text-secondary">Set up your account to get started.</p>
+    <div className="space-y-4">
+      <div className="space-y-1">
+        <h2 className="text-[18px] font-semibold text-text-primary">
+          Join{invite ? <> <span>{invite.org_name}</span></> : null}
+        </h2>
+        {invite && (
+          <p className="text-[12.5px] text-text-secondary">
+            {invite.inviter_name && <>Invited by {invite.inviter_name} · </>}
+            <span>{invite.email}</span>
+          </p>
+        )}
       </div>
 
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-3">
         {errors.general && (
-          <div className="animate-shake rounded border border-accent-line bg-accent-muted px-3 py-2.5 font-mono text-[12px] text-accent">
-            {errors.general}
-          </div>
+          <p role="alert" className="text-[12.5px] text-accent">{errors.general}</p>
         )}
 
         <Input
-          label="Full name"
+          label="Name"
           type="text"
           placeholder="Alex Johnson"
           autoComplete="name"
@@ -178,8 +162,8 @@ export function InviteAccept({ token }: InviteAcceptProps) {
           error={errors.confirmPassword}
         />
 
-        <Button type="submit" size="lg" loading={submitting} className="mt-2 w-full">
-          Create account &amp; join
+        <Button type="submit" loading={submitting} className="mt-1 w-full">
+          {submitting ? 'Joining…' : 'Create account and join'}
         </Button>
       </form>
     </div>
