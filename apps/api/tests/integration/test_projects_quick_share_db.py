@@ -68,7 +68,7 @@ def test_quick_share_is_scoped_to_creator_over_http(db, make_user) -> None:
         foreign_membership = ProjectMember(
             project_id=project_a_id,
             user_id=user_b.id,
-            role=ProjectRole.viewer,
+            role=ProjectRole.editor,
             deleted_at=datetime.now(timezone.utc),
         )
         deleted_b = Project(
@@ -123,7 +123,7 @@ def test_quick_share_is_scoped_to_creator_over_http(db, make_user) -> None:
     db.refresh(foreign_membership)
     db.refresh(deleted_b)
     assert foreign_membership.deleted_at is not None
-    assert foreign_membership.role == ProjectRole.viewer
+    assert foreign_membership.role == ProjectRole.editor
     assert deleted_b.id == deleted_b_id
     assert deleted_b.deleted_at is not None
 

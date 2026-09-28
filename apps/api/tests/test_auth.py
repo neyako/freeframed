@@ -368,7 +368,7 @@ def test_get_invite_info_includes_workspace_and_inviter(client, mock_db):
     inviter.name = "Admin User"
     invitee.invited_by_id = inviter.id
 
-    from apps.api.models.branding import WorkspaceSettings
+    from apps.api.models.workspace import WorkspaceSettings
 
     workspace = WorkspaceSettings(id=1, name="Studio")
     mock_db.first.side_effect = [invitee, inviter, workspace]

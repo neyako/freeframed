@@ -21,13 +21,7 @@ from ..schemas.folder import (
     FolderTreeNode,
     FolderUpdate,
 )
-from ..services.permissions import require_project_role, get_project_member, is_public_project
-from ..services.folder_access import (
-    FolderAccess,
-    folder_is_in_scope,
-    folder_scope_select,
-    resolve_folder_access,
-)
+from ..services.permissions import require_project_role
 from ..tasks.purge_tasks import purge_trashed_assets
 
 router = APIRouter(tags=["folders"])
@@ -163,20 +157,6 @@ def _folder_to_response(db: Session, folder: Folder) -> FolderResponse:
     return resp
 
 
-def _folder_access_for_reader(
-    db: Session,
-    project_id: uuid.UUID,
-    user_id: uuid.UUID,
-) -> FolderAccess | None:
-    member = get_project_member(db, project_id, user_id)
-    if member is not None or is_public_project(db, project_id):
-        return None
-    access = resolve_folder_access(db, project_id, user_id)
-    if access is None:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not a project member")
-    return access
-
-
 def _parse_folder_filter(value: str) -> uuid.UUID:
     try:
         return uuid.UUID(value)
@@ -185,34 +165,6 @@ def _parse_folder_filter(value: str) -> uuid.UUID:
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Invalid folder ID",
         ) from exc
-
-
-def _scoped_folder_responses(
-    db: Session,
-    folders: list[Folder],
-    project_id: uuid.UUID,
-    access: FolderAccess,
-) -> list[FolderResponse]:
-    folder_ids = [folder.id for folder in folders]
-    scoped_ids = folder_scope_select(project_id, access.accessible_root_ids)
-    subfolder_counts = dict(db.query(Folder.parent_id, func.count(Folder.id)).filter(
-        Folder.parent_id.in_(folder_ids),
-        Folder.id.in_(scoped_ids),
-        Folder.deleted_at.is_(None),
-    ).group_by(Folder.parent_id).all()) if folder_ids else {}
-    asset_counts = dict(db.query(Asset.folder_id, func.count(Asset.id)).filter(
-        Asset.folder_id.in_(folder_ids),
-        Asset.deleted_at.is_(None),
-    ).group_by(Asset.folder_id).all()) if folder_ids else {}
-    roots = set(access.accessible_root_ids)
-    responses = []
-    for folder in folders:
-        response = FolderResponse.model_validate(folder)
-        if folder.id in roots:
-            response.parent_id = None
-        response.item_count = subfolder_counts.get(folder.id, 0) + asset_counts.get(folder.id, 0)
-        responses.append(response)
-    return responses
 
 
 def _get_descendant_ids_including_deleted(db: Session, folder_id: uuid.UUID) -> list[uuid.UUID]:
@@ -327,27 +279,12 @@ def list_folders(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    access = _folder_access_for_reader(db, project_id, current_user.id)
+    require_project_role(db, project_id, current_user, ProjectRole.editor)
 
     query = db.query(Folder).filter(
         Folder.project_id == project_id,
         Folder.deleted_at.is_(None),
     )
-
-    if access is not None:
-        query = query.filter(Folder.id.in_(
-            folder_scope_select(project_id, access.accessible_root_ids)
-        ))
-        if parent_id == "root":
-            query = query.filter(Folder.id.in_(access.accessible_root_ids))
-        elif parent_id is not None:
-            parsed_parent_id = _parse_folder_filter(parent_id)
-            if not folder_is_in_scope(db, project_id, parsed_parent_id, access):
-                raise HTTPException(status_code=404, detail="Folder not found")
-            query = query.filter(Folder.parent_id == parsed_parent_id)
-        folders = query.order_by(Folder.created_at.desc()).all()
-        return _scoped_folder_responses(db, folders, project_id, access)
-
     if parent_id == "root":
         query = query.filter(Folder.parent_id.is_(None))
     elif parent_id is not None:
@@ -369,17 +306,12 @@ def get_folder_tree(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    access = _folder_access_for_reader(db, project_id, current_user.id)
+    require_project_role(db, project_id, current_user, ProjectRole.editor)
 
-    query = db.query(Folder).filter(
+    all_folders = db.query(Folder).filter(
         Folder.project_id == project_id,
         Folder.deleted_at.is_(None),
-    )
-    if access is not None:
-        query = query.filter(Folder.id.in_(
-            folder_scope_select(project_id, access.accessible_root_ids)
-        ))
-    all_folders = query.all()
+    ).all()
 
     # Batch-compute item counts (avoid N+1 queries)
     folder_ids = [f.id for f in all_folders]
@@ -404,7 +336,7 @@ def get_folder_tree(
         folder_map[f.id] = FolderTreeNode(
             id=f.id,
             name=f.name,
-            parent_id=None if access is not None and f.id in access.accessible_root_ids else f.parent_id,
+            parent_id=f.parent_id,
             item_count=(subfolder_counts.get(f.id, 0) + asset_counts.get(f.id, 0)),
         )
 
@@ -473,13 +405,15 @@ def delete_folder(
 
     now = datetime.now(timezone.utc)
 
-    # Cascade soft-delete: folder + all descendants + their assets
+    # Cascade soft-delete: folder + all descendants + their assets. Items
+    # already in trash keep their own deleted_at, so restoring this folder
+    # (which matches on this cascade's timestamp) won't resurrect them.
     all_folder_ids = [folder_id] + _get_descendant_ids(db, folder_id)
 
-    db.query(Folder).filter(Folder.id.in_(all_folder_ids)).update(
+    db.query(Folder).filter(Folder.id.in_(all_folder_ids), Folder.deleted_at.is_(None)).update(
         {"deleted_at": now}, synchronize_session="fetch"
     )
-    db.query(Asset).filter(Asset.folder_id.in_(all_folder_ids)).update(
+    db.query(Asset).filter(Asset.folder_id.in_(all_folder_ids), Asset.deleted_at.is_(None)).update(
         {"deleted_at": now}, synchronize_session="fetch"
     )
 
@@ -707,14 +641,16 @@ def restore_folder(
         if not parent:
             folder.parent_id = None
 
-    # Restore folder and all its descendants + their assets
+    # Restore only what this folder's delete cascaded (same deleted_at);
+    # things trashed separately before it stay in trash.
+    cascade_deleted_at = folder.deleted_at
     folder.deleted_at = None
     all_ids = [folder_id] + descendant_ids
 
-    db.query(Folder).filter(Folder.id.in_(all_ids)).update(
+    db.query(Folder).filter(Folder.id.in_(all_ids), Folder.deleted_at == cascade_deleted_at).update(
         {"deleted_at": None}, synchronize_session="fetch"
     )
-    db.query(Asset).filter(Asset.folder_id.in_(all_ids), Asset.deleted_at.isnot(None)).update(
+    db.query(Asset).filter(Asset.folder_id.in_(all_ids), Asset.deleted_at == cascade_deleted_at).update(
         {"deleted_at": None}, synchronize_session="fetch"
     )
 

@@ -246,3 +246,20 @@ def test_patch_active_cycle_to_root_returns_conflict_without_mutation(db, make_p
     # Then
     assert caught.value.status_code == 409
     assert not inspect(graph.parent).attrs.parent_id.history.has_changes()
+
+
+def test_restore_folder_keeps_separately_trashed_items_in_trash(db, make_project) -> None:
+    # Given: the asset is trashed on its own, then its folder is deleted
+    graph = _graph(db, make_project)
+    graph.asset.deleted_at = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    db.commit()
+    folders.delete_folder(graph.parent.id, db, graph.owner)
+
+    # When
+    folders.restore_folder(graph.parent.id, db, graph.owner)
+
+    # Then: the cascade is undone, the earlier trash stays
+    db.refresh(graph.child)
+    db.refresh(graph.asset)
+    assert graph.child.deleted_at is None
+    assert graph.asset.deleted_at == datetime(2026, 1, 1, tzinfo=timezone.utc)

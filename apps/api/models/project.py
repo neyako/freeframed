@@ -10,15 +10,9 @@ try:
 except ImportError:
     from database import Base
 
-class ProjectType(str, PyEnum):
-    personal = "personal"
-    team = "team"
-
 class ProjectRole(str, PyEnum):
     owner = "owner"
     editor = "editor"
-    reviewer = "reviewer"
-    viewer = "viewer"
 
 class Project(Base):
     __tablename__ = "projects"
@@ -33,10 +27,8 @@ class Project(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(String(2000), nullable=True)
-    project_type: Mapped[ProjectType] = mapped_column(Enum(ProjectType), default=ProjectType.personal)
     created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     poster_s3_key: Mapped[Optional[str]] = mapped_column(String(1024), nullable=True)
-    is_public: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     is_quick_share: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -47,7 +39,7 @@ class ProjectMember(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     project_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("projects.id"), nullable=False, index=True)
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
-    role: Mapped[ProjectRole] = mapped_column(Enum(ProjectRole), default=ProjectRole.viewer)
+    role: Mapped[ProjectRole] = mapped_column(Enum(ProjectRole), default=ProjectRole.editor)
     invited_by: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     invited_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

@@ -1,6 +1,6 @@
 import shutil
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -10,7 +10,7 @@ from ..database import get_db
 from ..middleware.auth import get_current_user
 from ..models.asset import Asset, AssetVersion, MediaFile
 from ..models.user import User
-from ..schemas.branding import WorkspaceResponse
+from ..schemas.workspace import WorkspaceRename, WorkspaceResponse
 from ..services.workspace_service import get_workspace_settings
 
 router = APIRouter(tags=["workspace"])
@@ -25,6 +25,22 @@ class StorageStatsResponse(BaseModel):
 @router.get("/workspace", response_model=WorkspaceResponse)
 def get_workspace(db: Session = Depends(get_db)):
     return get_workspace_settings(db)
+
+
+@router.put("/workspace", response_model=WorkspaceResponse)
+def rename_workspace(
+    body: WorkspaceRename,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Rename the workspace. Owner (superadmin) only."""
+    if not current_user.is_superadmin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the workspace owner can rename it")
+    workspace = get_workspace_settings(db)
+    workspace.name = body.name
+    db.commit()
+    db.refresh(workspace)
+    return workspace
 
 
 @router.get("/workspace/storage", response_model=StorageStatsResponse)

@@ -1,20 +1,15 @@
 from __future__ import annotations
 
 from ._share_security_support import (
-    ActivityLog,
     Approval,
     ApprovalCreate,
-    AssetShare,
     Barrier,
     BrokenBarrierError,
     HTTPException,
-    Notification,
     ProjectRole,
-    SharePermission,
     SimpleNamespace,
     ThreadPoolExecutor,
     _add_asset,
-    _add_folder,
     _add_member,
     _add_version,
     _assert_forbidden,
@@ -27,83 +22,35 @@ from ._share_security_support import (
     uuid,
 )
 
-def test_internal_approval_uses_asset_capability_and_validates_version_scope(db, make_project, make_user, monkeypatch) -> None:
+def test_internal_approval_requires_active_membership_and_validates_version_scope(db, make_project, make_user, monkeypatch) -> None:
     project, owner = make_project()
-    direct_approve = make_user()
-    inherited_approve = make_user()
+    editor = make_user()
+    outsider = make_user()
     _add_member(db, project.id, owner.id, ProjectRole.owner)
+    editor_member = _add_member(db, project.id, editor.id, ProjectRole.editor)
     asset = _add_asset(db, project.id, owner.id)
     foreign = _add_asset(db, project.id, owner.id)
-    root = _add_folder(db, project.id, owner.id)
-    child = _add_folder(db, project.id, owner.id)
-    child.parent_id = root.id
-    sibling = _add_folder(db, project.id, owner.id)
-    inherited_asset = _add_asset(db, project.id, owner.id, child.id)
-    sibling_asset = _add_asset(db, project.id, owner.id, sibling.id)
     version = _add_version(db, asset)
     foreign_version = _add_version(db, foreign)
-    inherited_version = _add_version(db, inherited_asset)
-    sibling_version = _add_version(db, sibling_asset)
-    inherited_grant = AssetShare(
-        folder_id=root.id,
-        shared_with_user_id=inherited_approve.id,
-        permission=SharePermission.approve,
-        shared_by=owner.id,
-    )
-    db.add(
-        AssetShare(
-            asset_id=asset.id,
-            shared_with_user_id=direct_approve.id,
-            permission=SharePermission.approve,
-            shared_by=owner.id,
-        )
-    )
-    db.add(inherited_grant)
     db.commit()
     monkeypatch.setattr(approvals, "send_task_safe", lambda *args, **kwargs: None)
 
-    created = approvals.approve_asset(
-        asset.id,
-        ApprovalCreate(version_id=version.id),
-        db,
-        direct_approve,
-    )
-    assert created.user_id == direct_approve.id
+    created = approvals.approve_asset(asset.id, ApprovalCreate(version_id=version.id), db, editor)
+    assert created.user_id == editor.id
 
-    before = (
-        db.query(Approval).count(),
-        db.query(ActivityLog).count(),
-        db.query(Notification).count(),
-    )
+    before = db.query(Approval).count()
     with pytest.raises(HTTPException) as exc_info:
-        approvals.reject_asset(
-            asset.id,
-            ApprovalCreate(version_id=foreign_version.id),
-            db,
-            direct_approve,
-        )
+        approvals.reject_asset(asset.id, ApprovalCreate(version_id=foreign_version.id), db, editor)
     assert exc_info.value.status_code == 404
-    assert (
-        db.query(Approval).count(),
-        db.query(ActivityLog).count(),
-        db.query(Notification).count(),
-    ) == before
+    assert db.query(Approval).count() == before
+
     _assert_forbidden(lambda: approvals.approve_asset(
-        sibling_asset.id, ApprovalCreate(version_id=sibling_version.id), db, inherited_approve,
+        asset.id, ApprovalCreate(version_id=version.id), db, outsider,
     ))
-    approvals.approve_asset(
-        inherited_asset.id, ApprovalCreate(version_id=inherited_version.id), db, inherited_approve,
-    )
-    approvals.reject_asset(
-        inherited_asset.id,
-        ApprovalCreate(version_id=inherited_version.id),
-        db,
-        inherited_approve,
-    )
-    inherited_grant.deleted_at = datetime.now(timezone.utc)
+    editor_member.deleted_at = datetime.now(timezone.utc)
     db.commit()
     _assert_forbidden(lambda: approvals.approve_asset(
-        inherited_asset.id, ApprovalCreate(version_id=inherited_version.id), db, inherited_approve,
+        asset.id, ApprovalCreate(version_id=version.id), db, editor,
     ))
 
 
@@ -128,11 +75,7 @@ def test_every_internal_approval_route_rejects_invalid_version_without_writes(
         invalid_version_id = uuid.uuid4()
     db.commit()
     monkeypatch.setattr(approvals, "send_task_safe", lambda *args, **kwargs: None)
-    before = (
-        db.query(Approval).count(),
-        db.query(ActivityLog).count(),
-        db.query(Notification).count(),
-    )
+    before = db.query(Approval).count()
 
     with pytest.raises(HTTPException) as exc_info:
         if action == "approve":
@@ -153,45 +96,7 @@ def test_every_internal_approval_route_rejects_invalid_version_without_writes(
             approvals.list_approvals(asset.id, invalid_version_id, db, owner)
 
     assert exc_info.value.status_code == 404
-    assert (
-        db.query(Approval).count(),
-        db.query(ActivityLog).count(),
-        db.query(Notification).count(),
-    ) == before
-
-
-@pytest.mark.parametrize("permission", [SharePermission.view, SharePermission.comment])
-def test_internal_approval_denies_weaker_direct_capabilities(
-    db,
-    make_project,
-    make_user,
-    monkeypatch,
-    permission,
-) -> None:
-    project, owner = make_project()
-    actor = make_user()
-    asset = _add_asset(db, project.id, owner.id)
-    version = _add_version(db, asset)
-    db.add(
-        AssetShare(
-            asset_id=asset.id,
-            shared_with_user_id=actor.id,
-            permission=permission,
-            shared_by=owner.id,
-        )
-    )
-    db.commit()
-    monkeypatch.setattr(approvals, "send_task_safe", lambda *args, **kwargs: None)
-
-    _assert_forbidden(
-        lambda: approvals.approve_asset(
-            asset.id,
-            ApprovalCreate(version_id=version.id),
-            db,
-            actor,
-        )
-    )
-    assert db.query(Approval).count() == 0
+    assert db.query(Approval).count() == before
 
 
 def test_concurrent_internal_approval_upserts_one_row(
@@ -203,7 +108,7 @@ def test_concurrent_internal_approval_upserts_one_row(
 ) -> None:
     project, owner = make_project()
     reviewer = make_user()
-    _add_member(db, project.id, reviewer.id, ProjectRole.reviewer)
+    _add_member(db, project.id, reviewer.id, ProjectRole.editor)
     # Asset must belong to someone other than the reviewer: reviewing your
     # own upload is now rejected with 403.
     asset = _add_asset(db, project.id, owner.id)

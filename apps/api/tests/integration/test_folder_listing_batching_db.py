@@ -9,7 +9,6 @@ from apps.api.models.folder import Folder
 from apps.api.models.project import ProjectMember, ProjectRole
 from apps.api.routers import folders
 
-from ._folder_scope_support import build_folder_scope_world
 
 
 def _add_folder(
@@ -141,31 +140,3 @@ def test_folder_listing_batching_uses_bounded_query_count(
         event.remove(migrated_engine, "before_cursor_execute", count_statement)
 
     assert len(statements) <= 6
-
-
-def test_folder_listing_batching_keeps_scoped_counts_scope_filtered(
-    db,
-    make_project,
-    make_user,
-) -> None:
-    world = build_folder_scope_world(db, make_project, make_user)
-    foreign_project, foreign_owner = make_project()
-    _add_folder(
-        db,
-        foreign_project.id,
-        foreign_owner.id,
-        "Foreign child",
-        world.root_a.id,
-    )
-
-    response = folders.list_folders(
-        world.project.id,
-        parent_id="root",
-        db=db,
-        current_user=world.recipient,
-    )
-
-    assert {item.id: item.item_count for item in response} == {
-        world.root_a.id: 2,
-        world.root_b.id: 2,
-    }

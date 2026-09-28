@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from .config import get_cors_origins, settings, validate_runtime_settings
+from .config import get_cors_origins, validate_runtime_settings
 from .routers import (
     auth,
     users,
@@ -15,15 +15,11 @@ from .routers import (
     comments,
     approvals,
     share,
-    metadata,
-    branding,
-    notifications,
-    admin,
     setup,
     folders,
     hls_proxy,
-    integrations,
     workspace,
+    embeds,
 )
 from .services.s3_service import ensure_bucket_exists
 from .middleware.global_rate_limit import GlobalRateLimitMiddleware
@@ -75,15 +71,11 @@ app.include_router(me.router)
 app.include_router(comments.router)
 app.include_router(approvals.router)
 app.include_router(share.router)
-app.include_router(metadata.router)
-app.include_router(branding.router)
-app.include_router(notifications.router)
-app.include_router(admin.router)
 app.include_router(setup.router)
 app.include_router(folders.router)
 app.include_router(hls_proxy.router)
-app.include_router(integrations.router)
 app.include_router(workspace.router)
+app.include_router(embeds.router)
 
 
 @app.get("/health")

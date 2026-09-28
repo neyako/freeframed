@@ -128,6 +128,7 @@ class TestRuntimeFallback:
             backend: str,
             device: str,
             hw_decode: bool = False,
+            has_audio: bool = True,
         ) -> list[str]:
             build_modes.append((backend, hw_decode))
             hls_dirs.append(hls_dir)
@@ -148,8 +149,7 @@ class TestRuntimeFallback:
                 previous_output = partial_outputs[-1]
                 assert not previous_output.exists()
                 assert not previous_output.parent.exists()
-            for quality in QUALITIES:
-                assert (hls_dirs[-1] / quality).is_dir()
+            assert list(hls_dirs[-1].iterdir()) == []
 
             mode = cmd[1]
             if mode == "software":
@@ -428,6 +428,19 @@ class TestBuildHlsCommand:
         assert cmd[0] == "ffmpeg"
         assert cmd[-1].endswith("playlist.m3u8")
         assert cmd.count("a:0") == len(QUALITIES)
+
+    def test_build_hls_command_without_audio_maps_video_only(self, tmp_path: Path) -> None:
+        cmd = build_hls_command(
+            "https://example.test/input.mp4",
+            QUALITIES,
+            QUALITY_MAP,
+            tmp_path,
+            "software",
+            has_audio=False,
+        )
+
+        assert "a:0" not in cmd
+        assert cmd[cmd.index("-var_stream_map") + 1] == "v:0 v:1 v:2"
 
 
 class TestParseProgressPercent:

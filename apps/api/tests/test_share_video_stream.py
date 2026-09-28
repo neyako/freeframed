@@ -32,7 +32,6 @@ def test_validate_share_link_video_returns_master_m3u8(
     link.id = uuid.uuid4()
     link.asset_id = asset_id
     link.folder_id = None
-    link.project_id = None
     link.visibility = "public"
     link.password_hash = None
     link.title = "test"
@@ -106,7 +105,6 @@ def test_validate_share_link_image_does_not_append_master_m3u8(
     link.id = uuid.uuid4()
     link.asset_id = asset_id
     link.folder_id = None
-    link.project_id = None
     link.visibility = "public"
     link.password_hash = None
     link.title = "test"
@@ -148,7 +146,6 @@ def test_validate_share_link_image_does_not_append_master_m3u8(
 
 
 @patch("apps.api.routers.share.validate_asset_in_share")
-@patch("apps.api.routers.share._log_share_activity")
 @patch("apps.api.routers.share._get_latest_media_file")
 @patch("apps.api.routers.share._get_asset")
 @patch("apps.api.routers.share.validate_share_link_with_session")
@@ -156,7 +153,6 @@ def test_share_stream_endpoint_video_returns_hls_proxy_url(
     mock_validate,
     mock_get_asset,
     mock_get_latest_media_file,
-    mock_log_activity,
     mock_validate_in_share,
     client,
     mock_db,
@@ -173,7 +169,6 @@ def test_share_stream_endpoint_video_returns_hls_proxy_url(
     link.permission = "view"
     mock_validate.return_value = link
     mock_validate_in_share.return_value = None
-    mock_log_activity.return_value = None
 
     asset = MagicMock()
     asset.id = asset_id

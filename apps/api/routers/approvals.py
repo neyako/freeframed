@@ -2,19 +2,17 @@ import uuid
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from datetime import datetime, timezone
 
 from ..database import get_db
 from ..middleware.auth import get_current_user
 from ..models.user import User
 from ..models.asset import Asset
 from ..models.approval import Approval, ApprovalStatus
-from ..models.activity import ActivityLog, ActivityAction, Notification, NotificationType
 from ..schemas.approval import ApprovalCreate, ApprovalResponse
 from ..schemas.comment import AuthorInfo
 from ..services.approval_service import get_active_version, upsert_approval
 from ..services import avatar_service
-from ..services.permissions import get_asset_access, require_asset_access
+from ..services.permissions import require_asset_access
 from ..services.workspace_service import get_workspace_name
 from ..tasks.email_tasks import send_approval_email
 from ..tasks.celery_app import send_task_safe
@@ -39,8 +37,7 @@ def approve_asset(
     current_user: User = Depends(get_current_user),
 ):
     asset = _get_asset(db, asset_id)
-    if not get_asset_access(db, asset, current_user).can_approve:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Approval permission required")
+    require_asset_access(db, asset, current_user)
     version = get_active_version(db, asset, body.version_id)
     version_creator_id = version.created_by if version.created_by is not None else asset.created_by
     if version_creator_id == current_user.id:
@@ -51,10 +48,8 @@ def approve_asset(
 
     approval = upsert_approval(db, asset, body.version_id, current_user, ApprovalStatus.approved, body.note)
 
-    db.add(ActivityLog(user_id=current_user.id, asset_id=asset_id, action=ActivityAction.approved))
     creator = None
     if asset.created_by != current_user.id:
-        db.add(Notification(user_id=asset.created_by, type=NotificationType.approval, asset_id=asset_id))
         creator = db.query(User).filter(User.id == asset.created_by, User.deleted_at.is_(None)).first()
     workspace_name = get_workspace_name(db)
     email_payload = None if creator is None else {
@@ -84,8 +79,7 @@ def reject_asset(
     current_user: User = Depends(get_current_user),
 ):
     asset = _get_asset(db, asset_id)
-    if not get_asset_access(db, asset, current_user).can_approve:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Approval permission required")
+    require_asset_access(db, asset, current_user)
     version = get_active_version(db, asset, body.version_id)
     version_creator_id = version.created_by if version.created_by is not None else asset.created_by
     if version_creator_id == current_user.id:
@@ -96,10 +90,8 @@ def reject_asset(
 
     approval = upsert_approval(db, asset, body.version_id, current_user, ApprovalStatus.rejected, body.note)
 
-    db.add(ActivityLog(user_id=current_user.id, asset_id=asset_id, action=ActivityAction.rejected))
     creator = None
     if asset.created_by != current_user.id:
-        db.add(Notification(user_id=asset.created_by, type=NotificationType.approval, asset_id=asset_id))
         creator = db.query(User).filter(User.id == asset.created_by, User.deleted_at.is_(None)).first()
     workspace_name = get_workspace_name(db)
     email_payload = None if creator is None else {

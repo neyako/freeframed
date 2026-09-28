@@ -6,7 +6,6 @@ from unittest.mock import MagicMock, patch
 from jose import jwt
 
 from apps.api.config import settings
-from apps.api.services.permissions import AssetAccess
 
 
 def _setup_video_asset(mock_db, asset_type):
@@ -39,9 +38,9 @@ def _setup_video_asset(mock_db, asset_type):
     return asset, version, media_file
 
 
-@patch("apps.api.routers.assets.get_asset_access")
+@patch("apps.api.routers.assets.require_asset_access")
 def test_video_stream_returns_hls_proxy_url_with_token(
-    mock_get_access,
+    _mock_access,
     client,
     mock_db,
     auth_headers,
@@ -49,7 +48,6 @@ def test_video_stream_returns_hls_proxy_url_with_token(
     from apps.api.models.asset import AssetType
 
     asset, _, media_file = _setup_video_asset(mock_db, AssetType.video)
-    mock_get_access.return_value = AssetAccess(True, True, True, True, None)
 
     response = client.get(f"/assets/{asset.id}/stream", headers=auth_headers)
 
@@ -74,9 +72,9 @@ def test_video_stream_returns_hls_proxy_url_with_token(
 
 
 @patch("apps.api.routers.assets.generate_presigned_get_url")
-@patch("apps.api.routers.assets.get_asset_access")
+@patch("apps.api.routers.assets.require_asset_access")
 def test_video_download_still_returns_presigned_raw(
-    mock_get_access,
+    _mock_access,
     mock_presign,
     client,
     mock_db,
@@ -85,7 +83,6 @@ def test_video_download_still_returns_presigned_raw(
     from apps.api.models.asset import AssetType
 
     asset, _, _ = _setup_video_asset(mock_db, AssetType.video)
-    mock_get_access.return_value = AssetAccess(True, True, True, True, None)
     mock_presign.return_value = "https://s3.example.com/raw.mp4?sig=x"
 
     response = client.get(
@@ -100,9 +97,9 @@ def test_video_download_still_returns_presigned_raw(
 
 
 @patch("apps.api.routers.assets.generate_presigned_get_url")
-@patch("apps.api.routers.assets.get_asset_access")
+@patch("apps.api.routers.assets.require_asset_access")
 def test_image_stream_still_returns_presigned(
-    mock_get_access,
+    _mock_access,
     mock_presign,
     client,
     mock_db,
@@ -112,7 +109,6 @@ def test_image_stream_still_returns_presigned(
     from apps.api.models.asset import AssetType
 
     asset, _, _ = _setup_video_asset(mock_db, AssetType.image)
-    mock_get_access.return_value = AssetAccess(True, True, True, True, None)
     mock_presign.return_value = "https://s3.example.com/image.webp?sig=x"
 
     response = client.get(f"/assets/{asset.id}/stream", headers=auth_headers)

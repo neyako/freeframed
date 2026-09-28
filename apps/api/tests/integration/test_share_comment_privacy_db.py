@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from apps.api.models.asset import AssetVersion, ProcessingStatus
+from apps.api.models.asset import Asset, AssetType, AssetVersion, ProcessingStatus
 from apps.api.models.comment import Comment
 from apps.api.models.user import GuestUser
 from apps.api.tests.integration._comment_security_support import add_comment, comment_security
@@ -37,12 +37,12 @@ def test_share_tree_prunes_hidden_subtrees_scopes_version_and_hides_guest_email(
     world.db.flush()
     root = add_comment(world.db, asset, v1, None)
     root.guest_author_id = guest.id
-    public_reply = add_comment(world.db, asset, v1, world.actors["reviewer"], parent=root)
+    public_reply = add_comment(world.db, asset, v1, world.actors["editor"], parent=root)
     internal_reply = add_comment(
         world.db,
         asset,
         v1,
-        world.actors["reviewer"],
+        world.actors["editor"],
         parent=root,
         visibility="internal",
     )
@@ -50,25 +50,25 @@ def test_share_tree_prunes_hidden_subtrees_scopes_version_and_hides_guest_email(
         world.db,
         asset,
         v1,
-        world.actors["reviewer"],
+        world.actors["editor"],
         parent=internal_reply,
     )
     internal_root = add_comment(
         world.db,
         asset,
         v1,
-        world.actors["reviewer"],
+        world.actors["editor"],
         visibility="internal",
     )
     hidden_child = add_comment(
         world.db,
         asset,
         v1,
-        world.actors["reviewer"],
+        world.actors["editor"],
         parent=internal_root,
     )
-    other_version = add_comment(world.db, asset, v2, world.actors["reviewer"])
-    cross_version = add_comment(world.db, asset, v2, world.actors["reviewer"], parent=root)
+    other_version = add_comment(world.db, asset, v2, world.actors["editor"])
+    cross_version = add_comment(world.db, asset, v2, world.actors["editor"], parent=root)
     deleted_version = AssetVersion(
         asset_id=asset.id,
         version_number=3,
@@ -82,7 +82,7 @@ def test_share_tree_prunes_hidden_subtrees_scopes_version_and_hides_guest_email(
         world.db,
         asset,
         deleted_version,
-        world.actors["reviewer"],
+        world.actors["editor"],
         parent=root,
     )
     world.db.commit()
@@ -117,11 +117,28 @@ def test_share_version_filter_rejects_foreign_or_deleted_version(
     comment_security,
     version_state: str,
 ) -> None:
-    version = comment_security.public.version
+    db = comment_security.db
     if version_state == "deleted":
         version = comment_security.private.version
         version.deleted_at = datetime.now(timezone.utc)
-        comment_security.db.commit()
+    else:
+        owner = comment_security.actors["owner"]
+        foreign = Asset(
+            project_id=comment_security.private.asset.project_id,
+            name="foreign",
+            asset_type=AssetType.video,
+            created_by=owner.id,
+        )
+        db.add(foreign)
+        db.flush()
+        version = AssetVersion(
+            asset_id=foreign.id,
+            version_number=1,
+            processing_status=ProcessingStatus.ready,
+            created_by=owner.id,
+        )
+        db.add(version)
+    db.commit()
 
     response = comment_security.client.get(
         f"/share/{comment_security.comment_link.token}/comments?version_id={version.id}"
@@ -173,3 +190,35 @@ def test_guest_reply_inherits_public_parent_version_and_strips_email(
     }
     assert conflict.status_code in (400, 422), conflict.text
     assert denied.status_code == 403, denied.text
+
+
+def test_hidden_versions_scope_share_comments_to_latest(comment_security) -> None:
+    world = comment_security
+    v1 = world.private.version
+    v2 = AssetVersion(
+        asset_id=world.private.asset.id,
+        version_number=2,
+        processing_status=ProcessingStatus.ready,
+        created_by=world.actors["owner"].id,
+    )
+    world.db.add(v2)
+    world.db.flush()
+    old = add_comment(world.db, world.private.asset, v1, world.actors["editor"])
+    latest = add_comment(world.db, world.private.asset, v2, world.actors["editor"])
+    world.comment_link.show_versions = False
+    world.db.commit()
+    token = world.comment_link.token
+
+    unfiltered = world.client.get(f"/share/{token}/comments")
+    older = world.client.get(f"/share/{token}/comments?version_id={v1.id}")
+    guest_on_older = world.client.post(
+        f"/share/{token}/comment",
+        json={"version_id": str(v1.id), "body": "hi", "guest_email": "g@example.test", "guest_name": "G"},
+    )
+
+    assert unfiltered.status_code == 200, unfiltered.text
+    visible = _ids(unfiltered.json())
+    assert str(latest.id) in visible
+    assert str(old.id) not in visible
+    assert older.status_code == 404, older.text
+    assert guest_on_older.status_code == 404, guest_on_older.text

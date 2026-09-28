@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from enum import Enum as PyEnum
 from typing import Optional
-from sqlalchemy import String, Boolean, DateTime, Enum, ForeignKey, Float, Integer, BigInteger, func, Text, UniqueConstraint
+from sqlalchemy import String, Boolean, DateTime, ForeignKey, Float, Integer, BigInteger, func, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 try:
@@ -26,6 +26,8 @@ class Comment(Base):
     timecode_end: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     body: Mapped[str] = mapped_column(Text, nullable=False)
     resolved: Mapped[bool] = mapped_column(Boolean, default=False)
+    # A cut: this range should come out of the edit (counts toward after-cut runtime)
+    is_cut: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
     visibility: Mapped[str] = mapped_column(String(20), default="public", server_default="public", nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -37,7 +39,6 @@ class Annotation(Base):
     comment_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("comments.id"), nullable=False)
     drawing_data: Mapped[dict] = mapped_column(JSONB, nullable=False)
     frame_number: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    carousel_position: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
 class CommentAttachment(Base):
     __tablename__ = "comment_attachments"

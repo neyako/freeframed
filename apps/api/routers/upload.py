@@ -2,20 +2,17 @@ import os
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
 import uuid
-from datetime import datetime, timezone
-from typing import Optional
 from ..database import get_db
 from ..middleware.auth import get_current_user
-from ..models.user import User, UserStatus
+from ..models.user import User
 from ..models.asset import Asset, AssetVersion, MediaFile, AssetType, ProcessingStatus, FileType
 from ..models.folder import Folder
-from ..models.project import Project, ProjectMember, ProjectRole
-from ..models.activity import Notification, NotificationType
+from ..models.project import Project, ProjectRole
 from ..services.s3_service import (
     create_multipart_upload, presign_upload_part,
     complete_multipart_upload, abort_multipart_upload,
 )
-from ..services.permissions import get_project_member, require_project_role
+from ..services.permissions import require_project_role
 from ..schemas.upload import (
     InitiateUploadRequest, InitiateUploadResponse,
     PresignPartRequest, PresignPartResponse,
@@ -24,41 +21,6 @@ from ..schemas.upload import (
 )
 
 router = APIRouter(prefix="/upload", tags=["upload"])
-
-
-def find_quick_share_reviewer_id(
-    db: Session,
-    project: Project,
-    uploader_id: uuid.UUID,
-) -> Optional[uuid.UUID]:
-    if not project.is_quick_share:
-        return None
-    base = db.query(ProjectMember).filter(
-        ProjectMember.project_id == project.id,
-        ProjectMember.user_id != uploader_id,
-        ProjectMember.deleted_at.is_(None),
-    )
-    reviewer = (
-        base.filter(ProjectMember.role == ProjectRole.reviewer)
-        .order_by(ProjectMember.invited_at.asc())
-        .first()
-    )
-    if reviewer is not None:
-        return reviewer.user_id
-    if project.created_by != uploader_id:
-        return project.created_by
-    superadmin = (
-        db.query(User)
-        .filter(
-            User.is_superadmin == True,
-            User.id != uploader_id,
-            User.deleted_at.is_(None),
-            User.status == UserStatus.active,
-        )
-        .order_by(User.created_at.asc())
-        .first()
-    )
-    return superadmin.id if superadmin is not None else None
 
 
 def _get_upload_media_file(db: Session, version_id: uuid.UUID) -> MediaFile:
@@ -95,45 +57,20 @@ def initiate_upload(
         if folder.project_id != body.project_id:
             raise HTTPException(status_code=400, detail="Folder does not belong to the specified project")
 
-    # Get or create asset
-    if body.asset_id:
-        asset = db.query(Asset).filter(Asset.id == body.asset_id, Asset.deleted_at.is_(None)).first()
-        if not asset:
-            raise HTTPException(status_code=404, detail="Asset not found")
-        if asset.project_id != body.project_id:
-            raise HTTPException(status_code=400, detail="Asset does not belong to the specified project")
-    else:
-        asset_type = mime_to_asset_type(body.mime_type)
-        asset = Asset(
-            project_id=body.project_id,
-            name=body.asset_name,
-            asset_type=asset_type,
-            created_by=current_user.id,
-            folder_id=body.folder_id,
-        )
-        db.add(asset)
-        db.flush()
-        reviewer_id = find_quick_share_reviewer_id(db, project, current_user.id)
-        if reviewer_id is not None:
-            asset.assignee_id = reviewer_id
-            notification = Notification(
-                user_id=reviewer_id,
-                type=NotificationType.assignment,
-                asset_id=asset.id,
-            )
-            db.add(notification)
-
-    # Get next version number
-    last_version = db.query(AssetVersion).filter(
-        AssetVersion.asset_id == asset.id,
-        AssetVersion.deleted_at.is_(None),
-    ).order_by(AssetVersion.version_number.desc()).first()
-    next_version_number = (last_version.version_number + 1) if last_version else 1
+    asset = Asset(
+        project_id=body.project_id,
+        name=body.asset_name,
+        asset_type=mime_to_asset_type(body.mime_type),
+        created_by=current_user.id,
+        folder_id=body.folder_id,
+    )
+    db.add(asset)
+    db.flush()
 
     # Build S3 key: raw/{project_id}/{asset_id}/{version_id}/{filename}
     version = AssetVersion(
         asset_id=asset.id,
-        version_number=next_version_number,
+        version_number=1,
         processing_status=ProcessingStatus.uploading,
         created_by=current_user.id,
     )
@@ -147,7 +84,7 @@ def initiate_upload(
     upload_id = create_multipart_upload(s3_key, body.mime_type)
 
     # Create MediaFile record
-    file_type_map = {AssetType.image: FileType.image, AssetType.audio: FileType.audio, AssetType.video: FileType.video, AssetType.image_carousel: FileType.image}
+    file_type_map = {AssetType.image: FileType.image, AssetType.audio: FileType.audio, AssetType.video: FileType.video}
     media_file = MediaFile(
         version_id=version.id,
         file_type=file_type_map.get(asset.asset_type, FileType.video),

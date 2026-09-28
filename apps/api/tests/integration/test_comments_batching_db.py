@@ -86,7 +86,6 @@ def test_comment_tree_batching_preserves_seeded_response_contract(
         Annotation(
             comment_id=reply.id,
             drawing_data={"objects": [{"x": 1}]},
-            carousel_position=3,
         )
     )
     db.add(
@@ -142,7 +141,6 @@ def test_comment_tree_batching_preserves_seeded_response_contract(
     reply_response = batched[0].replies[0]
     assert reply_response.annotation is not None
     assert reply_response.annotation.drawing_data == {"objects": [{"x": 1}]}
-    assert reply_response.annotation.carousel_position == 3
     assert len(batched[0].attachments) == 1
     assert batched[0].attachments[0].file_name == "root.png"
     assert batched[0].attachments[0].file_size == 128

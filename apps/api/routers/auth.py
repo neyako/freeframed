@@ -2,11 +2,11 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response, 
 from sqlalchemy.orm import Session
 import secrets
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from ..database import get_db
 from ..schemas.auth import (
     RegisterRequest, LoginRequest, TokenResponse,
-    RefreshRequest, UserResponse, InviteRequest,
+    RefreshRequest, UserResponse,
     AcceptInviteRequest, InviteInfoResponse,
     ForgotPasswordRequest, ResetPasswordRequest,
 )
@@ -30,7 +30,7 @@ from ..services.redis_service import (
     store_password_reset_token,
 )
 from ..tasks.celery_app import send_task_safe
-from ..tasks.email_tasks import send_invite_email, send_password_reset_email
+from ..tasks.email_tasks import send_password_reset_email
 from ..models.user import User, UserStatus
 from ..middleware.auth import get_current_user
 from ..services.workspace_service import get_workspace_name

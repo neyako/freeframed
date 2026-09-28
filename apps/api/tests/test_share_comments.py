@@ -14,7 +14,6 @@ def _mock_share_link(asset_id: uuid.UUID | None = None) -> MagicMock:
     link.id = uuid.uuid4()
     link.asset_id = asset_id
     link.folder_id = None
-    link.project_id = None
     link.permission = SharePermission.comment
     return link
 

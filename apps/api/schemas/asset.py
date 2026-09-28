@@ -1,9 +1,8 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import uuid
 from datetime import datetime
 from typing import Optional
 from ..models.asset import AssetType, AssetStatus, ProcessingStatus, FileType
-from ..models.activity import NotificationType
 
 class MediaFileResponse(BaseModel):
     id: uuid.UUID
@@ -39,41 +38,23 @@ class AssetResponse(BaseModel):
     description: Optional[str]
     asset_type: AssetType
     status: AssetStatus
-    rating: Optional[int]
-    assignee_id: Optional[uuid.UUID]
     folder_id: Optional[uuid.UUID] = None
-    due_date: Optional[datetime]
-    keywords: Optional[list]
     created_by: uuid.UUID
     created_at: datetime
     updated_at: datetime
     latest_version: Optional[AssetVersionResponse] = None
     thumbnail_url: Optional[str] = None
+    target_duration_seconds: Optional[int] = None
     model_config = {"from_attributes": True}
 
 class AssetUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     status: Optional[AssetStatus] = None
-    rating: Optional[int] = None
-    assignee_id: Optional[uuid.UUID] = None
-    due_date: Optional[datetime] = None
-    keywords: Optional[list] = None
+    # Explicit null clears the target
+    target_duration_seconds: Optional[int] = Field(default=None, ge=1, le=86400)
 
 class StreamUrlResponse(BaseModel):
     url: str
     asset_type: AssetType
     expires_in: int = 3600
-
-class NotificationResponse(BaseModel):
-    id: uuid.UUID
-    type: NotificationType
-    asset_id: uuid.UUID
-    comment_id: Optional[uuid.UUID] = None
-    read: bool
-    created_at: datetime
-    # Enriched fields
-    asset_name: Optional[str] = None
-    actor_name: Optional[str] = None
-    comment_preview: Optional[str] = None
-    project_id: Optional[uuid.UUID] = None

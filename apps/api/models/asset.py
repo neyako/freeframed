@@ -3,7 +3,7 @@ from datetime import datetime
 from enum import Enum as PyEnum
 from typing import Optional
 from sqlalchemy import String, Enum, DateTime, ForeignKey, Integer, BigInteger, Float, func, UniqueConstraint, Index
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 try:
     from ..database import Base
@@ -12,7 +12,6 @@ except ImportError:
 
 class AssetType(str, PyEnum):
     image = "image"
-    image_carousel = "image_carousel"
     audio = "audio"
     video = "video"
 
@@ -37,11 +36,9 @@ class Asset(Base):
     description: Mapped[Optional[str]] = mapped_column(String(2000), nullable=True)
     asset_type: Mapped[AssetType] = mapped_column(Enum(AssetType), nullable=False)
     status: Mapped[AssetStatus] = mapped_column(Enum(AssetStatus), default=AssetStatus.draft)
-    rating: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    assignee_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True, index=True)
     folder_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("folders.id"), nullable=True, index=True)
-    due_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    keywords: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True, default=list)
+    # Runtime goal for the edit (e.g. 180 for YouTube Shorts); compared to the after-cut runtime
+    target_duration_seconds: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -85,10 +82,3 @@ class MediaFile(Base):
     fps: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     sequence_order: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-
-class CarouselItem(Base):
-    __tablename__ = "carousel_items"
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    version_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("asset_versions.id"), nullable=False)
-    media_file_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("media_files.id"), nullable=False)
-    position: Mapped[int] = mapped_column(Integer, nullable=False)

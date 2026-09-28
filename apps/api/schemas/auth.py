@@ -73,9 +73,3 @@ class ResetPasswordRequest(BaseModel):
 class UpdateProfileRequest(BaseModel):
     name: str | None = None
     avatar_url: str | None = None
-
-class UpdateUserRoleRequest(BaseModel):
-    is_admin: bool
-
-class DeactivateUserRequest(BaseModel):
-    user_id: uuid.UUID
