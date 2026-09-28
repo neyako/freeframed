@@ -1,14 +1,15 @@
 # freeframed
 
-**Homelab-first media review for individual creators and small teams.**
+**Homelab-first media review for one creator, their editor, and their clients.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker)](docker-compose.aio.yml)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](docs/contributing.md)
 
 freeframed is a fork of [FreeFrame](https://github.com/Techiebutler/freeframe), tuned for
-individual creators and small teams who want to self-host media review on a NAS,
-mini PC, or office workstation. The default deployment is one container, one bind
+a single creator who wants to self-host media review on a NAS, mini PC, or office
+workstation. The creator owns the workspace, an editor account uploads versions
+and comments, and brands or clients review through share links. The default deployment is one container, one bind
 mount, and low operational overhead.
 
 This fork is not aimed at SaaS, multi-tenant, or production-house team
@@ -26,8 +27,9 @@ deployments. If that is the direction you want, use or contribute to mainline
 - **Threaded comments** with mentions, reactions, and attachments
 - **Version management** for client notes and creator revisions
 - **Folders and projects** without needing a full production-management stack
-- **Private share links** for reviewers, including guest commenting
-- **Due dates and email reminders** for small-team follow-up
+- **Asset and folder share links** with password, expiry, download, version,
+  and watermark-overlay options, plus guest comments
+- **Owner + editor roles** per project, no role matrix to manage
 - **Server-Sent Events** for live review updates without WebSocket complexity
 
 ## Quick Start: NAS / All-In-One
