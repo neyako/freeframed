@@ -12,10 +12,11 @@ from apps.api.services.drafts import plan_draft_merges, split_draft_name
 @pytest.mark.parametrize(
     ("name", "expected"),
     [
-        ("draft 3 - mang den cho ban", (3, "mang den cho ban")),
-        ("Draft1_Intro", (1, "Intro")),
-        ("DRAFT 12 – Intro cut", (12, "Intro cut")),
-        ("draft 2 Intro", (2, "Intro")),
+        ("draft 3 - mang den cho ban.mov", ((3,), "mang den cho ban.mov")),
+        ("Draft1_Intro", ((1,), "Intro")),
+        ("DRAFT 12 – Intro cut", ((12,), "Intro cut")),
+        ("draft 2 Intro", ((2,), "Intro")),
+        ("draft 1.1 - lenovo idea tab plus.mov", ((1, 1), "lenovo idea tab plus.mov")),
         ("Drafts for client", None),
         ("draft 3", None),
         ("Intro - draft 3", None),
@@ -55,6 +56,16 @@ def test_plan_groups_per_folder_and_renames_lone_drafts():
 
     assert (here, [], "Intro") in plans
     assert (elsewhere, [], "Intro") in plans
+
+
+def test_plan_ignores_extension_and_stray_spaces():
+    draft1 = _asset("draft 1 - amaran len smarthome.mov")
+    draft3 = _asset("draft 3 - amaran len smarthome .mov", minutes=1)
+    draft11 = _asset("draft 1.1 - amaran len smarthome.mp4", minutes=2)
+
+    assert plan_draft_merges([draft3, draft11, draft1]) == [
+        (draft1, [draft11, draft3], "amaran len smarthome.mov")
+    ]
 
 
 def test_plan_skips_groups_without_drafts():
