@@ -97,7 +97,10 @@ Full stack: `docker compose -f docker-compose.dev.yml up --build`
 - `NEXT_PUBLIC_API_URL` defaults to `http://localhost:8000` in the web app.
 - Uploads: browser → presigned S3 multipart → `/upload/complete` → Celery
   `process_asset`. The upload UI state machine lives in
-  `stores/upload-store.ts`.
+  `stores/upload-store.ts`. A new upload named `draft N - X` drops the
+  prefix and, if X already exists in the same folder, becomes X's next
+  version (`services/drafts.py`); `scripts/merge_draft_assets.py` folds
+  drafts uploaded before that into versions.
 - MinIO no longer ships binaries or images; `Dockerfile.allinone` compiles it
   from a pinned source tag (`MINIO_RELEASE`). Only ever move that tag
   forward: an older MinIO must not open data a newer one wrote.

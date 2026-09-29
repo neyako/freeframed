@@ -13,6 +13,8 @@ from ..services.s3_service import (
     complete_multipart_upload, abort_multipart_upload,
 )
 from ..services.permissions import require_project_role
+from ..services.drafts import split_draft_name, find_draft_target
+from .assets import start_version_upload
 from ..schemas.upload import (
     InitiateUploadRequest, InitiateUploadResponse,
     PresignPartRequest, PresignPartResponse,
@@ -57,10 +59,20 @@ def initiate_upload(
         if folder.project_id != body.project_id:
             raise HTTPException(status_code=400, detail="Folder does not belong to the specified project")
 
+    # "draft 3 - Intro" is Intro's next version, not a new asset
+    asset_type = mime_to_asset_type(body.mime_type)
+    asset_name = body.asset_name
+    draft = split_draft_name(body.asset_name)
+    if draft:
+        asset_name = draft[1]
+        target = find_draft_target(db, body.project_id, body.folder_id, asset_type, asset_name)
+        if target:
+            return start_version_upload(db, target.id, body, current_user)
+
     asset = Asset(
         project_id=body.project_id,
-        name=body.asset_name,
-        asset_type=mime_to_asset_type(body.mime_type),
+        name=asset_name,
+        asset_type=asset_type,
         created_by=current_user.id,
         folder_id=body.folder_id,
     )

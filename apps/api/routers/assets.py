@@ -266,6 +266,17 @@ def initiate_new_version(
     current_user: User = Depends(get_current_user),
 ):
     """Initiate upload of a new version for an existing asset."""
+    return start_version_upload(db, asset_id, body, current_user)
+
+
+def start_version_upload(
+    db: Session,
+    asset_id: uuid.UUID,
+    body: InitiateUploadRequest,
+    current_user: User,
+) -> InitiateUploadResponse:
+    """Open the next version of an asset for upload. Also used when a new
+    upload is a draft of an existing asset (see services/drafts.py)."""
     # Row lock serializes concurrent version uploads so they can't both claim
     # the same version number.
     asset = (
