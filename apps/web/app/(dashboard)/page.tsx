@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import useSWR from "swr";
+import useSWRInfinite from "swr/infinite";
 import Link from "next/link";
 import { Film, LayoutGrid, Trash2 } from "lucide-react";
 import { api } from "@/lib/api";
@@ -82,6 +82,7 @@ function AssetCard({ asset, onDelete }: AssetCardProps) {
             <img
               src={asset.thumbnail_url}
               alt={asset.name}
+              loading="lazy"
               onError={() => setImgError(true)}
               className="h-full w-full object-cover"
             />
@@ -120,7 +121,15 @@ function AssetCard({ asset, onDelete }: AssetCardProps) {
   );
 }
 
-const ROW_HEIGHT = 180;
+const ROW_HEIGHT = 240;
+const PAGE_SIZE = 40;
+
+// Each page peeks one item past PAGE_SIZE: if it comes back, there is more.
+// The peeked item is never shown; it opens the next page instead.
+function recentKey(page: number, previous: AssetResponse[] | null): string | null {
+  if (previous && previous.length <= PAGE_SIZE) return null;
+  return `/me/assets?skip=${page * PAGE_SIZE}&limit=${PAGE_SIZE + 1}`;
+}
 
 interface SectionProps {
   title: string;
@@ -128,9 +137,21 @@ interface SectionProps {
   isLoading: boolean;
   emptyTitle: string;
   onDelete: (asset: AssetResponse) => Promise<void>;
+  hasMore: boolean;
+  loadingMore: boolean;
+  onShowMore: () => void;
 }
 
-function Section({ title, assets, isLoading, emptyTitle, onDelete }: SectionProps) {
+function Section({
+  title,
+  assets,
+  isLoading,
+  emptyTitle,
+  onDelete,
+  hasMore,
+  loadingMore,
+  onShowMore,
+}: SectionProps) {
   return (
     <section className="space-y-2">
       <h2 className="flex items-baseline gap-2 text-[13px] font-medium text-text-primary">
@@ -138,6 +159,7 @@ function Section({ title, assets, isLoading, emptyTitle, onDelete }: SectionProp
         {assets && assets.length > 0 && (
           <span className="font-mono text-[12px] font-normal text-text-tertiary">
             {assets.length}
+            {hasMore && "+"}
           </span>
         )}
       </h2>
@@ -148,12 +170,18 @@ function Section({ title, assets, isLoading, emptyTitle, onDelete }: SectionProp
         <EmptyState title={emptyTitle} />
       ) : (
         <div className="flex flex-wrap gap-x-3 gap-y-4">
-          {assets.slice(0, 8).map((asset) => (
+          {assets.map((asset) => (
             <AssetCard key={asset.id} asset={asset} onDelete={onDelete} />
           ))}
           {/* Absorbs the last row's spare width so its cards keep row height */}
           <div aria-hidden className="h-0" style={{ flexGrow: 1e6, flexBasis: 0 }} />
         </div>
+      )}
+
+      {hasMore && (
+        <Button type="button" variant="secondary" size="sm" onClick={onShowMore} disabled={loadingMore}>
+          {loadingMore ? "Loading…" : "Show more"}
+        </Button>
       )}
     </section>
   );
@@ -173,14 +201,19 @@ export default function HomePage() {
   }, [mounted, homeMode, router]);
 
   const {
-    data: recentAssets,
+    data: recentPages,
     isLoading: loadingRecent,
     mutate: mutateRecentAssets,
-  } = useSWR<AssetResponse[]>(
+    size,
+    setSize,
+  } = useSWRInfinite<AssetResponse[]>(
     // Everything you can see: for the workspace owner that includes editors' uploads
-    "/me/assets",
-    () => api.get<AssetResponse[]>("/me/assets"),
+    recentKey,
+    (key: string) => api.get<AssetResponse[]>(key),
   );
+  const recentAssets = recentPages?.flatMap((page) => page.slice(0, PAGE_SIZE));
+  const hasMore = (recentPages?.at(-1)?.length ?? 0) > PAGE_SIZE;
+  const loadingMore = !!recentPages && recentPages.length < size;
 
   const handleDeleteAsset = React.useCallback(
     async (asset: AssetResponse) => {
@@ -219,6 +252,9 @@ export default function HomePage() {
         isLoading={loadingRecent}
         emptyTitle="No assets yet."
         onDelete={handleDeleteAsset}
+        hasMore={hasMore}
+        loadingMore={loadingMore}
+        onShowMore={() => setSize(size + 1)}
       />
     </div>
   );

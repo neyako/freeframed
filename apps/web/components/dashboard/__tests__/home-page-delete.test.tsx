@@ -26,6 +26,8 @@ const mocks = vi.hoisted(() => ({
     thumbnail_url: null,
   } satisfies AssetResponse,
   mutateOwned: vi.fn<() => Promise<void>>(async () => undefined),
+  setSize: vi.fn(),
+  pages: [] as AssetResponse[][],
 }));
 
 vi.mock("next/navigation", () => ({
@@ -48,13 +50,14 @@ vi.mock("next/link", () => ({
   ),
 }));
 
-vi.mock("swr", () => ({
-  default: (key: string) => {
-    if (key === "/me/assets") {
-      return { data: [mocks.asset], isLoading: false, mutate: mocks.mutateOwned };
-    }
-    return { data: [], isLoading: false, mutate: vi.fn() };
-  },
+vi.mock("swr/infinite", () => ({
+  default: () => ({
+    data: mocks.pages,
+    isLoading: false,
+    mutate: mocks.mutateOwned,
+    size: mocks.pages.length,
+    setSize: mocks.setSize,
+  }),
 }));
 
 vi.mock("@/lib/api", () => ({
@@ -106,6 +109,7 @@ describe("HomePage asset delete", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockedApi.delete.mockResolvedValue(undefined);
+    mocks.pages = [[mocks.asset]];
   });
 
   it("deletes an asset from the dashboard and revalidates the asset list", async () => {
@@ -121,6 +125,25 @@ describe("HomePage asset delete", () => {
       expect(mockedApi.delete).toHaveBeenCalledWith("/assets/asset-1");
     });
     expect(mocks.mutateOwned).toHaveBeenCalledTimes(1);
+  });
+
+  it("offers more only when a page peeks past its size", async () => {
+    const user = userEvent.setup();
+    const page = (n: number) =>
+      Array.from({ length: n }, (_, i) => ({ ...mocks.asset, id: `asset-${i}`, name: `Clip ${i}` }));
+    mocks.pages = [page(41)];
+    const { rerender } = render(<HomePage />);
+
+    expect(screen.getByText("40+")).toBeInTheDocument();
+    expect(screen.queryByText("Clip 40")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Show more" }));
+    expect(mocks.setSize).toHaveBeenCalledWith(2);
+
+    // Exactly 40: nothing peeked past, so no dead-end "Show more"
+    mocks.pages = [page(40)];
+    rerender(<HomePage />);
+    expect(screen.getByText("40")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Show more" })).not.toBeInTheDocument();
   });
 
   it("hydrates greeting and relative asset time from deterministic initial markup", async () => {
