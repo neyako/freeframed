@@ -324,14 +324,27 @@ export function ProgressBar({
     [duration],
   )
 
-  const handleMouseMove = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
+  // Pointer events cover mouse, touch and pen alike. Capturing the pointer
+  // keeps a drag alive when the finger or cursor leaves the thin track.
+  const handlePointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (e.button !== 0) return
+      e.preventDefault()
+      e.currentTarget.setPointerCapture(e.pointerId)
+      setIsDragging(true)
+      onSeek(getTimeFromEvent(e.clientX))
+    },
+    [getTimeFromEvent, onSeek],
+  )
+
+  const handlePointerMove = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
       const time = getTimeFromEvent(e.clientX)
       setHoverTime(time)
       const track = trackRef.current
       if (track) {
         const rect = track.getBoundingClientRect()
-        setHoverX(e.clientX - rect.left)
+        setHoverX(Math.max(0, Math.min(rect.width, e.clientX - rect.left)))
       }
       if (isDragging) {
         onSeek(time)
@@ -341,44 +354,27 @@ export function ProgressBar({
     [isDragging, getTimeFromEvent, onSeek, seekPreview],
   )
 
-  const handleMouseLeave = useCallback(() => {
+  const endDrag = useCallback(() => {
+    setIsDragging(false)
+    setHoverTime(null)
+    clearPreview()
+  }, [clearPreview])
+
+  const handlePointerUp = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (!isDragging) return
+      onSeek(getTimeFromEvent(e.clientX))
+      endDrag()
+    },
+    [isDragging, getTimeFromEvent, onSeek, endDrag],
+  )
+
+  const handlePointerLeave = useCallback(() => {
     if (!isDragging) {
       setHoverTime(null)
       clearPreview()
     }
   }, [isDragging, clearPreview])
-
-  const handleMouseDown = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      e.preventDefault()
-      setIsDragging(true)
-      onSeek(getTimeFromEvent(e.clientX))
-    },
-    [getTimeFromEvent, onSeek],
-  )
-
-  // Global mouse up / move to handle drag outside track
-  useEffect(() => {
-    if (!isDragging) return
-
-    const handleGlobalMouseMove = (e: MouseEvent) => {
-      onSeek(getTimeFromEvent(e.clientX))
-    }
-
-    const handleGlobalMouseUp = (e: MouseEvent) => {
-      setIsDragging(false)
-      setHoverTime(null)
-      clearPreview()
-      onSeek(getTimeFromEvent(e.clientX))
-    }
-
-    window.addEventListener('mousemove', handleGlobalMouseMove)
-    window.addEventListener('mouseup', handleGlobalMouseUp)
-    return () => {
-      window.removeEventListener('mousemove', handleGlobalMouseMove)
-      window.removeEventListener('mouseup', handleGlobalMouseUp)
-    }
-  }, [isDragging, getTimeFromEvent, onSeek, clearPreview])
 
   // Every timecoded comment gets an avatar marker; range comments also get a span
   const pointMarkers = comments.filter(
@@ -409,10 +405,12 @@ export function ProgressBar({
       {/* Track area */}
       <div
         ref={trackRef}
-        className="relative w-full h-1.5 group-hover/progress:h-2 cursor-pointer bg-border rounded-full"
-        onMouseMove={handleMouseMove}
-        onMouseLeave={handleMouseLeave}
-        onMouseDown={handleMouseDown}
+        className="relative w-full h-1.5 group-hover/progress:h-2 cursor-pointer touch-none bg-border rounded-full before:absolute before:-inset-y-3 before:content-['']"
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={endDrag}
+        onPointerLeave={handlePointerLeave}
       >
         {/* Buffered range */}
         <div
@@ -447,7 +445,7 @@ export function ProgressBar({
               }}
               onMouseEnter={() => setHoveredCommentId(c.id)}
               onMouseLeave={() => setHoveredCommentId(null)}
-              onMouseDown={(e) => e.stopPropagation()}
+              onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => {
                 e.stopPropagation()
                 onSeek(c.timecode_start!)

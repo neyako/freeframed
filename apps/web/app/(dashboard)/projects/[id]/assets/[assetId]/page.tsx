@@ -12,7 +12,7 @@ import { AnnotationOverlay } from '@/components/review/annotation-overlay'
 import { CommentPanel } from '@/components/review/comment-panel'
 import { CommentInput, type CommentDraft } from '@/components/review/comment-input'
 import { ApprovalBar } from '@/components/review/approval-bar'
-import { VersionSwitcher } from '@/components/review/version-switcher'
+import { VersionNameMenu, VersionSwitcher } from '@/components/review/version-switcher'
 import { CutSummary } from '@/components/review/cut-summary'
 import { Button } from '@/components/ui/button'
 import { ShareDialog } from '@/components/review/share-dialog'
@@ -77,6 +77,9 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
     `/projects/${projectId}`,
     () => api.get<Project>(`/projects/${projectId}`),
   )
+  // Only a refusal means lost access. A dropped request (a download starting,
+  // flaky mobile network) must not take down a page that already loaded.
+  const projectDenied = projectError?.status === 403 || projectError?.status === 404
 
   async function handleDownload() {
     if (!asset || !currentVersion || downloading) return
@@ -85,9 +88,11 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
       const res = await api.get<{ url: string }>(
         `/assets/${asset.id}/stream?download=true&version_id=${currentVersion.id}`,
       )
-      // Let the server's Content-Disposition filename win — don't set `a.download`
+      // An empty `download` keeps the page in place (mobile Safari otherwise
+      // navigates away) and lets the server's Content-Disposition filename win
       const a = document.createElement('a')
       a.href = res.url
+      a.download = ''
       a.rel = 'noopener noreferrer'
       a.style.display = 'none'
       document.body.appendChild(a)
@@ -104,7 +109,7 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
 
   // Fetch folder tree to build the folder path for the breadcrumb
   const { data: folderTree } = useSWR<FolderTreeNode[]>(
-    asset && project && !reviewError && projectError === undefined
+    asset && project && !reviewError && !projectDenied
       ? `/projects/${projectId}/folder-tree`
       : null,
     () => api.get<FolderTreeNode[]>(`/projects/${projectId}/folder-tree`),
@@ -136,7 +141,7 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
 
   // Fetch all assets for navigation (1 of N)
   const { data: allAssets } = useSWR<AssetResponse[]>(
-    project && !reviewError && projectError === undefined ? `/projects/${projectId}/assets` : null,
+    project && !reviewError && !projectDenied ? `/projects/${projectId}/assets` : null,
     () => api.get<AssetResponse[]>(`/projects/${projectId}/assets`),
   )
 
@@ -236,7 +241,7 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [asset?.asset_type, prevAsset, nextAsset])
 
-  if (reviewError || projectError) {
+  if (reviewError || projectDenied) {
     return (
       <div className="flex flex-1 items-center justify-center px-6 text-center">
         <div>
@@ -359,12 +364,14 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
           <ArrowLeft />
         </Button>
         <div className="min-w-0">
-          <div className="truncate text-[13px] font-medium leading-tight text-text-primary">{asset.name}</div>
+          {/* Phones pick versions by tapping the name; wider screens get tabs */}
+          <div className="hidden truncate text-[13px] font-medium leading-tight text-text-primary sm:block">{asset.name}</div>
+          <VersionNameMenu name={asset.name} versions={versions} className="sm:hidden" />
           <div className="truncate text-[11.5px] leading-tight text-text-tertiary">
             {[project.name, ...(asset.folder_id && folderTree ? (findPath(folderTree, asset.folder_id) ?? []).map((f) => f.name) : [])].join(' / ')}
           </div>
         </div>
-        <VersionSwitcher versions={versions} className="ml-1 hidden sm:flex" />
+        <VersionSwitcher versions={versions} className="ml-1 hidden shrink-0 sm:flex" />
 
         <div className="flex flex-1 items-center justify-end gap-1">
           {totalAssets > 1 && (

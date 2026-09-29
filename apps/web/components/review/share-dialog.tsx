@@ -78,7 +78,11 @@ export function ShareDialog({ assetId }: ShareDialogProps) {
         onClick={() => void toggle()}
         onPointerEnter={() => void prefetch()}
         onFocus={() => void prefetch()}
-        className={cn(dropdownOpen && "bg-text-primary/85")}
+        // Phones: plain like its neighbours in the cramped header row
+        className={cn(
+          "max-sm:bg-transparent max-sm:text-text-secondary max-sm:hover:bg-bg-hover max-sm:hover:text-text-primary",
+          dropdownOpen && "bg-text-primary/85 max-sm:bg-bg-hover max-sm:text-text-primary",
+        )}
         title="Share"
       >
         <Share2 className="h-4 w-4" />

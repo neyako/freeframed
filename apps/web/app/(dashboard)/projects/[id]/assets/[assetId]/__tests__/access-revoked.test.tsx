@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ReviewPage from '../page'
 
 const mocks = vi.hoisted(() => ({
-  projectState: 'loading' as 'loading' | 'denied' | 'denied-stale',
+  projectState: 'loading' as 'loading' | 'denied' | 'denied-stale' | 'dropped',
   reviewError: null as string | null,
   swrKeys: [] as string[],
 }))
@@ -19,12 +19,14 @@ vi.mock('swr', () => ({
     if (key) mocks.swrKeys.push(key)
     if (key === '/projects/project-1') {
       return {
-        data: mocks.projectState === 'denied-stale'
+        data: mocks.projectState === 'denied-stale' || mocks.projectState === 'dropped'
           ? { id: 'project-1', name: 'Editor project', role: 'editor' }
           : undefined,
         error: mocks.projectState === 'denied' || mocks.projectState === 'denied-stale'
           ? { status: 403, detail: 'Access denied' }
-          : undefined,
+          : mocks.projectState === 'dropped'
+            ? new TypeError('Load failed')
+            : undefined,
         isLoading: mocks.projectState === 'loading',
       }
     }
@@ -68,7 +70,10 @@ vi.mock('@/components/review/comment-input', () => ({ CommentInput: () => <div>C
 vi.mock('@/components/review/approval-bar', () => ({
   ApprovalBar: () => <div><button>Reject</button><button>Approve</button></div>,
 }))
-vi.mock('@/components/review/version-switcher', () => ({ VersionSwitcher: () => <div>Versions</div> }))
+vi.mock('@/components/review/version-switcher', () => ({
+  VersionSwitcher: () => <div>Versions</div>,
+  VersionNameMenu: ({ name }: { readonly name: string }) => <div>{name}</div>,
+}))
 vi.mock('@/components/review/share-dialog', () => ({ ShareDialog: () => <button>Share asset</button> }))
 vi.mock('@/stores/review-store', () => ({
   useReviewStore: () => ({
@@ -122,6 +127,14 @@ describe('ReviewPage revoked access', () => {
 
     expect(screen.getByText(/access denied/i)).toBeInTheDocument()
     expect(screen.queryByText(/loading review/i)).not.toBeInTheDocument()
+  })
+
+  it('keeps a loaded page when a request drops without a refusal', () => {
+    mocks.projectState = 'dropped'
+    render(<ReviewPage params={{ id: 'project-1', assetId: 'asset-1' }} />)
+
+    expect(screen.queryByText(/access denied/i)).not.toBeInTheDocument()
+    expect(screen.getByText('Video player')).toBeInTheDocument()
   })
 
   it('does not fetch navigation collections when revoked project data is retained', () => {
