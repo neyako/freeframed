@@ -14,23 +14,31 @@ from sqlalchemy.orm import Session
 
 from ..models.asset import Asset, AssetType
 
-_DRAFT_PREFIX = re.compile(r"^\s*draft\s*#?\s*(\d+)(?:\s*[-–—_:.]+\s*|\s+)", re.IGNORECASE)
+_DRAFT_PREFIX = re.compile(r"^\s*draft\s*#?\s*(\d+(?:\.\d+)*)(?:\s*[-–—_:]+\s*|\s+)", re.IGNORECASE)
+_EXTENSION = re.compile(r"\s*\.[A-Za-z0-9]{1,5}$")
 
 
-def split_draft_name(name: str) -> Optional[tuple[int, str]]:
-    """("draft 3 - Intro") -> (3, "Intro"); None when there's no draft prefix."""
+def split_draft_name(name: str) -> Optional[tuple[tuple[int, ...], str]]:
+    """("draft 1.1 - Intro") -> ((1, 1), "Intro"); None without a draft prefix."""
     match = _DRAFT_PREFIX.match(name)
     if not match:
         return None
     rest = name[match.end():].strip()
-    return (int(match.group(1)), rest) if rest else None
+    number = tuple(int(part) for part in match.group(1).split("."))
+    return (number, rest) if rest else None
+
+
+def _stem(name: str) -> str:
+    """Name without draft prefix or file extension, whitespace collapsed."""
+    draft = split_draft_name(name)
+    base = draft[1] if draft else name
+    return " ".join(_EXTENSION.sub("", base).split())
 
 
 def draft_key(name: str) -> str:
-    """What two names must share to be drafts of the same asset."""
-    draft = split_draft_name(name)
-    base = draft[1] if draft else name
-    return " ".join(base.split()).casefold()
+    """What two names must share to be drafts of the same asset: the
+    extension and stray spaces ("intro .mov" vs "intro.mp4") don't count."""
+    return _stem(name).casefold()
 
 
 def find_draft_target(
@@ -50,7 +58,7 @@ def find_draft_target(
             Asset.asset_type == asset_type,
             Asset.deleted_at.is_(None),
             # Narrow in SQL; the exact draft-aware match happens below
-            func.lower(Asset.name).endswith(base_name.strip().lower(), autoescape=True),
+            func.lower(Asset.name).contains(_stem(base_name).lower(), autoescape=True),
         )
         .order_by(Asset.created_at)
         .all()
@@ -74,7 +82,7 @@ def plan_draft_merges(assets: list[Asset]) -> list[tuple[Asset, list[Asset], str
         drafts = {asset.id: split_draft_name(asset.name) for asset in group}
         if not any(drafts.values()):
             continue
-        group.sort(key=lambda asset: (drafts[asset.id][0] if drafts[asset.id] else 0, asset.created_at))
+        group.sort(key=lambda asset: (drafts[asset.id][0] if drafts[asset.id] else (0,), asset.created_at))
         target, *sources = group
         name = drafts[target.id][1] if drafts[target.id] else target.name
         plans.append((target, sources, name))
