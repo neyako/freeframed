@@ -7,9 +7,10 @@ soft-deleted. A lone "draft 1 - X" is just renamed to "X".
 
 Dry run by default: prints the plan and changes nothing. Pass --apply to write.
 
-Usage (all-in-one container):
-    docker exec <container> python -m apps.api.scripts.merge_draft_assets
-    docker exec <container> python -m apps.api.scripts.merge_draft_assets --apply
+Usage (all-in-one container; exec sessions don't inherit the generated
+secrets, and config refuses to load without them):
+    docker exec <container> sh -c 'set -a; . /data/secrets.env; set +a; python -m apps.api.scripts.merge_draft_assets'
+    Then the same with --apply after the module name.
 """
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
