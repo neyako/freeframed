@@ -2,16 +2,13 @@
 
 import { useState, type FormEvent } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { api, ApiError } from '@/lib/api'
-import { setTokens } from '@/lib/auth'
-import { useAuthStore } from '@/stores/auth-store'
+import { postLoginPath, setTokens } from '@/lib/auth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import type { AuthTokens } from '@/types'
 
 export function LoginForm() {
-  const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [classicEmail, setClassicEmail] = useState('')
   const [classicPassword, setClassicPassword] = useState('')
@@ -33,15 +30,15 @@ export function LoginForm() {
         password: classicPassword,
       })
       setTokens(res.access_token, res.refresh_token)
-      await useAuthStore.getState().fetchUser()
-      router.replace('/')
+      // Full navigation so middleware and the dashboard start from the fresh
+      // session cookies instead of any client router state from before sign-in
+      window.location.replace(postLoginPath())
     } catch (err) {
       if (err instanceof ApiError) {
         setClassicError(err.detail)
       } else {
         setClassicError('Invalid email or password')
       }
-    } finally {
       setLoading(false)
     }
   }

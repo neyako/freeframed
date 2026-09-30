@@ -27,8 +27,8 @@ export async function middleware(request: NextRequest) {
 
   // Check if setup is needed — redirect to /setup if no superadmin exists
   // Uses a cookie cache to avoid calling the API on every request
-  const setupDone = request.cookies.get('ff_setup_done')?.value
-  if (!setupDone) {
+  let markSetupDone = false
+  if (!request.cookies.get('ff_setup_done')?.value) {
     try {
       const res = await fetch(`${API_URL}/setup/status`, { cache: 'no-store' })
       if (res.ok) {
@@ -36,10 +36,7 @@ export async function middleware(request: NextRequest) {
         if (data.needs_setup) {
           return NextResponse.redirect(new URL('/setup', request.url))
         }
-        // Setup is done — set cookie so we don't check again
-        const response = NextResponse.next()
-        response.cookies.set('ff_setup_done', '1', { path: '/', maxAge: 60 * 60 * 24 }) // 24 hours
-        return response
+        markSetupDone = true
       }
     } catch {
       // API unreachable — let the request through, the page will show errors
@@ -50,13 +47,20 @@ export async function middleware(request: NextRequest) {
   const accessToken = request.cookies.get('ff_access_token')?.value
   const refreshToken = request.cookies.get('ff_refresh_token')?.value
 
+  let response: NextResponse
   if (!accessToken && !refreshToken) {
     const loginUrl = new URL('/login', request.url)
     loginUrl.searchParams.set('from', pathname)
-    return NextResponse.redirect(loginUrl)
+    response = NextResponse.redirect(loginUrl)
+  } else {
+    response = NextResponse.next()
   }
 
-  return NextResponse.next()
+  // Setup is done — set cookie so we don't check again for 24 hours
+  if (markSetupDone) {
+    response.cookies.set('ff_setup_done', '1', { path: '/', maxAge: 60 * 60 * 24 })
+  }
+  return response
 }
 
 export const config = {

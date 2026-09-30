@@ -1,35 +1,37 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { LoginForm } from '../login-form'
 
-const mocks = vi.hoisted(() => ({
-  fetchUser: vi.fn(),
-  replace: vi.fn(),
-}))
-
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({
-    replace: mocks.replace,
-  }),
-}))
-
-vi.mock('@/stores/auth-store', () => ({
-  useAuthStore: {
-    getState: () => ({
-      fetchUser: mocks.fetchUser,
-    }),
-  },
-}))
-
 const originalLocation = window.location
 
-describe('LoginForm 401 handling', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
+function stubLocation(url: string) {
+  const parsed = new URL(url)
+  const locationMock = {
+    href: url,
+    origin: parsed.origin,
+    pathname: parsed.pathname,
+    search: parsed.search,
+    replace: vi.fn(),
+  }
+  Object.defineProperty(window, 'location', {
+    value: locationMock,
+    configurable: true,
+    writable: true,
   })
+  return locationMock
+}
 
+async function submit(email: string, password: string) {
+  const user = userEvent.setup()
+  render(<LoginForm />)
+  await user.type(screen.getByLabelText('Email address'), email)
+  await user.type(screen.getByLabelText('Password'), password)
+  await user.click(screen.getByRole('button', { name: 'Sign in' }))
+}
+
+describe('LoginForm', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
     Object.defineProperty(window, 'location', {
@@ -40,14 +42,7 @@ describe('LoginForm 401 handling', () => {
 
   it('shows the login error without refreshing or leaving the page', async () => {
     // Given
-    const user = userEvent.setup()
-    const initialHref = 'http://localhost/login'
-    const locationMock = { href: initialHref, pathname: '/login' }
-    Object.defineProperty(window, 'location', {
-      value: locationMock,
-      configurable: true,
-      writable: true,
-    })
+    const location = stubLocation('http://localhost/login')
     const fetchMock = vi.fn(async (input: string | URL | Request): Promise<Response> => {
       const url = input instanceof Request ? input.url : input.toString()
       if (url.endsWith('/auth/logout')) {
@@ -60,18 +55,32 @@ describe('LoginForm 401 handling', () => {
       })
     })
     vi.stubGlobal('fetch', fetchMock)
-    render(<LoginForm />)
 
     // When
-    await user.type(screen.getByLabelText('Email address'), 'reviewer@example.com')
-    await user.type(screen.getByLabelText('Password'), 'wrong-password')
-    await user.click(screen.getByRole('button', { name: 'Sign in' }))
+    await submit('reviewer@example.com', 'wrong-password')
 
     // Then
     expect(await screen.findByText('Invalid email or password')).toBeInTheDocument()
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
-    expect(window.location.href).toBe(initialHref)
-    expect(mocks.replace).not.toHaveBeenCalled()
-    expect(mocks.fetchUser).not.toHaveBeenCalled()
+    expect(location.replace).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['/projects/p1?tab=files', '/projects/p1?tab=files'],
+    ['https://evil.example/phish', '/'],
+    ['//evil.example', '/'],
+  ])('lands on the safe `from` path after sign-in (%s)', async (from, expected) => {
+    // Given
+    const location = stubLocation(`http://localhost/login?from=${encodeURIComponent(from)}`)
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(
+      JSON.stringify({ access_token: 'a', refresh_token: 'r', token_type: 'bearer' }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    )))
+
+    // When
+    await submit('reviewer@example.com', 'right-password')
+
+    // Then
+    await waitFor(() => expect(location.replace).toHaveBeenCalledWith(expected))
   })
 })

@@ -75,3 +75,17 @@ async function _doRefresh(): Promise<string | null> {
     return null
   }
 }
+
+// Where to land after sign-in: the `from` path middleware attached to /login,
+// if it stays on this origin; otherwise home.
+export function postLoginPath(): string {
+  const from = new URLSearchParams(window.location.search).get('from')
+  if (!from) return '/'
+  try {
+    const url = new URL(from, window.location.origin)
+    if (url.origin === window.location.origin) return url.pathname + url.search + url.hash
+  } catch {
+    // malformed — fall through
+  }
+  return '/'
+}
