@@ -1,21 +1,14 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import AuthLayout from '../../../app/(auth)/layout'
 import { LoginForm } from '../login-form'
 
 const mocks = vi.hoisted(() => ({
-  fetchUser: vi.fn(),
   post: vi.fn(),
   replace: vi.fn(),
   setTokens: vi.fn(),
-}))
-
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({
-    replace: mocks.replace,
-  }),
 }))
 
 vi.mock('@/lib/api', () => {
@@ -39,20 +32,27 @@ vi.mock('@/lib/api', () => {
 })
 
 vi.mock('@/lib/auth', () => ({
+  postLoginPath: () => '/',
   setTokens: mocks.setTokens,
 }))
 
-vi.mock('@/stores/auth-store', () => ({
-  useAuthStore: {
-    getState: () => ({
-      fetchUser: mocks.fetchUser,
-    }),
-  },
-}))
+const originalLocation = window.location
 
 describe('AuthLayout', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    Object.defineProperty(window, 'location', {
+      value: { replace: mocks.replace },
+      configurable: true,
+      writable: true,
+    })
+  })
+
+  afterEach(() => {
+    Object.defineProperty(window, 'location', {
+      value: originalLocation,
+      configurable: true,
+    })
   })
 
   it('renders the freeframed wordmark around the form', () => {
@@ -73,7 +73,6 @@ describe('AuthLayout', () => {
       refresh_token: 'refresh-token',
       token_type: 'bearer',
     })
-    mocks.fetchUser.mockResolvedValue(undefined)
 
     render(<LoginForm />)
 
@@ -95,7 +94,6 @@ describe('AuthLayout', () => {
       })
     })
     expect(mocks.setTokens).toHaveBeenCalledWith('access-token', 'refresh-token')
-    expect(mocks.fetchUser).toHaveBeenCalledOnce()
     expect(mocks.replace).toHaveBeenCalledWith('/')
   })
 })
