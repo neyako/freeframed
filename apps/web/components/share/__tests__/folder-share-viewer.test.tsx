@@ -170,7 +170,10 @@ describe("ShareReviewScreen watermark", () => {
 
     const overlay = await screen.findByTestId("share-watermark");
     expect(overlay).toHaveClass("pointer-events-none");
-    expect(decodeURIComponent(overlay.style.backgroundImage)).toContain("sam@brand.co");
+    // The stored identity lands in an effect after the overlay's first paint
+    await waitFor(() =>
+      expect(decodeURIComponent(screen.getByTestId("share-watermark").style.backgroundImage)).toContain("sam@brand.co"),
+    );
     unmount();
 
     localStorage.clear();
