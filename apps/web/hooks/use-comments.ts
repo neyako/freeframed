@@ -2,6 +2,7 @@
 
 import useSWR, { mutate as globalMutate } from 'swr'
 import { api } from '@/lib/api'
+import { putPartWithProgress } from '@/stores/upload-store'
 import type { Comment, Annotation, CommentReaction } from '@/types'
 
 // ─── Extended comment type with nested data ───────────────────────────────────
@@ -47,23 +48,31 @@ interface CreateCommentPayload {
   is_cut?: boolean
 }
 
-/** Presign + upload comment attachments (sequential — these are small files). */
-export async function uploadCommentAttachments(commentId: string, files: File[]): Promise<void> {
-  for (const file of files) {
+/** Presign + upload comment attachments one at a time, reporting each file's progress. */
+export async function uploadCommentAttachments(
+  commentId: string,
+  files: File[],
+  onProgress?: (index: number, fraction: number) => void,
+): Promise<void> {
+  for (let index = 0; index < files.length; index++) {
+    const file = files[index]
     const presign = await api.post<{ upload_url: string; attachment_id: string }>(
       `/comments/${commentId}/attachments`,
       { file_name: file.name, content_type: file.type, file_size: file.size },
     )
-    const res = await fetch(presign.upload_url, {
-      method: 'PUT',
-      headers: { 'Content-Type': file.type },
-      body: file,
-    }).catch(() => null)
-    if (!res?.ok) {
+    const ok = await putPartWithProgress(
+      presign.upload_url,
+      file,
+      new AbortController().signal,
+      (fraction) => onProgress?.(index, fraction),
+      file.type,
+    ).then(() => true, () => false)
+    if (!ok) {
       // The record exists before the bytes do; drop it so no broken attachment shows
       await api.delete(`/comments/${commentId}/attachments/${presign.attachment_id}`).catch(() => {})
       throw new Error(`Failed to upload ${file.name}`)
     }
+    onProgress?.(index, 1)
   }
 }
 

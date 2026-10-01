@@ -264,7 +264,7 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
       annotation: draft.annotation || annotationData || undefined,
     })
     if (draft.attachments?.length) {
-      await uploadCommentAttachments(created.id, draft.attachments)
+      await uploadCommentAttachments(created.id, draft.attachments, draft.onAttachmentProgress)
       await mutateComments()
     }
     setAnnotationData(null)
