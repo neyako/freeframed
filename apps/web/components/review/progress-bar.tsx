@@ -126,6 +126,13 @@ function useFramePreview(streamUrl: string | null | undefined) {
 
 // ─── Comment Marker ──────────────────────────────────────────────────────────
 
+// A mouse click on a comment marker focuses it instead of scrubbing, and its
+// hover shows the comment rather than the frame preview. Touch passes through
+// so a drag that starts on a marker still scrubs; a tap still clicks it.
+function stopMouse(e: React.PointerEvent) {
+  if (e.pointerType === 'mouse') e.stopPropagation()
+}
+
 interface CommentMarkerProps {
   comment: Comment
   leftPercent: number
@@ -191,6 +198,8 @@ function CommentMarker({
       style={{ left: `${leftPercent}%` }}
       onMouseEnter={onHover}
       onMouseLeave={onLeave}
+      onPointerDown={stopMouse}
+      onPointerMove={stopMouse}
       onClick={handleClick}
     >
       {/* Avatar dot — reviewer photo when available, mono initials otherwise */}
@@ -325,12 +334,14 @@ export function ProgressBar({
   )
 
   // Pointer events cover mouse, touch and pen alike. Capturing the pointer
-  // keeps a drag alive when the finger or cursor leaves the thin track.
+  // keeps a drag alive when the cursor leaves the thin track. Touch is
+  // already captured by the touched element; re-capturing it here would
+  // steal a marker tap's click.
   const handlePointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       if (e.button !== 0) return
       e.preventDefault()
-      e.currentTarget.setPointerCapture(e.pointerId)
+      if (e.pointerType !== 'touch') e.currentTarget.setPointerCapture(e.pointerId)
       setIsDragging(true)
       onSeek(getTimeFromEvent(e.clientX))
     },
@@ -401,16 +412,20 @@ export function ProgressBar({
   const bufferedPercent = timeToPercent(buffered)
 
   return (
-    <div className={cn('relative flex flex-col w-full group/progress py-1', className)}>
+    // The whole strip (track + marker row) scrubs and is touch-none: a finger
+    // landing beside the thin track would otherwise pan the page instead.
+    <div
+      className={cn('relative flex flex-col w-full group/progress py-1 cursor-pointer touch-none', className)}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={endDrag}
+      onPointerLeave={handlePointerLeave}
+    >
       {/* Track area */}
       <div
         ref={trackRef}
-        className="relative w-full h-1.5 group-hover/progress:h-2 cursor-pointer touch-none bg-border rounded-full before:absolute before:-inset-y-3 before:content-['']"
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={endDrag}
-        onPointerLeave={handlePointerLeave}
+        className="relative w-full h-1.5 group-hover/progress:h-2 bg-border rounded-full before:absolute before:-inset-y-3 before:content-['']"
       >
         {/* Buffered range */}
         <div
@@ -445,7 +460,7 @@ export function ProgressBar({
               }}
               onMouseEnter={() => setHoveredCommentId(c.id)}
               onMouseLeave={() => setHoveredCommentId(null)}
-              onPointerDown={(e) => e.stopPropagation()}
+              onPointerDown={stopMouse}
               onClick={(e) => {
                 e.stopPropagation()
                 onSeek(c.timecode_start!)
@@ -492,7 +507,10 @@ export function ProgressBar({
                 extraCount={extra}
                 isHovered={hoveredCommentId === lead.id}
                 isFocused={focusedCommentId === lead.id}
-                onHover={() => setHoveredCommentId(lead.id)}
+                onHover={() => {
+                  setHoveredCommentId(lead.id)
+                  setHoverTime(null)
+                }}
                 onLeave={() => setHoveredCommentId(null)}
                 onSeek={onSeek}
               />
