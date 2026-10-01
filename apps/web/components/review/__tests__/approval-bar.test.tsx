@@ -17,13 +17,14 @@ const mocks = vi.hoisted(() => ({
   data: [] as typeof approved[],
   mutate: vi.fn(),
   post: vi.fn(),
+  del: vi.fn(),
   error: null as Error | null,
 }))
 
 vi.mock('swr', () => ({
   default: () => ({ data: mocks.data, error: mocks.error, isLoading: false, mutate: mocks.mutate }),
 }))
-vi.mock('@/lib/api', () => ({ api: { get: vi.fn(), post: mocks.post } }))
+vi.mock('@/lib/api', () => ({ api: { get: vi.fn(), post: mocks.post, delete: mocks.del } }))
 vi.mock('@/components/shared/avatar', () => ({ Avatar: () => <span>Avatar</span> }))
 
 describe('ApprovalBar', () => {
@@ -32,6 +33,7 @@ describe('ApprovalBar', () => {
     mocks.data = []
     mocks.error = null
     mocks.post.mockResolvedValue({})
+    mocks.del.mockResolvedValue(undefined)
     mocks.mutate.mockResolvedValue(undefined)
   })
 
@@ -58,6 +60,17 @@ describe('ApprovalBar', () => {
     mocks.data = [approved]
     rerender(<ApprovalBar assetId="asset-1" versionId="version-1" currentUserId="user-1" />)
     expect(screen.getByText('You approved')).toBeInTheDocument()
+  })
+
+  it('undoes the current approval', async () => {
+    mocks.data = [approved]
+    render(<ApprovalBar assetId="asset-1" versionId="version-1" currentUserId="user-1" />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+    await waitFor(() => expect(mocks.del).toHaveBeenCalledWith(
+      '/assets/asset-1/approval?version_id=version-1',
+    ))
+    expect(mocks.mutate).toHaveBeenCalledOnce()
   })
 
   it('hides approval actions when the approval list fails to load', () => {
