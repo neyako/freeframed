@@ -145,6 +145,16 @@
   }
 }
 
+/* iOS Safari zooms the page when focusing a field under 16px. !important
+   beats the text-[13px]-style utilities on individual inputs. */
+@media (pointer: coarse) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
 /* Respect users who ask for less motion: neutralizes the tailwindcss-animate
    open/close animations and any transitions across the app. */
 @media (prefers-reduced-motion: reduce) {
