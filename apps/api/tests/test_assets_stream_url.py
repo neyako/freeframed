@@ -1,6 +1,7 @@
 """Regression tests for issue #51 — /assets/{id}/stream must route video HLS
 through the /stream/hls proxy so S3 objects can stay private."""
 import uuid
+from urllib.parse import parse_qs, urlsplit
 from unittest.mock import MagicMock, patch
 
 from jose import jwt
@@ -59,7 +60,9 @@ def test_video_stream_returns_hls_proxy_url_with_token(
     assert url.startswith("/stream/hls/master.m3u8?token="), (
         f"Expected /stream/hls/master.m3u8?token=..., got: {url}"
     )
-    assert "s3" not in url.lower(), (
+    # Only the proxy token, no presigned S3 params (the random JWT itself may
+    # contain any letters, so don't substring-match the whole URL).
+    assert list(parse_qs(urlsplit(url).query)) == ["token"], (
         f"Stream URL must not contain a presigned S3 URL, got: {url}"
     )
 

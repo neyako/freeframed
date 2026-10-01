@@ -271,7 +271,9 @@ export function useVideoPlayer(src: string | null): UseVideoPlayerReturn {
   const seek = useCallback((time: number) => {
     const video = videoRef.current
     if (!video) return
-    const clamped = Math.max(0, Math.min(time, video.duration || 0))
+    // iOS Safari can report a NaN duration mid-session; clamping to 0 then
+    // sent every seek back to the start until a reload
+    const clamped = Math.max(0, Math.min(time, video.duration || Infinity))
     video.currentTime = clamped
     setCurrentTime(clamped)
     setPlayheadTime(clamped)

@@ -10,14 +10,16 @@ interface PutPartResult {
 }
 
 /**
- * PUT a single multipart chunk with byte-level progress.
- * `onProgress` receives the fraction (0..1) of THIS part uploaded so far.
+ * PUT a single multipart chunk (or a whole small file) with byte-level progress.
+ * `onProgress` receives the fraction (0..1) of THIS body uploaded so far.
+ * Pass `contentType` when the presigned URL signs it.
  */
-function putPartWithProgress(
+export function putPartWithProgress(
   url: string,
   chunk: Blob,
   signal: AbortSignal,
   onProgress: (fraction: number) => void,
+  contentType?: string,
 ): Promise<PutPartResult> {
   return new Promise<PutPartResult>((resolve, reject) => {
     if (signal.aborted) {
@@ -26,6 +28,7 @@ function putPartWithProgress(
     }
     const xhr = new XMLHttpRequest()
     xhr.open('PUT', url)
+    if (contentType) xhr.setRequestHeader('Content-Type', contentType)
     const onAbort = () => xhr.abort()
     signal.addEventListener('abort', onAbort, { once: true })
     xhr.upload.onprogress = (e) => {

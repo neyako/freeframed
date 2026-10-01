@@ -20,6 +20,7 @@ import {
   Lock,
   Scissors,
   Film,
+  Check,
 } from "lucide-react";
 import { cn, formatTime, formatTimecode, formatFrames } from "@/lib/utils";
 import { formatRange, formatSpan } from "@/lib/cuts";
@@ -44,6 +45,8 @@ export interface CommentDraft {
   visibility?: CommentVisibility;
   mentionUserIds?: string[];
   attachments?: File[];
+  /** Called as each attachment uploads, with that file's 0..1 fraction */
+  onAttachmentProgress?: (index: number, fraction: number) => void;
   /** The range should come out of the edit */
   isCut?: boolean;
 }
@@ -272,6 +275,9 @@ export function CommentInput({
   // Pending image attachments (guests can't upload — the endpoint needs auth)
   const canAttach = !visibilityLocked;
   const [pendingFiles, setPendingFiles] = React.useState<File[]>([]);
+  // Per-file upload fraction while posting; null when nothing is uploading
+  const [uploadProgress, setUploadProgress] = React.useState<number[] | null>(null);
+  const [dragOver, setDragOver] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   function addFiles(files: FileList | File[]) {
@@ -363,6 +369,13 @@ export function CommentInput({
   // How we work: an I/O range is a cut (members only; guests and replies just comment)
   const isCut = markedRange !== null && !visibilityLocked && !replyToId;
   const canSubmit = isCut || body.trim().length > 0;
+  // Overall upload percent, weighted by file size
+  const uploadPercent = (() => {
+    if (!uploadProgress) return null;
+    const total = pendingFiles.reduce((sum, f) => sum + f.size, 0) || 1;
+    const sent = pendingFiles.reduce((sum, f, i) => sum + f.size * (uploadProgress[i] ?? 0), 0);
+    return Math.floor((sent / total) * 100);
+  })();
 
   function displayTime(seconds: number): string {
     switch (timeFormat) {
@@ -441,6 +454,7 @@ export function CommentInput({
 
     setSubmitting(true);
     setError(null);
+    if (pendingFiles.length > 0) setUploadProgress(pendingFiles.map(() => 0));
 
     try {
       // Grab canvas state: try live canvas first, then store, then prop
@@ -501,6 +515,8 @@ export function CommentInput({
         visibility: commentVisibility,
         mentionUserIds: mentionUserIds.length > 0 ? mentionUserIds : undefined,
         attachments: pendingFiles.length > 0 ? pendingFiles : undefined,
+        onAttachmentProgress: (index, fraction) =>
+          setUploadProgress((prev) => prev && prev.map((v, i) => (i === index ? fraction : v))),
         isCut: isCut || undefined,
       });
 
@@ -517,6 +533,7 @@ export function CommentInput({
       setError(err instanceof Error ? err.message : "Failed to post comment");
     } finally {
       setSubmitting(false);
+      setUploadProgress(null);
     }
   }
 
@@ -542,8 +559,29 @@ export function CommentInput({
 
       {/* Input area */}
       <div className="px-4 pt-3 pb-2">
-        <div className="relative">
-          <div className="flex items-start gap-0 rounded-lg border border-border bg-bg-tertiary focus-within:border-accent/50 focus-within:ring-1 focus-within:ring-accent/20">
+        <div
+          className="relative"
+          onDragOver={(e) => {
+            if (!canAttach || !e.dataTransfer.types.includes("Files")) return;
+            e.preventDefault();
+            setDragOver(true);
+          }}
+          onDragLeave={(e) => {
+            if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragOver(false);
+          }}
+          onDrop={(e) => {
+            if (!canAttach || e.dataTransfer.files.length === 0) return;
+            e.preventDefault();
+            setDragOver(false);
+            addFiles(e.dataTransfer.files);
+          }}
+        >
+          <div
+            className={cn(
+              "flex items-start gap-0 rounded-lg border border-border bg-bg-tertiary focus-within:border-accent/50 focus-within:ring-1 focus-within:ring-accent/20",
+              dragOver && "border-dashed border-accent bg-accent-muted",
+            )}
+          >
             {/* Inline timecode badge — show when timecode attached (normal mode) or in drawing mode */}
             {hasTimecode && (timecodeAttached || isDrawingMode) && (
               <span
@@ -611,6 +649,12 @@ export function CommentInput({
             />
           </div>
 
+          {dragOver && (
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-lg bg-bg-secondary/85 text-[13px] text-text-primary">
+              Drop to attach
+            </div>
+          )}
+
           {/* Mention dropdown */}
           {mentionQuery !== null && (
             <div className="absolute bottom-full left-0 right-0 mb-1 z-50 rounded-lg border border-border bg-bg-elevated shadow-xl max-h-48 overflow-y-auto animate-ff-rise-in">
@@ -635,15 +679,32 @@ export function CommentInput({
                 className="relative h-14 w-14 rounded-md border border-border overflow-hidden group/att"
               >
                 <AttachmentThumb file={file} />
-                <button
-                  onClick={() =>
-                    setPendingFiles((prev) => prev.filter((_, j) => j !== i))
-                  }
-                  className="absolute top-0.5 right-0.5 h-4 w-4 flex items-center justify-center rounded-full bg-black/60 text-white opacity-0 group-hover/att:opacity-100 transition-opacity"
-                  title="Remove"
-                >
-                  <X className="h-2.5 w-2.5" />
-                </button>
+                {uploadProgress && uploadProgress[i] < 1 && (
+                  <>
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/55 font-mono text-[11px] text-white">
+                      {Math.floor(uploadProgress[i] * 100)}%
+                    </div>
+                    <div className="absolute inset-x-0 bottom-0 h-[3px] bg-white/15">
+                      <div className="h-full bg-accent" style={{ width: `${uploadProgress[i] * 100}%` }} />
+                    </div>
+                  </>
+                )}
+                {uploadProgress && uploadProgress[i] >= 1 && (
+                  <span className="absolute right-0.5 bottom-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-text-primary text-text-inverse">
+                    <Check className="h-2.5 w-2.5" />
+                  </span>
+                )}
+                {!uploadProgress && (
+                  <button
+                    onClick={() =>
+                      setPendingFiles((prev) => prev.filter((_, j) => j !== i))
+                    }
+                    className="absolute top-0.5 right-0.5 h-4 w-4 flex items-center justify-center rounded-full bg-black/60 text-white opacity-0 group-hover/att:opacity-100 transition-opacity"
+                    title="Remove"
+                  >
+                    <X className="h-2.5 w-2.5" />
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -873,16 +934,23 @@ export function CommentInput({
                   disabled={!canSubmit || submitting}
                   className="inline-flex h-7 items-center rounded-md bg-text-primary px-2.5 text-[12px] font-medium text-text-inverse hover:opacity-90 disabled:opacity-30 disabled:cursor-not-allowed"
                 >
-                  {submitting ? "Adding…" : "Add cut"}
+                  {uploadPercent !== null ? `${uploadPercent}%` : submitting ? "Adding…" : "Add cut"}
                 </button>
               ) : (
                 <button
                   onClick={handleSubmit}
                   disabled={!canSubmit || submitting}
-                  className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-accent text-text-primary hover:bg-accent/90 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  className={cn(
+                    "inline-flex h-7 min-w-7 items-center justify-center rounded-full bg-accent text-text-primary hover:bg-accent/90 disabled:opacity-30 disabled:cursor-not-allowed transition-colors",
+                    uploadPercent !== null && "px-1.5 disabled:opacity-100",
+                  )}
                   title="Send (Enter)"
                 >
-                  <Send className="h-3.5 w-3.5" />
+                  {uploadPercent !== null ? (
+                    <span className="font-mono text-[10px] tabular-nums">{uploadPercent}%</span>
+                  ) : (
+                    <Send className="h-3.5 w-3.5" />
+                  )}
                 </button>
               )}
             </div>

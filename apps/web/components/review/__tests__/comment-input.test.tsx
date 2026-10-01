@@ -1,7 +1,7 @@
 import * as React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, act, waitFor } from "@testing-library/react";
-import { CommentInput } from "../comment-input";
+import { CommentInput, type CommentDraft } from "../comment-input";
 import { useReviewStore } from "@/stores/review-store";
 
 vi.mock("@/lib/api", () => ({
@@ -205,5 +205,36 @@ describe("CommentInput range comments", () => {
     await waitFor(() =>
       expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ body: "nice", isCut: undefined })),
     );
+  });
+});
+
+describe("CommentInput attachments", () => {
+  it("takes dropped files and shows upload progress while posting", async () => {
+    URL.createObjectURL = vi.fn(() => "blob:preview");
+    URL.revokeObjectURL = vi.fn();
+    let draft: CommentDraft | undefined;
+    let finish = () => {};
+    const onSubmit = vi.fn((d: CommentDraft) => {
+      draft = d;
+      return new Promise<void>((resolve) => (finish = resolve));
+    });
+    render(<CommentInput assetId="a1" projectId="p1" assetType="video" onSubmit={onSubmit} />);
+    const image = new File(["x".repeat(100)], "still.png", { type: "image/png" });
+    const video = new File(["x".repeat(300)], "clip.mp4", { type: "video/mp4" });
+
+    fireEvent.drop(screen.getByRole("textbox"), { dataTransfer: { files: [image, video], types: ["Files"] } });
+    await typeAndSend("see refs");
+    await waitFor(() => expect(draft?.attachments).toEqual([image, video]));
+
+    act(() => {
+      draft!.onAttachmentProgress!(0, 1);
+      draft!.onAttachmentProgress!(1, 0.5);
+    });
+    // Weighted by size: (100 + 150) / 400
+    expect(screen.getByTitle("Send (Enter)").textContent).toBe("62%");
+    expect(screen.getByText("50%")).toBeTruthy();
+
+    await act(async () => finish());
+    expect(screen.getByTitle("Send (Enter)").textContent).toBe("");
   });
 });
