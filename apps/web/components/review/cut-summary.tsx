@@ -140,8 +140,9 @@ export function CutSummary({ comments, duration, target, onTargetChange }: CutSu
   )
 
   return (
-    // One line with no target; the meter row only appears once there's a goal
-    <div className="shrink-0 border-b border-border px-4 py-2.5">
+    // One line with no target; the meter row only appears once there's a goal.
+    // Hidden on mobile to leave room for the comments.
+    <div className="hidden md:block shrink-0 border-b border-border px-4 py-2.5">
       <div className="flex items-baseline gap-2">
         <span className="font-mono text-[18px] font-semibold tabular-nums text-text-primary">{formatTime(shownAfter)}</span>
         <span className="min-w-0 truncate text-[12.5px] text-text-tertiary">
