@@ -1,5 +1,6 @@
 import uuid
 import logging
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -111,6 +112,27 @@ def reject_asset(
             logger.warning("Failed to start approval email dispatch")
 
     return approval
+
+
+@router.delete("/assets/{asset_id}/approval", status_code=status.HTTP_204_NO_CONTENT)
+def withdraw_approval(
+    asset_id: uuid.UUID,
+    version_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Undo the caller's approve/reject on a version."""
+    asset = _get_asset(db, asset_id)
+    require_asset_access(db, asset, current_user)
+    get_active_version(db, asset, version_id)
+    approval = db.query(Approval).filter(
+        Approval.version_id == version_id,
+        Approval.user_id == current_user.id,
+        Approval.deleted_at.is_(None),
+    ).first()
+    if approval is not None:
+        approval.deleted_at = datetime.now(timezone.utc)
+        db.commit()
 
 
 @router.get("/assets/{asset_id}/approvals", response_model=list[ApprovalResponse])

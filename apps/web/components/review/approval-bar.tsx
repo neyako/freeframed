@@ -138,6 +138,19 @@ export function ApprovalBar({ assetId, versionId, currentUserId, versionCreatedB
     }
   }
 
+  async function handleUndo() {
+    setApproving(true)
+    setActionError(null)
+    try {
+      await api.delete(`/assets/${assetId}/approval?version_id=${versionId}`)
+      await mutate()
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Failed to undo')
+    } finally {
+      setApproving(false)
+    }
+  }
+
   async function handleReject(note: string) {
     setActionError(null)
     try {
@@ -259,6 +272,11 @@ export function ApprovalBar({ assetId, versionId, currentUserId, versionCreatedB
                 <XCircle className="h-4 w-4" />
                 You rejected
               </span>
+            )}
+            {(myApproval?.status === 'approved' || myApproval?.status === 'rejected') && (
+              <Button variant="ghost" size="sm" onClick={handleUndo} disabled={approving}>
+                Undo
+              </Button>
             )}
             {(!myApproval || myApproval.status === 'pending') && (
               <>

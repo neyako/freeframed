@@ -161,3 +161,19 @@ def test_committed_approval_survives_dispatch_start_failure(monkeypatch, action)
 
     db.commit.assert_called_once()
     assert result is approval
+
+
+def test_withdraw_approval_soft_deletes_callers_approval(monkeypatch) -> None:
+    actor = SimpleNamespace(id=uuid.uuid4())
+    asset = SimpleNamespace(id=uuid.uuid4())
+    monkeypatch.setattr(approvals, "_get_asset", lambda *args: asset)
+    monkeypatch.setattr(approvals, "require_asset_access", lambda *args: None)
+    monkeypatch.setattr(approvals, "get_active_version", lambda *args: None)
+    approval = SimpleNamespace(deleted_at=None)
+    db = MagicMock()
+    db.query.return_value.filter.return_value.first.return_value = approval
+
+    approvals.withdraw_approval(asset.id, uuid.uuid4(), db, actor)
+
+    assert approval.deleted_at is not None
+    db.commit.assert_called_once()
