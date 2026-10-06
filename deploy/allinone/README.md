@@ -62,8 +62,10 @@ own proxy, forward to that port with websocket support and unlimited body size, 
 set `FRONTEND_URL` and `CORS_ORIGINS` to the public origin.
 
 Nginx Proxy Manager: add a Proxy Host → forward to `<host>:8080`, enable
-"Websockets Support", and set client_max_body_size 0 under Advanced → Custom
-Nginx Configuration.
+"Websockets Support", and set `client_max_body_size 0;` and `proxy_buffering off;`
+under Advanced → Custom Nginx Configuration. Without `proxy_buffering off`, slow
+clients downloading multi-GB originals make the proxy spill them to its own disk,
+and downloads fail with a network error once that disk fills.
 
 nginx:
 
