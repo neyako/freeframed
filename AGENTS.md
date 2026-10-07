@@ -94,6 +94,9 @@ Full stack: `docker compose -f docker-compose.dev.yml up --build`
 - HLS playback in the app goes through `/stream/hls/*` proxy with a JWT
   (`routers/hls_proxy.py`), not raw S3 URLs; the web player is
   `hooks/use-video-player.ts` (hls.js) — reuse it, don't add `<video src>`.
+  hls.js runs only on classic MSE (`canUseHlsJs`, `preferManagedMediaSource:
+  false`); iPhone has only ManagedMediaSource, which can stop fetching after a
+  seek, so it gets Safari's native HLS instead.
 - `NEXT_PUBLIC_API_URL` defaults to `http://localhost:8000` in the web app.
 - Uploads: browser → presigned S3 multipart → `/upload/complete` → Celery
   `process_asset`. The upload UI state machine lives in

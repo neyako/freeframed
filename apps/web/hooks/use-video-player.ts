@@ -45,6 +45,14 @@ export interface UseVideoPlayerReturn extends VideoPlayerControls, VideoPlayerSt
   hlsRef: React.RefObject<Hls | null>
 }
 
+// hls.js on ManagedMediaSource (the only MSE iPhone Safari has) lets iOS pause
+// fetching, and after a seek into an unbuffered range it can stay paused: a
+// frozen frame while the timecode moves. Use classic MSE where it exists
+// (with preferManagedMediaSource: false), otherwise Safari's native HLS.
+export function canUseHlsJs(): boolean {
+  return typeof MediaSource !== 'undefined' && Hls.isSupported()
+}
+
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
 export function useVideoPlayer(src: string | null): UseVideoPlayerReturn {
@@ -180,10 +188,11 @@ export function useVideoPlayer(src: string | null): UseVideoPlayerReturn {
 
     const isHlsSource = src.includes('.m3u8')
 
-    if (isHlsSource && Hls.isSupported()) {
+    if (isHlsSource && canUseHlsJs()) {
       const hls = new Hls({
         enableWorker: true,
         lowLatencyMode: false,
+        preferManagedMediaSource: false,
       })
       hlsRef.current = hls
       hls.loadSource(src)
