@@ -473,9 +473,10 @@ export function VideoPlayer({
       <div className="grid grid-cols-[1fr_auto_1fr] items-center h-12 px-2 sm:px-4 bg-bg-secondary border-t border-border shrink-0">
         {/* Left: Play, Loop, Speed, Volume */}
         <div className="flex items-center gap-1 sm:gap-2 justify-self-start">
+          {/* ml-4 keeps it out of iOS Safari's ~20px left-edge swipe-back zone, which swallows taps that start there */}
           <button
             onClick={() => seek(currentTime - 5)}
-            className="md:hidden flex h-7 w-7 items-center justify-center rounded text-text-tertiary hover:text-text-primary transition-colors"
+            className="md:hidden ml-4 flex h-7 w-7 items-center justify-center rounded text-text-tertiary hover:text-text-primary transition-colors"
             aria-label="Back 5 seconds"
           >
             <RotateCcw className="h-4 w-4" />
