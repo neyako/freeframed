@@ -6,6 +6,7 @@ import Hls from 'hls.js'
 import { cn, formatTimecode } from '@/lib/utils'
 import { avatarGray, getInitials } from '@/lib/avatar'
 import { useReviewStore } from '@/stores/review-store'
+import { canUseHlsJs } from '@/hooks/use-video-player'
 import type { Comment } from '@/types'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -77,9 +78,10 @@ function useFramePreview(streamUrl: string | null | undefined) {
       seekResolveRef.current = null
     })
 
-    if (isHls && Hls.isSupported()) {
+    if (isHls && canUseHlsJs()) {
       const hls = new Hls({
         enableWorker: false,
+        preferManagedMediaSource: false,
         maxBufferLength: 1,
         maxMaxBufferLength: 2,
         maxBufferSize: 0.5 * 1024 * 1024, // 500KB — minimal buffering
