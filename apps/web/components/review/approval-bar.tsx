@@ -76,8 +76,8 @@ function RejectNoteDialog({ onConfirm, onCancel }: RejectNoteProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-sm rounded border border-border bg-bg-elevated p-5">
-        <h3 className="text-sm font-semibold text-text-primary mb-1">Reject with note</h3>
+      <div role="dialog" aria-modal="true" aria-labelledby="reject-note-title" className="w-full max-w-sm rounded border border-border bg-bg-elevated p-5">
+        <h3 id="reject-note-title" className="text-sm font-semibold text-text-primary mb-1">Reject with note</h3>
         <p className="text-xs text-text-tertiary mb-3">
           Optionally add a note explaining why this version is being rejected.
         </p>

@@ -29,4 +29,32 @@ describe('ProgressBar', () => {
 
     expect(onSeek.mock.calls.map(([time]) => time)).toEqual([10, 50, 75])
   })
+
+  it('scrubbing takes focus out of the comment box so I / O reach the player', () => {
+    const { container } = render(<ProgressBar currentTime={0} duration={100} onSeek={vi.fn()} />)
+    const box = document.createElement('textarea')
+    document.body.appendChild(box)
+    box.focus()
+    const track = container.querySelector('.touch-none')!.firstElementChild as HTMLDivElement
+    track.getBoundingClientRect = () => ({ left: 0, width: 200 }) as DOMRect
+
+    fireEvent.pointerDown(track, { pointerId: 1, pointerType: 'touch', button: 0, clientX: 50 })
+
+    expect(document.activeElement).toBe(document.body)
+    box.remove()
+  })
+
+  it('in the edit view, seeks to the source time past the cut', () => {
+    const onSeek = vi.fn()
+    const { container } = render(
+      <ProgressBar currentTime={0} duration={40} cuts={[{ start: 10, end: 20 }]} onSeek={onSeek} />,
+    )
+    const track = container.querySelector('.touch-none')!.firstElementChild as HTMLDivElement
+    track.getBoundingClientRect = () => ({ left: 0, width: 300 }) as DOMRect
+
+    // 30s edit across 300px: 150px is 0:15 of the edit, 0:25 of the source
+    fireEvent.pointerDown(track, { pointerId: 1, pointerType: 'touch', button: 0, clientX: 150 })
+
+    expect(onSeek).toHaveBeenCalledWith(25)
+  })
 })

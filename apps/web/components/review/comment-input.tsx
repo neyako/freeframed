@@ -448,9 +448,33 @@ export function CommentInput({
     }
   }
 
+  // I and O mark the range from anywhere on the page; Enter then adds the cut
+  // without a trip to the comment box. Any control, field, dialog or menu keeps
+  // its own Enter, as does anything that already handled the key.
+  const submitRef = React.useRef(handleSubmit);
+  submitRef.current = handleSubmit;
+  React.useEffect(() => {
+    if (!isCut) return;
+    function handleEnter(e: KeyboardEvent) {
+      if (e.key !== "Enter" || e.defaultPrevented || e.repeat || e.isComposing || e.shiftKey || e.altKey || e.metaKey || e.ctrlKey) return;
+      const target = e.target as HTMLElement;
+      if (
+        target.isContentEditable ||
+        target.closest?.(
+          "button, a[href], input, textarea, select, [role=button], [role=dialog], [role=alertdialog], [role=menu], [role=listbox]",
+        )
+      )
+        return;
+      e.preventDefault();
+      submitRef.current();
+    }
+    window.addEventListener("keydown", handleEnter);
+    return () => window.removeEventListener("keydown", handleEnter);
+  }, [isCut]);
+
   async function handleSubmit() {
     const trimmed = body.trim();
-    if (!canSubmit) return;
+    if (!canSubmit || submitting) return;
 
     setSubmitting(true);
     setError(null);
