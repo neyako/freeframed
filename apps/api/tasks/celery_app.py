@@ -43,6 +43,7 @@ celery_app.conf.update(
         # Maintenance tasks share the transcoding worker; nothing consumes "default".
         "purge_expired_trash": {"queue": "transcoding"},
         "fail_stale_versions": {"queue": "transcoding"},
+        "trash_approved_assets": {"queue": "transcoding"},
         "apps.api.tasks.email_tasks.send_invite_email": {"queue": "email_high"},
         "apps.api.tasks.email_tasks.send_mention_email": {"queue": "email_low"},
         "apps.api.tasks.email_tasks.send_comment_email": {"queue": "email_low"},
@@ -63,6 +64,10 @@ celery_app.conf.beat_schedule = {
     "fail-stale-versions": {
         "task": "fail_stale_versions",
         "schedule": crontab(minute="0", hour="4"),  # daily 04:00
+    },
+    "trash-approved-assets": {
+        "task": "trash_approved_assets",
+        "schedule": crontab(minute="15", hour="4"),  # daily 04:15
     },
 }
 
