@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { afterCutSeconds, mergedCuts } from '../cuts'
+import { afterCutSeconds, cutAt, mergedCuts, toEditTime, toSourceTime } from '../cuts'
 
 const cut = (start: number, end: number) => ({ is_cut: true, timecode_start: start, timecode_end: end })
 
@@ -16,6 +16,25 @@ describe('after-cut runtime', () => {
 
   it('clamps cuts that run past the end', () => {
     expect(afterCutSeconds(60, mergedCuts([cut(50, 90)], 60))).toBe(50)
+  })
+})
+
+describe('edit timeline', () => {
+  const cuts = [{ start: 10, end: 20 }, { start: 30, end: 35 }]
+
+  it('maps source time onto the edit and back, skipping the cuts', () => {
+    expect([5, 15, 20, 25, 32, 40].map((t) => toEditTime(t, cuts))).toEqual([5, 10, 10, 15, 20, 25])
+    expect([5, 10, 15, 20, 25].map((t) => toSourceTime(t, cuts))).toEqual([5, 20, 25, 35, 40])
+  })
+
+  it('stepping back past the start lands after an opening cut, not in it', () => {
+    expect(toSourceTime(-3, [{ start: 0, end: 10 }])).toBe(10)
+  })
+
+  it('jumps playback only from inside a cut', () => {
+    expect(cutAt(12, cuts)).toEqual({ start: 10, end: 20 })
+    expect(cutAt(20, cuts)).toBeUndefined()
+    expect(cutAt(9.9, cuts)).toBeUndefined()
   })
 })
 

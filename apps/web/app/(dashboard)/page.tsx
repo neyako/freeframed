@@ -126,9 +126,10 @@ const PAGE_SIZE = 40;
 
 // Each page peeks one item past PAGE_SIZE: if it comes back, there is more.
 // The peeked item is never shown; it opens the next page instead.
+// Approved assets are done, so they drop out (search still finds them).
 function recentKey(page: number, previous: AssetResponse[] | null): string | null {
   if (previous && previous.length <= PAGE_SIZE) return null;
-  return `/me/assets?skip=${page * PAGE_SIZE}&limit=${PAGE_SIZE + 1}`;
+  return `/me/assets?hide_approved=true&skip=${page * PAGE_SIZE}&limit=${PAGE_SIZE + 1}`;
 }
 
 interface SectionProps {

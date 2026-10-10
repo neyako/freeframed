@@ -7,6 +7,7 @@ import { cn, formatTimecode } from '@/lib/utils'
 import { avatarGray, getInitials } from '@/lib/avatar'
 import { useReviewStore } from '@/stores/review-store'
 import { canUseHlsJs } from '@/hooks/use-video-player'
+import { afterCutSeconds, toEditTime, toSourceTime, type CutRange } from '@/lib/cuts'
 import type { Comment } from '@/types'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -18,6 +19,9 @@ interface ProgressBarProps {
   comments?: Comment[]
   videoRef?: React.RefObject<HTMLVideoElement | null>
   streamUrl?: string | null
+  /** Set for the edit view: the bar runs on after-cut time, each cut collapsed to a join */
+  cuts?: CutRange[] | null
+  /** Source time, also in the edit view */
   onSeek: (time: number) => void
   className?: string
 }
@@ -28,7 +32,9 @@ function useFramePreview(streamUrl: string | null | undefined) {
   const previewVideoRef = useRef<HTMLVideoElement | null>(null)
   const previewHlsRef = useRef<Hls | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
-  const seekResolveRef = useRef<(() => void) | null>(null)
+  const seekingRef = useRef(false)
+  // Hover time that arrived mid-seek; sought next so the frame matches where the cursor stopped
+  const pendingTimeRef = useRef<number | null>(null)
   const readyRef = useRef(false)
   const [previewImage, setPreviewImage] = useState<string | null>(null)
 
@@ -54,6 +60,11 @@ function useFramePreview(streamUrl: string | null | undefined) {
 
     const onReady = () => {
       readyRef.current = true
+      const next = pendingTimeRef.current
+      if (next === null || seekingRef.current) return
+      pendingTimeRef.current = null
+      seekingRef.current = true
+      video.currentTime = next
     }
 
     video.addEventListener('loadeddata', onReady)
@@ -74,8 +85,10 @@ function useFramePreview(streamUrl: string | null | undefined) {
       } catch {
         // CORS — silently fail
       }
-      seekResolveRef.current?.()
-      seekResolveRef.current = null
+      const next = pendingTimeRef.current
+      pendingTimeRef.current = null
+      if (next === null) seekingRef.current = false
+      else video.currentTime = next
     })
 
     if (isHls && canUseHlsJs()) {
@@ -97,6 +110,8 @@ function useFramePreview(streamUrl: string | null | undefined) {
 
     return () => {
       readyRef.current = false
+      seekingRef.current = false
+      pendingTimeRef.current = null
       if (previewHlsRef.current) {
         previewHlsRef.current.destroy()
         previewHlsRef.current = null
@@ -112,18 +127,28 @@ function useFramePreview(streamUrl: string | null | undefined) {
 
   const seekPreview = useCallback((time: number) => {
     const video = previewVideoRef.current
-    if (!video || !readyRef.current) return
-    // Debounce: if already seeking, skip
-    if (seekResolveRef.current) return
-    seekResolveRef.current = () => {}
+    if (!video) return
+    // One seek in flight (or none yet possible); the latest hover waits and replaces any older one
+    if (!readyRef.current || seekingRef.current) {
+      pendingTimeRef.current = Math.max(0, time)
+      return
+    }
+    seekingRef.current = true
     video.currentTime = Math.max(0, time)
   }, [])
 
   const clearPreview = useCallback(() => {
+    pendingTimeRef.current = null
     setPreviewImage(null)
   }, [])
 
   return { previewImage, seekPreview, clearPreview }
+}
+
+/** Mouse work on the player leaves no focus behind in the comment box or on a
+ * button, so the next I / O / Enter reaches the player shortcuts. */
+export function releaseFocus() {
+  ;(document.activeElement as HTMLElement | null)?.blur?.()
 }
 
 // ─── Comment Marker ──────────────────────────────────────────────────────────
@@ -140,7 +165,6 @@ interface CommentMarkerProps {
   leftPercent: number
   authorName: string
   avatarUrl: string | null
-  extraCount: number
   isHovered: boolean
   isFocused: boolean
   onHover: () => void
@@ -153,7 +177,6 @@ function CommentMarker({
   leftPercent,
   authorName,
   avatarUrl,
-  extraCount,
   isHovered,
   isFocused,
   onHover,
@@ -196,7 +219,7 @@ function CommentMarker({
   return (
     <div
       ref={markerRef}
-      className="absolute top-0 -translate-x-1/2 cursor-pointer duration-300 ease-out"
+      className={cn('absolute top-0 -translate-x-1/2 cursor-pointer duration-300 ease-out hover:z-10', isFocused && 'z-10')}
       style={{ left: `${leftPercent}%` }}
       onMouseEnter={onHover}
       onMouseLeave={onLeave}
@@ -217,11 +240,6 @@ function CommentMarker({
           <img src={avatarUrl} alt={authorName} className="w-full h-full rounded-full object-cover" />
         ) : (
           initials
-        )}
-        {extraCount > 0 && (
-          <span className="absolute -top-1.5 -right-1.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-bg-elevated border border-border px-0.5 text-[8px] font-bold text-text-primary">
-            +{extraCount}
-          </span>
         )}
       </div>
 
@@ -281,12 +299,16 @@ function CommentMarker({
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
+/** Half of the hover preview's w-40 (160px) */
+const PREVIEW_HALF_WIDTH = 80
+
 export function ProgressBar({
   currentTime,
   duration,
   buffered = 0,
   comments = [],
   streamUrl,
+  cuts,
   onSeek,
   className,
 }: ProgressBarProps) {
@@ -316,23 +338,23 @@ export function ProgressBar({
 
   const { previewImage, seekPreview, clearPreview } = useFramePreview(streamUrl)
 
-  const timeToPercent = useCallback(
-    (time: number): number => {
-      if (!duration) return 0
-      return Math.max(0, Math.min(100, (time / duration) * 100))
-    },
-    [duration],
-  )
+  // Bar time is source time, or after-cut time in the edit view
+  const barDuration = cuts ? afterCutSeconds(duration, cuts) : duration
+  const toBar = (time: number) => (cuts ? toEditTime(time, cuts) : time)
+  const fromBar = useCallback((time: number) => (cuts ? toSourceTime(time, cuts) : time), [cuts])
+  const barPercent = (barTime: number) =>
+    barDuration ? Math.max(0, Math.min(100, (barTime / barDuration) * 100)) : 0
+  const timeToPercent = (time: number) => barPercent(toBar(time))
 
-  const getTimeFromEvent = useCallback(
+  const getBarTime = useCallback(
     (clientX: number): number => {
       const track = trackRef.current
-      if (!track || !duration) return 0
+      if (!track || !barDuration) return 0
       const rect = track.getBoundingClientRect()
       const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
-      return ratio * duration
+      return ratio * barDuration
     },
-    [duration],
+    [barDuration],
   )
 
   // Pointer events cover mouse, touch and pen alike. Capturing the pointer
@@ -342,29 +364,33 @@ export function ProgressBar({
   const handlePointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       if (e.button !== 0) return
+      // preventDefault also skips the mousedown that would have blurred the comment box
       e.preventDefault()
+      releaseFocus()
       if (e.pointerType !== 'touch') e.currentTarget.setPointerCapture(e.pointerId)
       setIsDragging(true)
-      onSeek(getTimeFromEvent(e.clientX))
+      onSeek(fromBar(getBarTime(e.clientX)))
     },
-    [getTimeFromEvent, onSeek],
+    [getBarTime, fromBar, onSeek],
   )
 
   const handlePointerMove = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
-      const time = getTimeFromEvent(e.clientX)
-      setHoverTime(time)
+      const barTime = getBarTime(e.clientX)
+      const time = fromBar(barTime)
+      setHoverTime(barTime)
       const track = trackRef.current
       if (track) {
         const rect = track.getBoundingClientRect()
-        setHoverX(Math.max(0, Math.min(rect.width, e.clientX - rect.left)))
+        // Pin the fixed-width preview inside the bar so it never shrinks or clips at the ends
+        setHoverX(Math.max(PREVIEW_HALF_WIDTH, Math.min(rect.width - PREVIEW_HALF_WIDTH, e.clientX - rect.left)))
       }
       if (isDragging) {
         onSeek(time)
       }
       seekPreview(time)
     },
-    [isDragging, getTimeFromEvent, onSeek, seekPreview],
+    [isDragging, getBarTime, fromBar, onSeek, seekPreview],
   )
 
   const endDrag = useCallback(() => {
@@ -376,10 +402,10 @@ export function ProgressBar({
   const handlePointerUp = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       if (!isDragging) return
-      onSeek(getTimeFromEvent(e.clientX))
+      onSeek(fromBar(getBarTime(e.clientX)))
       endDrag()
     },
-    [isDragging, getTimeFromEvent, onSeek, endDrag],
+    [isDragging, getBarTime, fromBar, onSeek, endDrag],
   )
 
   const handlePointerLeave = useCallback(() => {
@@ -396,19 +422,6 @@ export function ProgressBar({
   const rangeMarkers = comments.filter(
     (c) => c.timecode_start !== null && c.timecode_end !== null && !c.resolved,
   )
-
-  // Cluster markers that sit within a few percent of each other so the avatar
-  // row doesn't overlap on narrow/mobile widths — lead avatar carries a +N badge.
-  const CLUSTER_PCT = 4
-  const markerBuckets: { lead: Comment; left: number; extra: number }[] = []
-  for (const c of [...pointMarkers].sort(
-    (a, b) => (a.timecode_start ?? 0) - (b.timecode_start ?? 0),
-  )) {
-    const left = timeToPercent(c.timecode_start ?? 0)
-    const last = markerBuckets[markerBuckets.length - 1]
-    if (last && left - last.left < CLUSTER_PCT) last.extra += 1
-    else markerBuckets.push({ lead: c, left, extra: 0 })
-  }
 
   const playPercent = timeToPercent(currentTime)
   const bufferedPercent = timeToPercent(buffered)
@@ -478,7 +491,7 @@ export function ProgressBar({
             const a = rangeStart ?? currentTime
             const b = rangeEnd ?? currentTime
             const left = timeToPercent(Math.min(a, b))
-            const width = Math.max(timeToPercent(Math.abs(b - a)), 0.4)
+            const width = Math.max(timeToPercent(Math.max(a, b)) - left, 0.4)
             return (
               <div
                 className="absolute -inset-y-[1px] rounded-full border border-dashed border-white/80 bg-white/15 pointer-events-none"
@@ -487,6 +500,15 @@ export function ProgressBar({
             )
           })()}
 
+        {/* Edit view: a red join where each cut came out */}
+        {cuts?.map((r) => (
+          <div
+            key={r.start}
+            className="absolute -inset-y-[3px] w-0.5 -translate-x-1/2 rounded-full bg-accent pointer-events-none"
+            style={{ left: `${timeToPercent(r.start)}%` }}
+          />
+        ))}
+
         {/* Playhead thumb */}
         <div
           className="absolute top-1/2 -translate-y-1/2 w-1 h-3.5 rounded-full bg-text-primary pointer-events-none z-10"
@@ -494,23 +516,24 @@ export function ProgressBar({
         />
       </div>
 
-      {/* Comment markers row — below the progress bar */}
-      {markerBuckets.length > 0 && (
+      {/* Comment markers row — below the progress bar. Every avatar shows;
+          close ones overlap and the hovered one comes to the front. */}
+      {pointMarkers.length > 0 && (
         <div className="relative w-full h-6 mt-0.5">
-          {markerBuckets.map(({ lead, left, extra }) => {
-            const authorName = lead.author?.name ?? lead.guest_author?.name ?? 'Unknown'
+          {pointMarkers.map((c) => {
+            const authorName = c.author?.name ?? c.guest_author?.name ?? 'Unknown'
             return (
               <CommentMarker
-                key={lead.id}
-                comment={lead}
-                leftPercent={left}
+                key={c.id}
+                comment={c}
+                leftPercent={timeToPercent(c.timecode_start ?? 0)}
                 authorName={authorName}
-                avatarUrl={lead.author?.avatar_url ?? null}
-                extraCount={extra}
-                isHovered={hoveredCommentId === lead.id}
-                isFocused={focusedCommentId === lead.id}
+                avatarUrl={c.author?.avatar_url ?? null}
+                // The frame preview wins while scrubbing over a range comment
+                isHovered={hoveredCommentId === c.id && hoverTime === null}
+                isFocused={focusedCommentId === c.id}
                 onHover={() => {
-                  setHoveredCommentId(lead.id)
+                  setHoveredCommentId(c.id)
                   setHoverTime(null)
                 }}
                 onLeave={() => setHoveredCommentId(null)}
@@ -524,14 +547,14 @@ export function ProgressBar({
       {/* Frame preview + time tooltip on bar hover */}
       {hoverTime !== null && (
         <div
-          className="absolute -top-2 z-30 pointer-events-none"
+          className="absolute -top-2 z-30 w-40 pointer-events-none"
           style={{ left: hoverX, transform: 'translateX(-50%) translateY(-100%)' }}
         >
           {/* Frame preview */}
           {previewImage && (
             <div className="mb-1 rounded-md overflow-hidden border border-border-strong">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={previewImage} alt="" className="w-40 object-contain bg-black" />
+              <img src={previewImage} alt="" className="w-full object-contain bg-black" />
             </div>
           )}
           {/* Time label */}

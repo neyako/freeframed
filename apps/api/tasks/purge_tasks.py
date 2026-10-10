@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime, timedelta, timezone
 
+from sqlalchemy import exists
 from sqlalchemy.orm import Session
 
 from .celery_app import celery_app
@@ -12,6 +13,7 @@ from ..models.comment import Annotation, Comment, CommentAttachment, CommentReac
 from ..models.folder import Folder
 from ..models.share import ShareLink
 from ..services import s3_service
+from ..services.approval_service import latest_version_approved
 
 
 def purge_trashed_assets(
@@ -166,5 +168,46 @@ def fail_stale_versions_task() -> int:
     db = SessionLocal()
     try:
         return fail_stale_versions(db)
+    finally:
+        db.close()
+
+
+def trash_approved_assets(db: Session, *, now: datetime | None = None) -> int:
+    """Move assets approved and untouched for approved_retention_days to the trash.
+
+    Untouched means no edit to the asset (restoring counts, so a restored asset
+    gets another full period) and no new or changed comment or cut on it. The
+    trash purge deletes them for good trash_retention_days later, so a
+    cleaned-up asset can still be restored in between. Returns the count.
+    """
+    now = now or datetime.now(timezone.utc)
+    cutoff = now - timedelta(days=settings.approved_retention_days)
+    # One UPDATE checks and trashes together: an approval withdrawn or a new
+    # version committed before it runs is seen, with no select-then-write gap.
+    trashed = (
+        db.query(Asset)
+        .filter(
+            Asset.deleted_at.is_(None),
+            Asset.updated_at < cutoff,
+            latest_version_approved(approved_before=cutoff),
+            ~exists().where(
+                Comment.asset_id == Asset.id,
+                Comment.deleted_at.is_(None),
+                Comment.updated_at >= cutoff,
+            ).correlate(Asset),
+        )
+        .update({Asset.deleted_at: now}, synchronize_session=False)
+    )
+    db.commit()
+    return trashed
+
+
+@celery_app.task(name="trash_approved_assets")
+def trash_approved_assets_task() -> int:
+    if settings.approved_retention_days == 0:
+        return 0
+    db = SessionLocal()
+    try:
+        return trash_approved_assets(db)
     finally:
         db.close()

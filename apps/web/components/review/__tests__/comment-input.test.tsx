@@ -198,6 +198,35 @@ describe("CommentInput range comments", () => {
     );
   });
 
+  it("Enter outside the comment box adds the marked cut once", async () => {
+    const onSubmit = setup();
+    act(() => {
+      useReviewStore.setState({ rangeStart: 6.8, rangeEnd: 9 });
+    });
+    fireEvent.keyDown(document.body, { key: "Enter" });
+    fireEvent.keyDown(document.body, { key: "Enter", repeat: true });
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({ body: "", timecodeStart: 6.8, timecodeEnd: 9, isCut: true }),
+      ),
+    );
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves Enter to a focused control, like a popover option", () => {
+    const onSubmit = setup();
+    act(() => {
+      useReviewStore.setState({ rangeStart: 6.8, rangeEnd: 9 });
+    });
+    const option = document.createElement("button");
+    document.body.appendChild(option);
+    const event = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true });
+    option.dispatchEvent(event);
+    option.remove();
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(event.defaultPrevented).toBe(false);
+  });
+
   it("a point comment is never a cut", async () => {
     const onSubmit = setup();
     setPlayhead(12);

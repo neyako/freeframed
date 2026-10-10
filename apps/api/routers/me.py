@@ -9,6 +9,7 @@ from ..models.folder import Folder
 from ..models.project import Project, ProjectMember
 from ..schemas.asset import AssetResponse
 from ..routers.assets import _build_asset_responses_bulk
+from ..services.approval_service import latest_version_approved
 
 router = APIRouter(prefix="/me", tags=["me"])
 
@@ -38,6 +39,7 @@ def list_my_assets(
     limit: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    hide_approved: bool = Query(default=False, description="Leave out assets whose newest version is approved"),
 ):
     if filter == "owned":
         query = db.query(Asset).filter(
@@ -53,6 +55,8 @@ def list_my_assets(
     # Apply search filter
     if q and q.strip():
         query = query.filter(Asset.name.ilike(f"%{q.strip()}%"))
+    if hide_approved:
+        query = query.filter(~latest_version_approved())
 
     assets = query.order_by(Asset.created_at.desc()).offset(skip).limit(limit).all()
     return _build_asset_responses_bulk(assets, db)

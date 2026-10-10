@@ -36,6 +36,33 @@ export function afterCutSeconds(duration: number, cuts: CutRange[]): number {
   return Math.max(0, duration - removed)
 }
 
+/** Source time → time in the edit. A moment inside a cut lands on the join. */
+export function toEditTime(time: number, cuts: CutRange[]): number {
+  let removed = 0
+  for (const r of cuts) {
+    if (r.start >= time) break
+    removed += Math.min(time, r.end) - r.start
+  }
+  return time - removed
+}
+
+/** Time in the edit → source time. A join maps to just after its cut; before
+ * the start maps to the first kept frame, so a cut at 0:00 is never landed in. */
+export function toSourceTime(editTime: number, cuts: CutRange[]): number {
+  let time = Math.max(0, editTime)
+  for (const r of cuts) {
+    if (r.start > time) break
+    time += r.end - r.start
+  }
+  return time
+}
+
+/** The cut `time` is inside, if any. */
+export function cutAt(time: number, cuts: CutRange[]): CutRange | undefined {
+  // The 10ms slack stops a seek that lands a hair short of the end from re-seeking forever
+  return cuts.find((c) => time >= c.start && time < c.end - 0.01)
+}
+
 /** Runtime targets offered in the picker (seconds). */
 export const TARGET_PRESETS: { label: string; seconds: number }[] = [
   { label: 'Shorts', seconds: 180 },

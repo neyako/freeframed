@@ -54,6 +54,9 @@ class Settings(BaseSettings):
     transcoding_concurrency: int = 2  # Number of concurrent video transcoding jobs
     email_concurrency: int = 2  # Number of concurrent email sending jobs
     trash_retention_days: int = 30
+    # Days an approved asset sits untouched (no edits, comments or cuts) before it
+    # moves to the trash; 0 keeps approved assets
+    approved_retention_days: int = 30
 
     # Filesystem path measured for disk capacity in /workspace/storage
     # (the all-in-one image keeps all state under /data)

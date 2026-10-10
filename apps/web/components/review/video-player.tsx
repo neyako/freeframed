@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Maximize,
   Minimize,
@@ -16,12 +16,13 @@ import {
   Download,
 } from "lucide-react";
 import { cn, formatTime, formatTimecode, formatFrames } from "@/lib/utils";
+import { afterCutSeconds, cutAt, mergedCuts, toEditTime, toSourceTime } from "@/lib/cuts";
 import { api } from "@/lib/api";
 import { useReviewStore, type TimeFormat } from "@/stores/review-store";
 import { useVideoPlayer } from "@/hooks/use-video-player";
 import { resolveStreamUrl } from "@/components/share/share-stream";
 import { useReview } from "./review-provider";
-import { ProgressBar } from "./progress-bar";
+import { ProgressBar, releaseFocus } from "./progress-bar";
 import type { Comment } from "@/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -142,6 +143,7 @@ export function VideoPlayer({
   const containerRef = useRef<HTMLDivElement>(null);
   const [streamUrl, setStreamUrl] = useState<string | null>(null);
   const [loop, setLoop] = useState(false);
+  const [editView, setEditView] = useState(false);
 
   const { isDrawingMode, timeFormat, setTimeFormat, setPlayheadTime } =
     useReviewStore();
@@ -239,6 +241,53 @@ export function VideoPlayer({
     toggleFullscreen,
   } = player;
 
+  // Edit view plays the video as it will be cut: the bar and clock run on
+  // after-cut time and playback jumps over each cut. Source view is untouched.
+  const cuts = useMemo(() => mergedCuts(comments, duration), [comments, duration]);
+  const editCuts = editView && cuts.length > 0 ? cuts : null;
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !editCuts) return;
+    // Only while playing, so a paused step or comment click can still land in a cut
+    const skip = () => {
+      const cut = video.paused ? undefined : cutAt(video.currentTime, editCuts);
+      if (!cut) return;
+      if (cut.end < video.duration - 0.05) {
+        video.currentTime = cut.end;
+      } else if (video.loop && toSourceTime(0, editCuts) < cut.start) {
+        // A cut that runs to the end: loop to the first kept frame...
+        video.currentTime = toSourceTime(0, editCuts);
+      } else {
+        // ...or stop on the last kept frame, not at the end inside the cut
+        // (also where everything is cut, so there is nothing to loop)
+        video.pause();
+        video.currentTime = Math.max(0, cut.start - 0.01);
+      }
+    };
+    // Per-frame where supported; timeupdate (~4Hz) can show a sliver of the cut
+    if (typeof video.requestVideoFrameCallback === "function") {
+      let handle = 0;
+      const onFrame = () => {
+        skip();
+        handle = video.requestVideoFrameCallback(onFrame);
+      };
+      handle = video.requestVideoFrameCallback(onFrame);
+      return () => video.cancelVideoFrameCallback(handle);
+    }
+    video.addEventListener("timeupdate", skip);
+    return () => video.removeEventListener("timeupdate", skip);
+  }, [editCuts, videoRef]);
+
+  // Relative seeks step through the edit in edit view, so stepping back past
+  // a cut crosses it instead of landing inside it
+  const seekBy = useCallback(
+    (delta: number, from: number) => {
+      seek(editCuts ? toSourceTime(toEditTime(from, editCuts) + delta, editCuts) : from + delta);
+    },
+    [seek, editCuts],
+  );
+
   // Register pause handler with review provider
   useEffect(() => {
     registerPauseHandler(pause);
@@ -272,7 +321,7 @@ export function VideoPlayer({
         useReviewStore.getState().currentVersion?.files?.find((f) => f.fps)
           ?.fps ?? 24;
       // Read time off the element — the state value lags behind timeupdate
-      seek(video.currentTime + direction / fps);
+      seekBy(direction / fps, video.currentTime);
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -291,14 +340,14 @@ export function VideoPlayer({
           break;
         case "ArrowLeft":
           e.preventDefault();
-          seek(currentTime - 5);
+          seekBy(-5, currentTime);
           break;
         case "ArrowRight":
           e.preventDefault();
-          seek(currentTime + 5);
+          seekBy(5, currentTime);
           break;
         case "KeyJ":
-          seek(currentTime - 10);
+          seekBy(-10, currentTime);
           break;
         case "KeyK":
           togglePlay();
@@ -312,18 +361,19 @@ export function VideoPlayer({
         case "Period":
           stepFrame(1);
           break;
+        // Element time, not the lagging state, so in/out land on the frame you see
         case "KeyI":
-          useReviewStore.getState().setRangeStart(currentTime);
+          useReviewStore.getState().setRangeStart(videoRef.current?.currentTime ?? currentTime);
           break;
         case "KeyO":
-          useReviewStore.getState().setRangeEnd(currentTime);
+          useReviewStore.getState().setRangeEnd(videoRef.current?.currentTime ?? currentTime);
           break;
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [togglePlay, seek, currentTime, isDrawingMode, handleSpeedCycle, pause, videoRef]);
+  }, [togglePlay, seekBy, currentTime, isDrawingMode, handleSpeedCycle, pause, videoRef]);
 
   const handleContainerClick = useCallback(() => {
     if (holdSuppressClickRef.current) {
@@ -465,17 +515,30 @@ export function VideoPlayer({
           buffered={buffered}
           comments={comments}
           streamUrl={streamUrl}
+          cuts={editCuts}
           onSeek={seek}
         />
       </div>
 
-      {/* Bottom transport bar (matches audio player style) */}
-      <div className="grid grid-cols-[1fr_auto_1fr] items-center h-12 px-2 sm:px-4 bg-bg-secondary border-t border-border shrink-0">
+      {/* Bottom transport bar (matches audio player style). A clicked control
+          neither takes focus nor leaves it in the comment box, so the next
+          I / O / Enter marks and adds a cut; Tab focus still works as usual.
+          Popover triggers (aria-expanded) keep normal focus, so Enter while
+          their popover is open stays with them instead of adding a cut. */}
+      <div
+        className="grid grid-cols-[1fr_auto_1fr] items-center h-12 px-2 sm:px-4 bg-bg-secondary border-t border-border shrink-0"
+        onMouseDown={(e) => {
+          const button = (e.target as HTMLElement).closest("button");
+          if (!button || button.hasAttribute("aria-expanded")) return;
+          e.preventDefault();
+          releaseFocus();
+        }}
+      >
         {/* Left: Play, Loop, Speed, Volume */}
         <div className="flex items-center gap-1 sm:gap-2 justify-self-start">
           {/* ml-4 keeps it out of iOS Safari's ~20px left-edge swipe-back zone, which swallows taps that start there */}
           <button
-            onClick={() => seek(currentTime - 5)}
+            onClick={() => seekBy(-5, currentTime)}
             className="md:hidden ml-4 flex h-7 w-7 items-center justify-center rounded text-text-tertiary hover:text-text-primary transition-colors"
             aria-label="Back 5 seconds"
           >
@@ -494,7 +557,7 @@ export function VideoPlayer({
           </button>
 
           <button
-            onClick={() => seek(currentTime + 5)}
+            onClick={() => seekBy(5, currentTime)}
             className="md:hidden flex h-7 w-7 items-center justify-center rounded text-text-tertiary hover:text-text-primary transition-colors"
             aria-label="Forward 5 seconds"
           >
@@ -541,10 +604,18 @@ export function VideoPlayer({
         <div className="relative justify-self-center" ref={timeFormatRef}>
           <button
             onClick={() => setTimeFormatOpen((p) => !p)}
+            aria-expanded={timeFormatOpen}
             className="flex items-center gap-1.5 rounded-md border border-border bg-bg-tertiary px-3.5 py-1 hover:border-border-strong transition-colors"
           >
             <span className="font-mono tabular-nums text-xs sm:text-[15px] font-bold text-text-primary tracking-[0.02em]">
-              {timeFormat === "timecode" ? (
+              {editCuts ? (
+                // The edit's own clock, against its after-cut runtime
+                <>
+                  {formatTime(toEditTime(currentTime, editCuts))}{" "}
+                  <span className="text-text-tertiary">/</span>{" "}
+                  {formatTime(afterCutSeconds(duration, editCuts))}
+                </>
+              ) : timeFormat === "timecode" ? (
                 displayTime(currentTime)
               ) : (
                 <>
@@ -596,13 +667,34 @@ export function VideoPlayer({
           )}
         </div>
 
-        {/* Right: Quality, Fullscreen */}
+        {/* Right: Source/Edit, Quality, Fullscreen */}
         <div className="flex items-center gap-1 sm:gap-2 justify-self-end">
+          {/* Desktop only, like loop and speed: the phone transport row is full */}
+          {cuts.length > 0 && (
+            <div className="hidden md:flex rounded-md border border-border text-[12px] overflow-hidden" role="group" aria-label="Timeline">
+              {([false, true] as const).map((edit) => (
+                <button
+                  key={String(edit)}
+                  onClick={() => setEditView(edit)}
+                  aria-pressed={editView === edit}
+                  title={edit ? "Play it as cut" : "Original timeline"}
+                  className={cn(
+                    "px-2.5 py-1 transition-colors",
+                    editView === edit ? "bg-bg-elevated text-text-primary" : "text-text-tertiary hover:text-text-primary",
+                  )}
+                >
+                  {edit ? "Edit" : "Source"}
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* Quality selector */}
           {qualityLevels.length > 0 && (
             <div className="relative shrink-0" ref={qualityRef}>
               <button
                 onClick={() => setQualityOpen((p) => !p)}
+                aria-expanded={qualityOpen}
                 className="flex items-center gap-1 rounded border border-border px-2 py-1 text-[12.5px] text-text-secondary hover:border-border-strong hover:text-text-primary transition-colors"
                 aria-label="Quality"
               >
