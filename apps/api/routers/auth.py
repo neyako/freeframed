@@ -9,6 +9,7 @@ from ..schemas.auth import (
     RefreshRequest, UserResponse,
     AcceptInviteRequest, InviteInfoResponse,
     ForgotPasswordRequest, ResetPasswordRequest,
+    ChangePasswordRequest,
 )
 from ..config import settings
 from ..middleware.rate_limit import rate_limit
@@ -246,6 +247,25 @@ def logout(
 @router.get("/me", response_model=UserResponse)
 def get_me(current_user: User = Depends(get_current_user)):
     return current_user
+
+
+@router.patch(
+    "/change-password",
+    dependencies=[Depends(rate_limit("change_password", 10, 600))],
+)
+def change_password(
+    body: ChangePasswordRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Change the signed-in user's password (the settings page calls this)."""
+    if current_user.password_hash is None:
+        raise HTTPException(status_code=400, detail="This account has no password yet")
+    if not verify_password(body.current_password, current_user.password_hash):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    current_user.password_hash = hash_password(body.new_password)
+    db.commit()
+    return {"message": "Password changed"}
 
 
 @router.patch("/me/preferences", response_model=UserResponse)

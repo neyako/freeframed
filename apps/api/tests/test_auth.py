@@ -329,6 +329,36 @@ def test_get_me(client, auth_headers, test_user):
     assert resp.json()["email"] == test_user.email
 
 
+def test_change_password_sets_the_new_hash(client, auth_headers, mock_db, test_user):
+    with (
+        patch(_VERIFY_PATCH, return_value=True),
+        patch(_HASH_PATCH, return_value="new-hash"),
+    ):
+        resp = client.patch(
+            "/auth/change-password",
+            json={"current_password": "old-password", "new_password": "new-password-123"},
+            headers=auth_headers,
+        )
+
+    assert resp.status_code == 200
+    assert test_user.password_hash == "new-hash"
+    mock_db.commit.assert_called_once()
+
+
+def test_change_password_rejects_a_wrong_current_password(client, auth_headers, mock_db, test_user):
+    before = test_user.password_hash
+    with patch(_VERIFY_PATCH, return_value=False):
+        resp = client.patch(
+            "/auth/change-password",
+            json={"current_password": "nope", "new_password": "new-password-123"},
+            headers=auth_headers,
+        )
+
+    assert resp.status_code == 400
+    assert test_user.password_hash == before
+    mock_db.commit.assert_not_called()
+
+
 def test_refresh_token(client, mock_db):
     """POST /auth/refresh — valid refresh token returns new access_token."""
     user = _mock_user("ref@example.com")

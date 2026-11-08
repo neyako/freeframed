@@ -70,6 +70,10 @@ class ResetPasswordRequest(BaseModel):
     token: str
     password: str
 
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
 class UpdateProfileRequest(BaseModel):
     name: str | None = None
     avatar_url: str | None = None
