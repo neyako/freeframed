@@ -787,6 +787,18 @@ def list_share_versions(
     if not link.show_versions:
         versions = versions[:1]
 
+    # Frame rate and shape only (no keys or URLs), so a guest's timecodes count
+    # the same frames as the owner's instead of assuming 24 fps
+    files_by_version: dict = {}
+    if versions:
+        for f in db.query(MediaFile).filter(MediaFile.version_id.in_([v.id for v in versions])).all():
+            files_by_version.setdefault(f.version_id, []).append({
+                "fps": f.fps,
+                "duration_seconds": f.duration_seconds,
+                "width": f.width,
+                "height": f.height,
+            })
+
     return [
         {
             "id": str(version.id),
@@ -800,6 +812,7 @@ def list_share_versions(
             "created_by": str(version.created_by),
             "created_at": version.created_at.isoformat() if version.created_at else None,
             "deleted_at": version.deleted_at.isoformat() if version.deleted_at else None,
+            "files": files_by_version.get(version.id, []),
         }
         for version in versions
     ]

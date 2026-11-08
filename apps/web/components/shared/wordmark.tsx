@@ -25,8 +25,9 @@ export function Wordmark({ className, showName = true }: { className?: string; s
  * The mark's corners drawn around something: "this one". Marks a selected
  * card or a live drop target. Static; the parent must be `relative`.
  */
-export function FrameCorners({ className }: { className?: string }) {
-  const corner = 'absolute h-2.5 w-2.5 border-accent'
+export function FrameCorners({ className, muted = false }: { className?: string; muted?: boolean }) {
+  // Muted corners mark a place something can go; red marks "this one"
+  const corner = cn('absolute h-2.5 w-2.5', muted ? 'border-border-strong' : 'border-accent')
   return (
     <span aria-hidden className={cn('pointer-events-none absolute -inset-1 z-10', className)}>
       <span className={cn(corner, 'left-0 top-0 border-l-2 border-t-2')} />

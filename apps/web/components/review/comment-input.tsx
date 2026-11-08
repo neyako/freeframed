@@ -23,6 +23,7 @@ import {
   Check,
 } from "lucide-react";
 import { cn, isSendEnter } from "@/lib/utils";
+import { Timecode, TimecodeRange } from "@/components/shared/timecode";
 import { useReviewStore, useFormatPosition } from "@/stores/review-store";
 import { useReview } from "./review-provider";
 import { useDrawing } from "@/hooks/use-drawing";
@@ -611,8 +612,8 @@ export function CommentInput({
                   <>
                     {isCut && <Scissors className="h-3 w-3" aria-label="Cut" />}
                     {markedRange
-                      ? `${formatPosition(markedRange.start)}–${formatPosition(markedRange.end)}`
-                      : formatPosition(rangeStart ?? rangeEnd ?? playheadTime)}
+                      ? <TimecodeRange start={formatPosition(markedRange.start)} end={formatPosition(markedRange.end)} />
+                      : <Timecode value={formatPosition(rangeStart ?? rangeEnd ?? playheadTime)} />}
                     <button
                       onClick={() => clearRange()}
                       className="ml-0.5 text-accent/60 hover:text-accent transition-colors relative after:absolute after:-inset-2.5 after:content-['']"
@@ -625,7 +626,11 @@ export function CommentInput({
                   <>
                     {/* Before playback a note is about the whole video; it only
                         gets a time once the playhead has moved (see attachTime) */}
-                    {playheadTime > 0 ? formatPosition(playheadTime) : "General"}
+                    {playheadTime > 0 ? (
+                      <Timecode value={formatPosition(playheadTime)} />
+                    ) : (
+                      <span className="font-sans">Whole video</span>
+                    )}
                     <button
                       onClick={() => setRangeStart(playheadTime)}
                       className="ml-0.5 text-text-tertiary hover:text-text-primary transition-colors relative after:absolute after:-inset-2.5 after:content-['']"
@@ -646,9 +651,11 @@ export function CommentInput({
                   ? "Reply…"
                   : isCut
                     ? "Why cut this? (optional)"
-                    : hasTimecode
+                    : hasTimecode && timecodeAttached && (playheadTime > 0 || rangeActive)
                       ? "Note at this frame"
-                      : "Leave a note"
+                      : hasTimecode
+                        ? "Note on the whole video"
+                        : "Leave a note"
               }
               value={body}
               onChange={handleTextChange}

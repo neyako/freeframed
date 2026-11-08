@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import Hls from 'hls.js'
 import { cn } from '@/lib/utils'
+import { Timecode, TimecodeRange } from '@/components/shared/timecode'
 import { avatarGray, getInitials } from '@/lib/avatar'
 import { useReviewStore, useFormatPosition } from '@/stores/review-store'
 import { canUseHlsJs } from '@/hooks/use-video-player'
@@ -274,9 +275,11 @@ function CommentMarker({
               <span className="text-xs font-medium text-text-primary truncate">{authorName}</span>
               {comment.timecode_start !== null && (
                 <span className="ml-auto text-[10.5px] font-mono tabular-nums text-text-secondary whitespace-nowrap">
-                  {formatPosition(comment.timecode_start)}
-                  {comment.timecode_end != null &&
-                    `–${formatPosition(comment.timecode_end)}`}
+                  {comment.timecode_end != null ? (
+                    <TimecodeRange start={formatPosition(comment.timecode_start)} end={formatPosition(comment.timecode_end)} />
+                  ) : (
+                    <Timecode value={formatPosition(comment.timecode_start)} />
+                  )}
                 </span>
               )}
             </div>
@@ -559,7 +562,7 @@ export function ProgressBar({
           {/* Time label */}
           <div className="flex justify-center">
             <span className="bg-bg-elevated border border-border text-text-primary text-[11px] font-mono tabular-nums px-2 py-0.5 rounded-md">
-              {formatPosition(hoverTime)}
+              <Timecode value={formatPosition(hoverTime)} />
             </span>
           </div>
         </div>

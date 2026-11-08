@@ -16,6 +16,7 @@ import {
   Download,
 } from "lucide-react";
 import { cn, formatTime } from "@/lib/utils";
+import { Timecode } from "@/components/shared/timecode";
 import { afterCutSeconds, cutAt, mergedCuts, toEditTime, toSourceTime } from "@/lib/cuts";
 import { api } from "@/lib/api";
 import { useReviewStore, useFormatPosition, type TimeFormat } from "@/stores/review-store";
@@ -639,7 +640,7 @@ export function VideoPlayer({
                 </>
               ) : timeFormat === "timecode" ? (
                 <>
-                  {displayTime(currentTime)}
+                  <Timecode value={displayTime(currentTime)} />
                   {/* Total only where there's room; the frame count needs the width */}
                   <span className="hidden font-normal text-text-tertiary lg:inline">
                     {" "}/ {displayTime(duration)}
@@ -711,7 +712,7 @@ export function VideoPlayer({
                     editView === edit ? "bg-bg-elevated text-text-primary" : "text-text-tertiary hover:text-text-primary",
                   )}
                 >
-                  {edit ? "Edit" : "Source"}
+                  {edit ? "Cut" : "Original"}
                 </button>
               ))}
             </div>
@@ -723,7 +724,7 @@ export function VideoPlayer({
               <button
                 onClick={() => setQualityOpen((p) => !p)}
                 aria-expanded={qualityOpen}
-                className="flex items-center gap-1 rounded-sm px-2 py-1 font-mono text-[12px] text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
+                className="flex items-center gap-1 rounded-sm px-2 py-1 tabular-nums text-[12px] text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
                 aria-label="Quality"
               >
                 {/* Phones drop the "(1080p)" so the fullscreen button keeps its room */}

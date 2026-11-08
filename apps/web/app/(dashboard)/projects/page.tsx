@@ -58,10 +58,10 @@ function ProjectListRow({
     >
       <FolderOpen className="h-[15px] w-[15px] shrink-0 text-text-tertiary" />
       <span className="min-w-0 flex-1 truncate text-text-primary">{project.name}</span>
-      <span className="hidden font-mono text-[12px] text-text-tertiary sm:inline">
+      <span className="hidden tabular-nums text-[12px] text-text-tertiary sm:inline">
         {projectMeta(project, showRole)}
       </span>
-      <span className="hidden w-24 text-right font-mono text-[12px] text-text-tertiary md:inline">
+      <span className="hidden w-24 text-right tabular-nums text-[12px] text-text-tertiary md:inline">
         {new Date(project.created_at).toLocaleDateString("en-US", {
           month: "short",
           day: "numeric",
@@ -95,7 +95,7 @@ function ProjectSection({
       {title && (
         <h2 className="flex items-baseline gap-2 text-[13px] font-medium text-text-primary">
           {title}
-          <span className="font-mono text-[12px] font-normal text-text-tertiary">
+          <span className="tabular-nums text-[12px] font-normal text-text-tertiary">
             {projects.length}
           </span>
         </h2>
@@ -125,7 +125,8 @@ function ProjectSection({
 }
 
 function sortQuickShareFirst(projects: Project[]) {
-  return [...projects].sort(
+  // An empty Quick Shares project is just a placeholder; leave it out until used
+  return projects.filter((p) => !p.is_quick_share || (p.asset_count ?? 0) > 0).sort(
     (a, b) => Number(Boolean(b.is_quick_share)) - Number(Boolean(a.is_quick_share)),
   );
 }

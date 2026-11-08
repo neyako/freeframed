@@ -190,7 +190,9 @@ describe("CommentInput range comments", () => {
       useReviewStore.setState({ rangeStart: 6.8, rangeEnd: 9 });
     });
     // The chip reads the player clock (SMPTE timecode by default)
-    expect(screen.getByText(/00:00:06:\d\d–00:00:09:00/)).toBeTruthy();
+    expect(
+      screen.getAllByText((_, el) => /^00:00:06:\d\d–00:00:09:00$/.test(el?.textContent ?? "")).length,
+    ).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: "Add cut" }));
     await waitFor(() =>
       expect(onSubmit).toHaveBeenCalledWith(

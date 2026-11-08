@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { cn, copyToClipboard, formatRelativeTime, isSendEnter } from "@/lib/utils";
 import { formatSpan } from "@/lib/cuts";
+import { Timecode, TimecodeRange } from "@/components/shared/timecode";
 import { avatarGray, getInitials } from "@/lib/avatar";
 import { useReviewStore, useFormatPosition } from "@/stores/review-store";
 import { useAutoGrow } from "@/hooks/use-auto-grow";
@@ -531,7 +532,8 @@ function CommentItem({
 
         <div className="flex-1 min-w-0">
           {/* Header: where in the video, then who and when */}
-          <div className="flex min-h-6 items-center gap-2">
+          {/* Wraps instead of overflowing when a long range meets a long name */}
+          <div className="flex min-h-6 flex-wrap items-center gap-x-2 gap-y-0.5">
             {comment.timecode_start !== null &&
               comment.timecode_start !== undefined && (
                 <button
@@ -550,8 +552,8 @@ function CommentItem({
                 >
                   {comment.is_cut && <Scissors className="h-3 w-3" />}
                   {isRange
-                    ? `${formatPosition(comment.timecode_start)}–${formatPosition(comment.timecode_end!)}`
-                    : formatPosition(comment.timecode_start)}
+                    ? <TimecodeRange start={formatPosition(comment.timecode_start)} end={formatPosition(comment.timecode_end!)} />
+                    : <Timecode value={formatPosition(comment.timecode_start)} />}
                   {comment.is_cut && isRange && (
                     <span className="text-text-tertiary">· {formatSpan(comment.timecode_end! - comment.timecode_start)}</span>
                   )}
@@ -575,8 +577,15 @@ function CommentItem({
                 <Pencil className="h-3 w-3" />
               </button>
             )}
-            <span className="min-w-0 truncate text-[12px] font-medium text-text-secondary">
-              {authorName}
+            {/* Your own notes say "You"; a guest's name is bright, since that's
+                the feedback you're scanning for */}
+            <span
+              className={cn(
+                "min-w-0 truncate text-[12px] font-medium",
+                comment.guest_author ? "text-text-primary" : "text-text-secondary",
+              )}
+            >
+              {isOwn && comment.author_id ? "You" : authorName}
             </span>
             <span className="shrink-0 text-[11.5px] text-text-tertiary">
               {formatRelativeTime(comment.created_at)}
@@ -676,7 +685,7 @@ function CommentItem({
                   disabled={!canReact}
                 >
                   {r.emoji}
-                  <span className="font-mono text-[10px] tabular-nums">{r.count}</span>
+                  <span className="tabular-nums text-[10px] tabular-nums">{r.count}</span>
                 </button>
               ))}
             </div>
@@ -1041,7 +1050,7 @@ export function CommentPanel({
                 tab === id ? "text-text-primary" : "text-text-tertiary hover:text-text-primary",
               )}
             >
-              {label} <span className="font-mono text-text-tertiary">{tabCounts[id]}</span>
+              {label} <span className="tabular-nums text-text-tertiary">{tabCounts[id]}</span>
             </button>
           ))}
           {/* Underline slides between tabs */}

@@ -52,7 +52,7 @@ export function MediaBadges({
       )}
       {open > 0 && (
         <span
-          className="absolute bottom-1.5 left-1.5 inline-flex items-center gap-1 rounded-sm bg-black/75 px-1 font-mono text-[11px] tabular-nums text-white"
+          className="absolute bottom-1.5 left-1.5 inline-flex items-center gap-1 rounded-sm bg-black/75 px-1 tabular-nums text-[11px] tabular-nums text-white"
           title={`${open} open note${open === 1 ? '' : 's'}`}
         >
           <span className="h-2.5 w-[2px] bg-accent" aria-hidden />
@@ -196,7 +196,7 @@ export function AssetCard({
             <p className={cn('text-[13.5px] leading-snug text-text-primary', lineClamp)}>
               {asset.name}
             </p>
-            <p className="truncate font-mono text-[11.5px] text-text-tertiary">{meta}</p>
+            <p className="truncate tabular-nums text-[11.5px] text-text-tertiary">{meta}</p>
           </div>
           <DropdownMenu.Root>
             <DropdownMenu.Trigger asChild>

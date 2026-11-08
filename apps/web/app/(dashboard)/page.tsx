@@ -65,7 +65,7 @@ function AssetCard({ asset, onDelete }: AssetCardProps) {
   const aspect = mediaAspect(asset);
   return (
     // Justified row item: as wide as the media's shape needs at ROW_HEIGHT
-    <div className="group relative min-w-0" style={{ flexGrow: aspect, flexBasis: aspect * ROW_HEIGHT }}>
+    <div className="group relative min-w-0 max-sm:!grow-0 max-sm:!basis-[calc(50%-6px)]" style={{ flexGrow: aspect, flexBasis: aspect * ROW_HEIGHT }}>
       <Link href={`/projects/${asset.project_id}/assets/${asset.id}`} className="block">
         <div
           className="relative flex w-full items-center justify-center overflow-hidden rounded-sm border border-border bg-bg-tertiary text-text-tertiary transition-colors duration-100 group-hover:border-border-strong"
@@ -86,8 +86,8 @@ function AssetCard({ asset, onDelete }: AssetCardProps) {
           <MediaBadges asset={asset} />
         </div>
         <p className="mt-1.5 truncate text-[13.5px] text-text-primary">{asset.name}</p>
-        <p className="font-mono text-[11.5px] tabular-nums text-text-tertiary">
-          {mounted ? [asset.latest_version && asset.latest_version.version_number > 1 ? `v${asset.latest_version.version_number}` : null, formatAgo(asset.updated_at)].filter(Boolean).join(" · ") : "\u00a0"}
+        <p className="tabular-nums text-[11.5px] tabular-nums text-text-tertiary">
+          {mounted ? [asset.latest_version && asset.latest_version.version_number > 1 ? `v${asset.latest_version.version_number}` : null, asset.open_comment_count ? `${asset.open_comment_count} open` : null, formatAgo(asset.updated_at)].filter(Boolean).join(" · ") : "\u00a0"}
         </p>
       </Link>
       <button
@@ -153,7 +153,7 @@ function Section({
       <h2 className="flex items-baseline gap-2 text-[13px] font-medium text-text-primary">
         {title}
         {assets && assets.length > 0 && (
-          <span className="font-mono text-[12px] font-normal text-text-tertiary">
+          <span className="tabular-nums text-[12px] font-normal text-text-tertiary">
             {assets.length}
             {hasMore && "+"}
           </span>

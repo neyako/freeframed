@@ -231,7 +231,8 @@ export function AssetGrid({
 
       {/* Grid view: folders */}
       {showFolders && layout === 'grid' && (
-        <div className={cn('grid gap-2', folderGridClass)}>
+        // At the project root, phones already list these folders in the strip above
+        <div className={cn('grid gap-2', folderGridClass, !currentFolderId && 'max-lg:hidden')}>
           {orderedFolders.map((folder) => {
             const isFolderSelected = selectedFolderIds.has(folder.id)
             return (
@@ -282,7 +283,9 @@ export function AssetGrid({
             return (
             <div
               key={asset.id}
-              className="min-w-0"
+              // Phones: two clips per row, whatever their shape, so you browse a library
+              // instead of one poster per screen
+              className="min-w-0 max-sm:!grow-0 max-sm:!basis-[calc(50%-6px)]"
               style={{ flexGrow: aspect, flexBasis: Math.max(aspect * rowHeightMap[cardSize], minCardWidthMap[cardSize]) }}
               onClick={() => (selectMode ? toggleAssetSelect(asset.id) : onAssetOpen?.(asset))}
             >
@@ -357,12 +360,12 @@ export function AssetGrid({
                 </div>
                 {showUploader && <div className="hidden w-32 md:block" />}
                 {showFileSize && (
-                  <div className="hidden w-20 text-right font-mono text-[12px] text-text-tertiary sm:block">
+                  <div className="hidden w-20 text-right tabular-nums text-[12px] text-text-tertiary sm:block">
                     {folder.item_count ?? 0} item{(folder.item_count ?? 0) !== 1 ? 's' : ''}
                   </div>
                 )}
                 <div className="hidden w-10 md:block" />
-                <div className="hidden w-24 shrink-0 font-mono text-[12px] text-text-tertiary sm:block">
+                <div className="hidden w-24 shrink-0 tabular-nums text-[12px] text-text-tertiary sm:block">
                   {formatShortDate(folder.created_at)}
                 </div>
                 <div className="flex w-6 shrink-0 justify-center opacity-0 transition-opacity duration-100 group-hover:opacity-100 pointer-coarse:opacity-100">
@@ -428,14 +431,14 @@ export function AssetGrid({
                   </div>
                 )}
                 {showFileSize && (
-                  <div className="hidden w-20 shrink-0 text-right font-mono text-[12px] text-text-secondary sm:block">
+                  <div className="hidden w-20 shrink-0 text-right tabular-nums text-[12px] text-text-secondary sm:block">
                     {fileSize ? formatBytes(fileSize) : ''}
                   </div>
                 )}
-                <div className="hidden w-10 shrink-0 text-center font-mono text-[12px] text-text-secondary md:block">
+                <div className="hidden w-10 shrink-0 text-center tabular-nums text-[12px] text-text-secondary md:block">
                   v{versionCount ?? 1}
                 </div>
-                <div className="hidden w-24 shrink-0 font-mono text-[12px] text-text-tertiary sm:block">
+                <div className="hidden w-24 shrink-0 tabular-nums text-[12px] text-text-tertiary sm:block">
                   {formatShortDate(asset.created_at)}
                 </div>
                 <div className="flex w-6 shrink-0 justify-center opacity-0 transition-opacity duration-100 group-hover:opacity-100 pointer-coarse:opacity-100">
@@ -490,7 +493,7 @@ export function AssetGrid({
           </Button>
           <span className="text-[13px] text-text-primary">{totalSelected} selected</span>
           {selectedTotalSize > 0 && (
-            <span className="hidden font-mono text-[12px] text-text-tertiary sm:inline">{formatBytes(selectedTotalSize)}</span>
+            <span className="hidden tabular-nums text-[12px] text-text-tertiary sm:inline">{formatBytes(selectedTotalSize)}</span>
           )}
           <div className="flex-1" />
           {onBulkDownload && (

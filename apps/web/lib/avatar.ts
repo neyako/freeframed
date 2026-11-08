@@ -1,9 +1,15 @@
 // Shared avatar helpers for review surfaces (comment panel + scrubber markers).
 
+// Built at runtime: the TS target (ES5) rejects the u flag in a literal
+const WORD = new RegExp('[\\p{L}\\p{N}]+', 'gu')
+
 export function getInitials(name: string): string {
-  const parts = name.trim().split(/\s+/)
-  if (parts.length === 1) return (parts[0].charAt(0) || '?').toUpperCase()
-  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase()
+  // Words only: "Mai (Acme)" is MA, not M(; any script's letters and digits count
+  const parts: string[] = name.match(WORD) ?? []
+  if (parts.length === 0) return '?'
+  const first = parts[0]!.charAt(0)
+  if (parts.length === 1) return first.toUpperCase()
+  return (first + parts[parts.length - 1]!.charAt(0)).toUpperCase()
 }
 
 // Monochrome avatar ramp — neutral grays keep reviewers distinguishable without

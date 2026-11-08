@@ -140,7 +140,7 @@ export function FolderCard({
         <Folder className="h-4 w-4 shrink-0 text-text-tertiary" strokeWidth={1.75} />
         <p className="min-w-0 flex-1 truncate text-[13px] text-text-primary">{folder.name}</p>
         <FolderThumbnails projectId={folder.project_id} folderId={folder.id} itemCount={folder.item_count} />
-        <span className="shrink-0 font-mono text-[11.5px] tabular-nums text-text-tertiary">{folder.item_count}</span>
+        <span className="shrink-0 tabular-nums text-[11.5px] tabular-nums text-text-tertiary">{folder.item_count}</span>
           <DropdownMenu.Root>
             <DropdownMenu.Trigger asChild>
               <button

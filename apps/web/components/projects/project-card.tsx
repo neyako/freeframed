@@ -95,7 +95,7 @@ export function ProjectCard({
             )}
           </div>
           <p className="mt-1.5 truncate pr-7 text-[12.5px] text-text-primary">{project.name}</p>
-          <p className="truncate font-mono text-[11.5px] text-text-tertiary">{meta}</p>
+          <p className="truncate tabular-nums text-[11.5px] text-text-tertiary">{meta}</p>
         </Link>
 
         {(isOwner || project.role === 'owner') && (

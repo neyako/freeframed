@@ -150,15 +150,13 @@ export function QuickShare() {
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         className={cn(
-          "relative flex cursor-pointer items-center gap-3 rounded-sm border border-dashed px-3 py-2.5 transition-colors duration-100",
-          dragKind === "video"
-            ? "border-transparent bg-white/[0.04]"
-            : dragKind === "other"
-              ? "border-accent/70"
-              : "border-border-strong hover:border-text-secondary",
+          // No dashed box: the mark's corners outline the drop area, and go red
+          // when a video is over it
+          "relative flex cursor-pointer items-center gap-3 px-3 py-3 transition-colors duration-100 hover:bg-white/[0.02]",
+          dragKind === "video" && "bg-white/[0.04]",
         )}
       >
-        {dragKind === "video" && <FrameCorners className="inset-0" />}
+        <FrameCorners className="inset-0" muted={dragKind !== "video"} />
         <Upload
           className={cn(
             "h-[15px] w-[15px] shrink-0 transition-[transform,color] duration-100",
@@ -205,7 +203,7 @@ export function QuickShare() {
         <div className="space-y-1.5">
           <div className="flex items-center gap-3 text-[13px]">
             <p className="min-w-0 flex-1 truncate text-text-primary">{activeUpload.fileName}</p>
-            <span className="font-mono text-[12px] text-text-tertiary">
+            <span className="tabular-nums text-[12px] text-text-tertiary">
               {statusLabel[activeUpload.status]}
               {typeof progress === "number" &&
                 (activeUpload.status === "uploading" || activeUpload.status === "processing") &&

@@ -96,7 +96,7 @@ export function CutSummary({ comments, duration, target, onTargetChange }: CutSu
           </form>
         ) : onTargetChange ? (
           <DropdownMenu.Root>
-            <DropdownMenu.Trigger className="inline-flex items-center gap-1 font-mono text-[11.5px] text-text-tertiary outline-none hover:text-text-primary">
+            <DropdownMenu.Trigger className="inline-flex items-center gap-1 tabular-nums text-[11.5px] text-text-tertiary outline-none hover:text-text-primary">
               {targetLabel}
               <ChevronDown className="h-3 w-3" />
             </DropdownMenu.Trigger>
@@ -134,15 +134,15 @@ export function CutSummary({ comments, duration, target, onTargetChange }: CutSu
             </DropdownMenu.Portal>
           </DropdownMenu.Root>
         ) : (
-          target !== null && <span className="font-mono text-[11.5px] text-text-tertiary">{targetLabel}</span>
+          target !== null && <span className="tabular-nums text-[11.5px] text-text-tertiary">{targetLabel}</span>
         )}
     </>
   )
 
   return (
     // One line with no target; the meter row only appears once there's a goal.
-    // Hidden on mobile to leave room for the comments.
-    <div className="hidden md:block shrink-0 border-b border-border px-4 py-2.5">
+    // Phones get it only once there are cuts: then the after-cut runtime is the point.
+    <div className={cn('shrink-0 border-b border-border px-4 py-2.5', cuts.length === 0 && 'hidden md:block')}>
       <div className="flex items-baseline gap-2">
         <span className="font-mono text-[18px] font-semibold tabular-nums text-text-primary">{formatTime(shownAfter)}</span>
         <span className="min-w-0 truncate text-[12.5px] text-text-tertiary">
