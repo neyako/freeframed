@@ -21,6 +21,20 @@ logger = logging.getLogger(__name__)
 # for a socket and the thumbnail upload after them still has room.
 _UPLOAD_THREADS = 8
 
+# The poster frame is square-pixel and fits inside 1280x1280 (never enlarged), in
+# the clip's own shape. A JPEG carries no pixel aspect ratio that browsers honour,
+# so an anamorphic frame has to be de-squeezed here: the first scale shrinks the
+# long axis by the sample aspect ratio (1 when the source sets none) instead of
+# widening, so a 2x-squeezed 4K frame never passes through an 8K one. It comes
+# before the fit because force_original_aspect_ratio works on pixel dimensions and
+# ignores SAR. Without the fit a 4K or 8K clip made a multi-megabyte JPEG for a
+# grid card.
+THUMBNAIL_VF = (
+    "scale=w='trunc(iw*min(1\\,sar)/2)*2':h='trunc(ih/max(1\\,sar)/2)*2',setsar=1,"
+    "scale='min(1280,iw)':'min(1280,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2,"
+    "setsar=1,format=yuvj420p"
+)
+
 
 def _parse_progress_percent(line: str, duration: float) -> float | None:
     """Parse one line of `ffmpeg -progress pipe:1` output into a 0-99 percent.
@@ -349,7 +363,8 @@ class FFmpegTranscoder:
             thumb_path = work_dir / "thumbnail.jpg"
             thumb_cmd = [
                 "ffmpeg", "-y", "-ss", f"{min(1.0, duration / 2):.3f}", "-i", input_url,
-                "-map", "0:V:0", "-q:v", "2", "-frames:v", "1", str(thumb_path),
+                "-map", "0:V:0", "-vf", THUMBNAIL_VF,
+                "-q:v", "2", "-frames:v", "1", str(thumb_path),
             ]
             thumbnail_keys: list[str] = []
             try:
