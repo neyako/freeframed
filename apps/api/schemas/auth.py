@@ -108,5 +108,5 @@ class ChangePasswordRequest(BaseModel):
     new_password: NewPassword
 
 class UpdateProfileRequest(BaseModel):
-    name: str | None = None
+    name: DisplayName | None = None
     avatar_url: str | None = None
