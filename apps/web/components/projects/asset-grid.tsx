@@ -3,7 +3,7 @@
 import * as React from 'react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { X, Download, MoreHorizontal, Share2, Trash2, FolderInput, FolderIcon, Check, Film, Music, Image as ImageIcon, Link as LinkIcon, Pencil } from 'lucide-react'
-import { cn, formatBytes } from '@/lib/utils'
+import { cn, copyToClipboard, formatBytes } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/shared/empty-state'
 import { AssetCard } from './asset-card'
@@ -144,9 +144,8 @@ export function AssetGrid({
 
   const copyAssetLink = (asset: Asset) => {
     const url = `${window.location.origin}/projects/${asset.project_id}/assets/${asset.id}`
-    navigator.clipboard.writeText(url).then(
-      () => toast.success('Link copied'),
-      () => toast.error('Could not copy link'),
+    void copyToClipboard(url).then((copied) =>
+      copied ? toast.success('Link copied') : toast.error('Could not copy link'),
     )
   }
 

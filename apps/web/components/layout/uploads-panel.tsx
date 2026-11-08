@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { usePathname } from 'next/navigation'
 import { X, Link, Check, Film, Music, Image as ImageIcon, FileIcon } from 'lucide-react'
-import { cn, formatBytes, formatRelativeTime } from '@/lib/utils'
+import { cn, copyToClipboard, formatBytes, formatRelativeTime } from '@/lib/utils'
 import {
   getUploadDisplayProgress,
   isQuickShareUpload,
@@ -67,13 +67,9 @@ function UploadItem({ upload }: { upload: UploadFile }) {
   const copyAssetLink = React.useCallback(async () => {
     if (!upload.assetId) return
 
-    try {
-      await navigator.clipboard.writeText(`${window.location.origin}/assets/${upload.assetId}`)
+    if (await copyToClipboard(`${window.location.origin}/assets/${upload.assetId}`)) {
       setLinkCopied(true)
       window.setTimeout(() => setLinkCopied(false), 2000)
-    } catch (err) {
-      if (err instanceof Error) return
-      throw err
     }
   }, [upload.assetId])
 

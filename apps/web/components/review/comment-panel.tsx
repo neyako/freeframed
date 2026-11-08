@@ -22,7 +22,7 @@ import {
   Lock,
   Download,
 } from "lucide-react";
-import { cn, formatTime, formatRelativeTime } from "@/lib/utils";
+import { cn, copyToClipboard, formatTime, formatRelativeTime } from "@/lib/utils";
 import { formatRange, formatSpan } from "@/lib/cuts";
 import { avatarGray, getInitials } from "@/lib/avatar";
 import { useReviewStore } from "@/stores/review-store";
@@ -199,7 +199,7 @@ function CommentMenu({
             }
             url.searchParams.set('commentId', commentId)
             if (versionId) url.searchParams.set('versionId', versionId)
-            navigator.clipboard.writeText(url.toString())
+            void copyToClipboard(url.toString())
             setOpen(false)
           }}
         >

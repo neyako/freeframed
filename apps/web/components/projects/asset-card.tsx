@@ -3,7 +3,7 @@
 import * as React from 'react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { Film, Music, Image as ImageIcon, MessageSquare, MoreHorizontal, Check, Share2, Download, Link as LinkIcon, Pencil, Trash2 } from 'lucide-react'
-import { cn, formatRelativeTime, formatBytes } from '@/lib/utils'
+import { cn, copyToClipboard, formatRelativeTime, formatBytes } from '@/lib/utils'
 import {
   menuContentClass,
   menuItemClass,
@@ -189,9 +189,8 @@ export function AssetCard({
                 <DropdownMenu.Item
                   onSelect={() => {
                     const url = `${window.location.origin}/projects/${asset.project_id}/assets/${asset.id}`
-                    navigator.clipboard.writeText(url).then(
-                      () => toast.success('Link copied'),
-                      () => toast.error('Could not copy link'),
+                    void copyToClipboard(url).then((copied) =>
+                      copied ? toast.success('Link copied') : toast.error('Could not copy link'),
                     )
                   }}
                   className={menuItemClass}
