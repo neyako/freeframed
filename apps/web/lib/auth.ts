@@ -61,7 +61,13 @@ async function _doRefresh(): Promise<string | null> {
     })
 
     if (!response.ok) {
-      clearTokens()
+      // Only a refusal ends the session: 401/403 is the server saying this
+      // refresh token is no longer valid. A 502 from a proxy mid-restart, a 500
+      // or a rate limit is the server being briefly unavailable, and signing
+      // the user out for it loses whatever they had open.
+      if (response.status === 401 || response.status === 403) {
+        clearTokens()
+      }
       return null
     }
 
@@ -71,7 +77,10 @@ async function _doRefresh(): Promise<string | null> {
     clearLegacyTokens()
     return newAccessToken
   } catch {
-    clearTokens()
+    // fetch rejects only on a transport failure (no network, DNS, a dropped
+    // connection). clearTokens() would sign out and navigate to /login for
+    // going through a tunnel. Callers treat null as "could not refresh" and let
+    // the original request fail, so the session survives until the network is back.
     return null
   }
 }
