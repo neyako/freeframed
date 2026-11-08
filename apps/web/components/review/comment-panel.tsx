@@ -122,7 +122,25 @@ function Dropdown({
   align?: "left" | "right";
 }) {
   const ref = React.useRef<HTMLDivElement>(null);
+  const [openUp, setOpenUp] = React.useState(false);
   useClickOutside(ref, onClose, open);
+
+  // The comment list scrolls and clips; open upward when the menu would run
+  // past its bottom (the last comments sit right above the composer)
+  React.useLayoutEffect(() => {
+    if (!open) {
+      setOpenUp(false);
+      return;
+    }
+    const el = ref.current;
+    let scroller = el?.parentElement;
+    while (scroller && !/(auto|scroll)/.test(getComputedStyle(scroller).overflowY)) {
+      scroller = scroller.parentElement;
+    }
+    if (el && scroller) {
+      setOpenUp(el.getBoundingClientRect().bottom > scroller.getBoundingClientRect().bottom);
+    }
+  }, [open]);
 
   if (!open) return null;
 
@@ -130,7 +148,8 @@ function Dropdown({
     <div
       ref={ref}
       className={cn(
-        "absolute top-full mt-1 z-50 rounded-xl border border-border bg-bg-elevated shadow-2xl py-1.5 duration-100 animate-ff-pop-in",
+        "absolute z-50 rounded-xl border border-border bg-bg-elevated shadow-2xl py-1.5 duration-100 animate-ff-pop-in",
+        openUp ? "bottom-full mb-1" : "top-full mt-1",
         align === "right" ? "right-0" : "left-0",
         className,
       )}
@@ -628,7 +647,7 @@ function CommentItem({
           ) : (
             <>
               {comment.body && (
-                <p className="mt-1 text-[13px] text-text-secondary leading-relaxed break-words">
+                <p className="mt-1 whitespace-pre-line text-[13px] text-text-secondary leading-relaxed break-words">
                   <Linkified text={comment.body} />
                 </p>
               )}

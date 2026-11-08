@@ -730,7 +730,9 @@ export function VideoPlayer({
                 className="flex items-center gap-1 rounded border border-border px-2 py-1 text-[12.5px] text-text-secondary hover:border-border-strong hover:text-text-primary transition-colors"
                 aria-label="Quality"
               >
-                {selectedQualityLabel}
+                {/* Phones drop the "(1080p)" so the fullscreen button keeps its room */}
+                <span className="hidden sm:inline">{selectedQualityLabel}</span>
+                <span className="sm:hidden">{selectedQuality === -1 ? "Auto" : selectedQualityLabel}</span>
                 <ChevronUp
                   className={cn(
                     "h-3 w-3 text-text-tertiary transition-transform",

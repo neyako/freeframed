@@ -329,7 +329,10 @@ export default function ProjectDetailPage() {
     );
 
   return (
-    <div className="flex h-full flex-col overflow-hidden lg:flex-row">
+    // Fill exactly the viewport (the dashboard template only sets a min-height,
+    // so h-full can't resolve) and scroll inside: the sticky bulk-action bar
+    // needs this scroller, and the folder sidebar stays put
+    <div className="flex min-h-0 flex-1 basis-0 flex-col overflow-hidden lg:flex-row">
       {/* Left sidebar */}
       {!leftPanelOpen && (
         <div className="hidden w-10 shrink-0 flex-col items-center border-r border-border pt-2 lg:flex">
@@ -438,7 +441,7 @@ export default function ProjectDetailPage() {
           )}
         </div>
         {/* Mobile folder strip: desktop uses the sidebar */}
-        <div className="flex gap-1 overflow-x-auto border-b border-border px-2 py-2 [scrollbar-width:none] lg:hidden">
+        <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-border px-2 py-2 [scrollbar-width:none] lg:hidden">
           <button type="button" onClick={() => handleSelectFolder(null)} className={mobileChip(currentFolderId === null && !showTrash)}>
             All files
           </button>
