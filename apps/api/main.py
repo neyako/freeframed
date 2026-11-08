@@ -47,19 +47,24 @@ app = FastAPI(
     openapi_url=None if _disable_docs else "/openapi.json",
 )
 
+app.add_middleware(SetupGuardMiddleware)
+# Compress JSON responses — comment lists and asset grids are large and remote
+# (WAN) reviewers feel the difference directly.
+app.add_middleware(GZipMiddleware, minimum_size=1024)
+app.add_middleware(GlobalRateLimitMiddleware)
+# add_middleware prepends, so the one added last runs first. CORS has to be
+# outermost: the limiter's 429 and the setup guard's 503 are returned without
+# reaching anything inside them, and without CORS headers a cross-origin browser
+# hides the status (and Retry-After) behind an opaque network error. It also
+# answers preflights before they count against the read limit.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=get_cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["Content-Disposition"],
+    expose_headers=["Content-Disposition", "Retry-After"],
 )
-app.add_middleware(GlobalRateLimitMiddleware)
-# Compress JSON responses — comment lists and asset grids are large and remote
-# (WAN) reviewers feel the difference directly.
-app.add_middleware(GZipMiddleware, minimum_size=1024)
-app.add_middleware(SetupGuardMiddleware)
 
 app.include_router(auth.router)
 app.include_router(users.router)
