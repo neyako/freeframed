@@ -14,7 +14,7 @@ from ..database import get_db
 from ..middleware.auth import get_current_user, get_optional_user
 from ..models.asset import Asset, AssetType, AssetVersion, MediaFile, ProcessingStatus
 from ..models.comment import Annotation, Comment, CommentAttachment, CommentReaction
-from ..models.user import User, GuestUser
+from ..models.user import User, UserStatus, GuestUser
 from ..models.share import SharePermission
 from ..schemas.comment import (
     AnnotationResponse,
@@ -360,6 +360,13 @@ def _send_mention_emails(db: Session, comment: Comment, asset: Asset, body: str,
             if user and user.id != comment.author_id:
                 mentioned_users.append(user)
 
+    # Only someone who can open the asset hears about it: otherwise any member
+    # could @mention an arbitrary account (or a deactivated one) and have the
+    # asset name and a comment preview emailed to it.
+    mentioned_users = [
+        u for u in mentioned_users
+        if u.deleted_at is None and u.status != UserStatus.deactivated and can_access_asset(db, asset, u)
+    ]
     if not mentioned_users:
         return
 
