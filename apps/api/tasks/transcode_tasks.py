@@ -227,7 +227,7 @@ def backfill_media_metadata(self):
                 )
                 cmd = ["ffprobe", "-v", "error", "-print_format", "json", "-show_format"]
                 if asset_type == AssetType.video:
-                    cmd += ["-show_streams", "-select_streams", "v:0"]
+                    cmd += ["-show_streams", "-select_streams", "V:0"]  # not cover art
                 probe = subprocess.run(cmd + [url], capture_output=True, text=True, timeout=300)
                 if probe.returncode != 0:
                     skipped += 1

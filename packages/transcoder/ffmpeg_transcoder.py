@@ -105,8 +105,30 @@ def _rotation(stream: dict) -> int:
         return 0
 
 
+def _is_attached_pic(stream: dict) -> bool:
+    """A cover image carried as a "video" stream (artwork on a file, a poster
+    frame). It is a single still, not a timeline, so it must never be treated as
+    the picture: ffmpeg's `V` stream specifier (below) skips these too."""
+    try:
+        return int((stream.get("disposition") or {}).get("attached_pic") or 0) == 1
+    except (TypeError, ValueError):
+        return False
+
+
+def _primary_video_stream(data: dict) -> Optional[dict]:
+    """The first real video stream: what `-map 0:V:0` selects."""
+    return next(
+        (
+            s
+            for s in data.get("streams") or []
+            if s.get("codec_type", "video") == "video" and not _is_attached_pic(s)
+        ),
+        None,
+    )
+
+
 def is_rotated_90(data: dict) -> bool:
-    video = next((s for s in data.get("streams") or [] if s.get("codec_type", "video") == "video"), None)
+    video = _primary_video_stream(data)
     return video is not None and abs(_rotation(video)) % 180 == 90
 
 
@@ -123,11 +145,9 @@ def parse_probe_metadata(data: dict) -> Optional[VideoMetadata]:
     are display dimensions: phone footage stored landscape with a 90° rotation
     flag reports as portrait, matching what ffmpeg's autorotate decodes.
     """
-    streams = data.get("streams") or []
-    video_streams = [s for s in streams if s.get("codec_type", "video") == "video"]
-    if not video_streams:
+    stream = _primary_video_stream(data)
+    if stream is None:
         return None
-    stream = video_streams[0]
     fps = 0.0
     raw_rate = stream.get("r_frame_rate") or ""
     if "/" in raw_rate:
@@ -311,7 +331,7 @@ class FFmpegTranscoder:
             thumb_path = work_dir / "thumbnail.jpg"
             thumb_cmd = [
                 "ffmpeg", "-y", "-ss", f"{min(1.0, duration / 2):.3f}", "-i", input_url,
-                "-q:v", "2", "-frames:v", "1", str(thumb_path),
+                "-map", "0:V:0", "-q:v", "2", "-frames:v", "1", str(thumb_path),
             ]
             thumbnail_keys: list[str] = []
             try:

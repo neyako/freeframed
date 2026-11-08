@@ -109,7 +109,9 @@ def build_hls_command(
     split_outputs = "".join(f"[v{index}]" for index in range(len(qualities)))
     suffix = _filter_suffix(backend)
     use_vaapi_hw_decode = backend == "vaapi" and hw_decode
-    filter_complex = f"[v:0]split={len(qualities)}{split_outputs};"
+    # `V`, not `v`: skips attached cover art, which would otherwise be picked
+    # as "the video" when it sorts before the real stream.
+    filter_complex = f"[0:V:0]split={len(qualities)}{split_outputs};"
     filter_branches: list[str] = []
     for index, quality in enumerate(qualities):
         scale = quality_map[quality][0]
