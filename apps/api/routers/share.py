@@ -168,6 +168,46 @@ def _latest_media_files_bulk(
     }
 
 
+def _guest_visible_comment_counts(
+    db: Session, asset_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, int]:
+    """Per asset, the comments a share viewer can actually read: live, not
+    team-only, on the newest ready version (a card has no version picker).
+    Counting every comment on every version made the badge disagree with the
+    list behind it and counted internal notes."""
+    if not asset_ids:
+        return {}
+    newest = (
+        db.query(
+            AssetVersion.asset_id.label("asset_id"),
+            sa_func.max(AssetVersion.version_number).label("version_number"),
+        )
+        .filter(
+            AssetVersion.asset_id.in_(asset_ids),
+            AssetVersion.deleted_at.is_(None),
+            AssetVersion.processing_status == ProcessingStatus.ready,
+        )
+        .group_by(AssetVersion.asset_id)
+        .subquery()
+    )
+    return dict(
+        db.query(Comment.asset_id, sa_func.count(Comment.id))
+        .join(AssetVersion, AssetVersion.id == Comment.version_id)
+        .join(
+            newest,
+            (newest.c.asset_id == AssetVersion.asset_id)
+            & (newest.c.version_number == AssetVersion.version_number),
+        )
+        .filter(
+            Comment.asset_id.in_(asset_ids),
+            Comment.deleted_at.is_(None),
+            Comment.visibility != "internal",
+        )
+        .group_by(Comment.asset_id)
+        .all()
+    )
+
+
 # ── Share links ───────────────────────────────────────────────────────────────
 
 @router.post("/assets/{asset_id}/share", response_model=ShareLinkResponse, status_code=status.HTTP_201_CREATED)
@@ -676,15 +716,7 @@ def get_folder_share_assets(
 
     asset_ids = [asset.id for asset in assets]
     asset_media_files = _latest_media_files_bulk(db, asset_ids)
-    comment_counts = dict(
-        db.query(Comment.asset_id, sa_func.count(Comment.id))
-        .filter(
-            Comment.asset_id.in_(asset_ids),
-            Comment.deleted_at.is_(None),
-        )
-        .group_by(Comment.asset_id)
-        .all()
-    ) if asset_ids else {}
+    comment_counts = _guest_visible_comment_counts(db, asset_ids)
     creator_ids = {asset.created_by for asset in assets if asset.created_by}
     creators = {
         creator.id: creator
