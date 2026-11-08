@@ -123,13 +123,18 @@ export function useVideoPlayer(src: string | null): UseVideoPlayerReturn {
     }
   }, [seekTarget])
 
-  // Fullscreen change listener
+  // Fullscreen state. Element fullscreen reports through the document, standard
+  // or Safari-prefixed (iPadOS, desktop); an iPhone only has the video element's
+  // native player, whose begin/end events are attached with the element below.
   useEffect(() => {
-    const handleFsChange = () => {
-      setIsFullscreen(!!document.fullscreenElement)
+    const doc = document as Document & { webkitFullscreenElement?: Element | null }
+    const readDoc = () => setIsFullscreen(!!(document.fullscreenElement || doc.webkitFullscreenElement))
+    document.addEventListener('fullscreenchange', readDoc)
+    document.addEventListener('webkitfullscreenchange', readDoc)
+    return () => {
+      document.removeEventListener('fullscreenchange', readDoc)
+      document.removeEventListener('webkitfullscreenchange', readDoc)
     }
-    document.addEventListener('fullscreenchange', handleFsChange)
-    return () => document.removeEventListener('fullscreenchange', handleFsChange)
   }, [])
 
   // HLS + video element setup
@@ -174,7 +179,11 @@ export function useVideoPlayer(src: string | null): UseVideoPlayerReturn {
         setBuffered(video.buffered.end(video.buffered.length - 1))
       }
     }
+    const onEnterNativeFullscreen = () => setIsFullscreen(true)
+    const onLeaveNativeFullscreen = () => setIsFullscreen(false)
 
+    video.addEventListener('webkitbeginfullscreen', onEnterNativeFullscreen)
+    video.addEventListener('webkitendfullscreen', onLeaveNativeFullscreen)
     video.addEventListener('loadedmetadata', onLoadedMetadata)
     video.addEventListener('timeupdate', onTimeUpdate)
     video.addEventListener('play', onPlay)
@@ -232,6 +241,8 @@ export function useVideoPlayer(src: string | null): UseVideoPlayerReturn {
     }
 
     return () => {
+      video.removeEventListener('webkitbeginfullscreen', onEnterNativeFullscreen)
+      video.removeEventListener('webkitendfullscreen', onLeaveNativeFullscreen)
       video.removeEventListener('loadedmetadata', onLoadedMetadata)
       video.removeEventListener('timeupdate', onTimeUpdate)
       video.removeEventListener('play', onPlay)
@@ -316,11 +327,37 @@ export function useVideoPlayer(src: string | null): UseVideoPlayerReturn {
     video.muted = !video.muted
   }, [])
 
+  // An iPhone has no element fullscreen: Element.requestFullscreen is undefined
+  // there, so this used to throw "not a function" and the button did nothing.
+  // Safari on iPadOS and desktop has the prefixed element API; an iPhone has only
+  // the video's own native player (which replaces our controls while it is up).
+  // Try them in that order.
   const toggleFullscreen = useCallback((containerEl: HTMLElement) => {
-    if (!document.fullscreenElement) {
-      containerEl.requestFullscreen().catch(() => {})
-    } else {
-      document.exitFullscreen().catch(() => {})
+    const doc = document as Document & {
+      webkitFullscreenElement?: Element | null
+      webkitExitFullscreen?: () => Promise<void> | void
+    }
+    const el = containerEl as HTMLElement & { webkitRequestFullscreen?: () => Promise<void> | void }
+    const video = videoRef.current as (HTMLVideoElement & {
+      webkitEnterFullscreen?: () => void
+      webkitDisplayingFullscreen?: boolean
+    }) | null
+
+    const active = !!(document.fullscreenElement || doc.webkitFullscreenElement)
+    if (!active && !video?.webkitDisplayingFullscreen) {
+      if (typeof el.requestFullscreen === 'function') {
+        void Promise.resolve(el.requestFullscreen()).catch(() => {})
+      } else if (typeof el.webkitRequestFullscreen === 'function') {
+        void Promise.resolve(el.webkitRequestFullscreen()).catch(() => {})
+      } else if (video && typeof video.webkitEnterFullscreen === 'function') {
+        video.webkitEnterFullscreen()
+      }
+      return
+    }
+    if (typeof document.exitFullscreen === 'function') {
+      void Promise.resolve(document.exitFullscreen()).catch(() => {})
+    } else if (typeof doc.webkitExitFullscreen === 'function') {
+      void Promise.resolve(doc.webkitExitFullscreen()).catch(() => {})
     }
   }, [])
 
