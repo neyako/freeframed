@@ -75,6 +75,7 @@ Common overrides from the all-in-one Dockerfile and compose file:
 | `API_WORKERS` | `4` | Gunicorn worker processes |
 | `TRANSCODING_CONCURRENCY` | `2` | Transcoding worker slots |
 | `EMAIL_CONCURRENCY` | `2` | Email worker slots |
+| `MAX_UPLOAD_BYTES` | `0` (no cap) | Largest single upload, in bytes |
 | `MINIO_ADDRESS` | `127.0.0.1:9000` | MinIO bind address inside the container |
 | `S3_PUBLIC_ENDPOINT` | `FRONTEND_URL` (same origin) | Browser-facing object-storage endpoint; set only for external S3 |
 | `SETUP_TOKEN` | generated in `/data/secrets.env` | First-admin setup token |

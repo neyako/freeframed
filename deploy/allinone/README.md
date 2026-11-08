@@ -114,6 +114,7 @@ Common overrides:
   hardware support.
 - `API_WORKERS`: FastAPI worker process count.
 - `TRANSCODING_CONCURRENCY`: concurrent transcoding worker slots.
+- `MAX_UPLOAD_BYTES`: largest single upload in bytes; `0` (default) means no cap.
 
 Example:
 
