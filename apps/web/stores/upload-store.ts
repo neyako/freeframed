@@ -10,6 +10,19 @@ interface PutPartResult {
 }
 
 /**
+ * A failure that repeating cannot fix: a 4xx from storage means the request
+ * itself was rejected (bad signature, expired URL, wrong length) and every
+ * further attempt is rejected the same way. 408 and 429 invite a retry.
+ */
+interface PartUploadError extends Error {
+  permanent?: boolean
+}
+
+function isPermanentStatus(status: number): boolean {
+  return status >= 400 && status < 500 && status !== 408 && status !== 429
+}
+
+/**
  * PUT a single multipart chunk (or a whole small file) with byte-level progress.
  * `onProgress` receives the fraction (0..1) of THIS body uploaded so far.
  * Pass `contentType` when the presigned URL signs it.
@@ -39,7 +52,9 @@ export function putPartWithProgress(
       if (xhr.status >= 200 && xhr.status < 300) {
         resolve({ etag: xhr.getResponseHeader('ETag') ?? '' })
       } else {
-        reject(new Error(`Part failed: ${xhr.status} ${xhr.statusText}`))
+        const error: PartUploadError = new Error(`Part failed: ${xhr.status} ${xhr.statusText}`)
+        error.permanent = isPermanentStatus(xhr.status)
+        reject(error)
       }
     }
     xhr.onerror = () => {
@@ -52,6 +67,88 @@ export function putPartWithProgress(
     }
     xhr.send(chunk)
   })
+}
+
+const PART_MAX_ATTEMPTS = 8 // per part, including the first try
+const PART_RETRY_BASE_MS = 2000 // 2s, 4s, 8s ... about 254s of tolerance per part
+
+function isAbortError(err: unknown): boolean {
+  return err instanceof DOMException && err.name === 'AbortError'
+}
+
+/** Whether another attempt could change the outcome. */
+function isRetryable(err: unknown): boolean {
+  if ((err as PartUploadError)?.permanent) return false
+  // A rejected presign request (bad session, upload gone) fails the same way again
+  if (err instanceof ApiError) return !isPermanentStatus(err.status)
+  return true
+}
+
+/**
+ * Uploads one part, retrying with exponential backoff and jitter. A large file
+ * is hundreds of PUTs; one transient 5xx or a brief network drop used to fail
+ * the whole upload and throw away everything already sent. The presigned URL is
+ * fetched on every attempt because it expires after an hour and a long upload
+ * can outlive a URL fetched before a long backoff. A cancel is never retried.
+ */
+async function uploadPart(
+  file: File,
+  s3Key: string,
+  uploadId: string,
+  partNumber: number,
+  controller: AbortController,
+  onFraction: (fraction: number) => void,
+): Promise<string> {
+  const start = (partNumber - 1) * CHUNK_SIZE
+  const chunk = file.slice(start, Math.min(start + CHUNK_SIZE, file.size))
+  let lastError: unknown
+
+  for (let attempt = 1; attempt <= PART_MAX_ATTEMPTS; attempt++) {
+    try {
+      const { presigned_url } = await api.post<{ presigned_url: string }>('/upload/presign-part', {
+        s3_key: s3Key,
+        upload_id: uploadId,
+        part_number: partNumber,
+      })
+      const { etag } = await putPartWithProgress(presigned_url, chunk, controller.signal, onFraction)
+      return etag
+    } catch (err) {
+      if (controller.signal.aborted || isAbortError(err) || !isRetryable(err)) throw err
+      lastError = err
+      if (attempt === PART_MAX_ATTEMPTS) break
+      const delay = PART_RETRY_BASE_MS * 2 ** (attempt - 1) + Math.random() * 250
+      await new Promise((resolve) => setTimeout(resolve, delay))
+    }
+  }
+  throw lastError
+}
+
+/**
+ * Uploads every part of a multipart upload in order and returns the part list
+ * for /upload/complete. `onProgress` gets the overall percent (0-95; the last
+ * 5 is the server finishing the upload). Used by both the new-asset and
+ * new-version flows. Exported for tests.
+ */
+export async function uploadAllParts(
+  file: File,
+  s3Key: string,
+  uploadId: string,
+  controller: AbortController,
+  onProgress: (percent: number) => void,
+): Promise<Array<{ PartNumber: number; ETag: string }>> {
+  const totalChunks = Math.ceil(file.size / CHUNK_SIZE)
+  const parts: Array<{ PartNumber: number; ETag: string }> = []
+
+  for (let partNumber = 1; partNumber <= totalChunks; partNumber++) {
+    if (controller.signal.aborted) {
+      throw new DOMException('Upload cancelled', 'AbortError')
+    }
+    const etag = await uploadPart(file, s3Key, uploadId, partNumber, controller, (fraction) =>
+      onProgress(Math.round(((partNumber - 1 + fraction) / totalChunks) * 95)),
+    )
+    parts.push({ PartNumber: partNumber, ETag: etag })
+  }
+  return parts
 }
 
 const HISTORY_PAGE_SIZE = 20
@@ -245,35 +342,9 @@ const storeCreator: StateCreator<UploadStore, [['zustand/persist', unknown]]> = 
 
         updateFile(id, { uploadId: upload_id, assetId: asset_id, versionId: version_id })
 
-        const totalChunks = Math.ceil(file.size / CHUNK_SIZE)
-        const parts: Array<{ PartNumber: number; ETag: string }> = []
-
-        for (let partNumber = 1; partNumber <= totalChunks; partNumber++) {
-          if (controller.signal.aborted) {
-            throw new DOMException('Upload cancelled', 'AbortError')
-          }
-
-          const start = (partNumber - 1) * CHUNK_SIZE
-          const end = Math.min(start + CHUNK_SIZE, file.size)
-          const chunk = file.slice(start, end)
-
-          const { presigned_url } = await api.post<{ presigned_url: string }>('/upload/presign-part', {
-            s3_key,
-            upload_id,
-            part_number: partNumber,
-          })
-
-          const { etag } = await putPartWithProgress(
-            presigned_url,
-            chunk,
-            controller.signal,
-            (fraction) => {
-              const overall = ((partNumber - 1 + fraction) / totalChunks) * 95
-              updateFile(id, { progress: Math.round(overall) })
-            },
-          )
-          parts.push({ PartNumber: partNumber, ETag: etag })
-        }
+        const parts = await uploadAllParts(file, s3_key, upload_id, controller, (percent) =>
+          updateFile(id, { progress: percent }),
+        )
 
         await api.post('/upload/complete', {
           s3_key,
@@ -355,26 +426,9 @@ const storeCreator: StateCreator<UploadStore, [['zustand/persist', unknown]]> = 
         version_id = initRes.version_id
         updateFile(id, { uploadId: upload_id, versionId: version_id })
 
-        const totalChunks = Math.ceil(file.size / CHUNK_SIZE)
-        const parts: Array<{ PartNumber: number; ETag: string }> = []
-        for (let partNumber = 1; partNumber <= totalChunks; partNumber++) {
-          if (controller.signal.aborted) throw new DOMException('Upload cancelled', 'AbortError')
-          const start = (partNumber - 1) * CHUNK_SIZE
-          const chunk = file.slice(start, Math.min(start + CHUNK_SIZE, file.size))
-          const { presigned_url } = await api.post<{ presigned_url: string }>('/upload/presign-part', {
-            s3_key, upload_id, part_number: partNumber,
-          })
-          const { etag } = await putPartWithProgress(
-            presigned_url,
-            chunk,
-            controller.signal,
-            (fraction) => {
-              const overall = ((partNumber - 1 + fraction) / totalChunks) * 95
-              updateFile(id, { progress: Math.round(overall) })
-            },
-          )
-          parts.push({ PartNumber: partNumber, ETag: etag })
-        }
+        const parts = await uploadAllParts(file, s3_key, upload_id, controller, (percent) =>
+          updateFile(id, { progress: percent }),
+        )
 
         await api.post('/upload/complete', { s3_key, upload_id, asset_id: assetId, version_id, parts })
         const isMedia = file.type.startsWith('video/') || file.type.startsWith('audio/') || file.type.startsWith('image/')
