@@ -226,7 +226,11 @@ export function AssetGrid({
                     'absolute left-2.5 top-1/2 z-10 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-sm border transition-colors duration-100',
                     isFolderSelected
                       ? 'border-text-primary bg-text-primary text-bg-primary'
-                      : 'border-border-strong bg-bg-secondary text-transparent opacity-0 group-hover/folder:opacity-100 group-hover/folder:text-text-tertiary pointer-coarse:opacity-100',
+                      : cn(
+                          'border-border-strong bg-bg-secondary text-transparent opacity-0 group-hover/folder:opacity-100 group-hover/folder:text-text-tertiary',
+                          // On touch, folders show their icon until a selection is under way
+                          totalSelected > 0 && 'pointer-coarse:opacity-100',
+                        ),
                   )}
                   onClick={(e) => { e.stopPropagation(); toggleFolderSelect(folder.id) }}
                 >
