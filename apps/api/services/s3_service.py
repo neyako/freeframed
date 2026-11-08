@@ -1,5 +1,6 @@
 import os
 import re
+from functools import lru_cache
 import boto3
 from botocore.client import Config
 from botocore.exceptions import ClientError
@@ -23,9 +24,12 @@ def _is_aws_s3() -> bool:
     return settings.s3_storage.lower() == "s3"
 
 
+@lru_cache(maxsize=1)
 def get_s3_client():
     """
-    Create S3 client. Auto-detects AWS vs MinIO:
+    Shared S3 client (built once: boto3 clients are thread-safe, and building
+    one costs tens of milliseconds on every HLS manifest and upload call).
+    Auto-detects AWS vs MinIO:
     - If access_key starts with 'AKIA' -> use AWS S3 (no endpoint_url)
     - Otherwise -> use custom endpoint (MinIO or S3-compatible)
     """
