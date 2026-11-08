@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import useSWR from 'swr'
 import { ReviewProvider, useReview } from '@/components/review/review-provider'
+import { captureAnnotationSnapshot, reviewVideoElement, uploadAnnotationSnapshot } from '@/lib/annotation-snapshot'
 import { VideoPlayer } from '@/components/review/video-player'
 import { AudioPlayer } from '@/components/review/audio-player'
 import { ImageViewer } from '@/components/review/image-viewer'
@@ -259,10 +260,15 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
   }
 
   const handleSubmitComment = async (draft: CommentDraft) => {
-    const created = await createComment({
-      ...draft,
-      annotation: draft.annotation || annotationData || undefined,
-    })
+    const drawing = draft.annotation || annotationData || undefined
+    const video = drawing ? reviewVideoElement() : null
+    // Started before the request so the frame is the one the drawing was made on
+    const snapshot = drawing && video ? captureAnnotationSnapshot(video, drawing) : null
+    const created = await createComment({ ...draft, annotation: drawing })
+    if (snapshot) {
+      // Best effort: agents read it; the comment itself is already saved
+      uploadAnnotationSnapshot(created.id, snapshot).then(() => mutateComments(), () => {})
+    }
     if (draft.attachments?.length) {
       await uploadCommentAttachments(created.id, draft.attachments, draft.onAttachmentProgress)
       await mutateComments()

@@ -468,6 +468,7 @@ export function VideoPlayer({
       >
         <video
           ref={videoRef}
+          data-review-video
           className={cn(
             "absolute inset-0 w-full h-full object-contain",
             isDrawingMode ? "pointer-events-none" : "",

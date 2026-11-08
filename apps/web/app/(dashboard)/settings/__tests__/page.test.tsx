@@ -67,7 +67,7 @@ describe('SettingsPage', () => {
 
   it('deactivates a person only after confirming', async () => {
     mocks.user = owner
-    mocks.get.mockResolvedValue([owner, editor])
+    mocks.get.mockImplementation(async (key: string) => (key === '/agents' ? [] : [owner, editor]))
     mocks.post.mockResolvedValue({ ...editor, status: 'deactivated' })
     renderPage()
 
@@ -80,5 +80,19 @@ describe('SettingsPage', () => {
 
     await waitFor(() => expect(mocks.post).toHaveBeenCalledWith('/users/u2/deactivate'))
     expect(await screen.findByRole('button', { name: 'Reactivate' })).toBeInTheDocument()
+  })
+
+  it('connects a preset agent and shows its one-time setup prompt', async () => {
+    mocks.user = owner
+    const claude = { preset: 'claude', name: 'Claude', avatar_url: '/agents/claude.svg', connected_at: null }
+    mocks.get.mockImplementation(async (key: string) => (key === '/agents' ? [claude] : [owner]))
+    mocks.post.mockResolvedValue({ agent: { ...claude, connected_at: '2026-11-08T00:00:00Z' }, token: 'ffd_secret' })
+    renderPage()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Connect' }))
+
+    await waitFor(() => expect(mocks.post).toHaveBeenCalledWith('/agents/claude'))
+    expect(await screen.findByText(/--token ffd_secret/)).toBeInTheDocument()
+    expect(screen.getByText(/\/cli\/ffd -o ~\/.local\/bin\/ffd/)).toBeInTheDocument()
   })
 })

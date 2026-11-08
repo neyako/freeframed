@@ -516,6 +516,11 @@ function CommentItem({
             <span className="text-[13px] font-semibold text-text-primary leading-none">
               {authorName}
             </span>
+            {comment.author?.is_agent && (
+              <span className="font-mono text-[10.5px] tracking-[0.06em] text-text-secondary leading-none">
+                AGENT
+              </span>
+            )}
             <span className="text-[11px] text-text-tertiary leading-none">
               {formatRelativeTime(comment.created_at)}
             </span>

@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from typing import Optional, TypedDict
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy.orm import Session, aliased
 
 from ..config import settings
@@ -299,6 +299,7 @@ def _assemble_comment_response(
             id=author.id,
             name=author.name,
             avatar_url=avatar_service.effective_avatar_url(author),
+            is_agent=author.is_agent,
         )
     guest_author_info = None
     guest = data["guests"].get(comment.guest_author_id) if comment.guest_author_id else None
@@ -309,7 +310,7 @@ def _assemble_comment_response(
     resp = CommentResponse.model_validate(comment)
     resp.author = author_info
     resp.guest_author = guest_author_info
-    resp.annotation = AnnotationResponse.model_validate(annotation) if annotation else None
+    resp.annotation = _build_annotation_response(annotation) if annotation else None
     resp.replies = [
         _assemble_comment_response(reply, data, current_user_id=current_user_id)
         for reply in data["comments_by_parent"].get(comment.id, [])
@@ -322,6 +323,13 @@ def _assemble_comment_response(
         data["reactions"].get(comment.id, []),
         current_user_id,
     )
+    return resp
+
+
+def _build_annotation_response(annotation: Annotation) -> AnnotationResponse:
+    resp = AnnotationResponse.model_validate(annotation)
+    if annotation.snapshot_s3_key:
+        resp.snapshot_url = s3_service.generate_presigned_get_url(annotation.snapshot_s3_key, expires_in=3600)
     return resp
 
 
@@ -350,14 +358,14 @@ def _send_mention_emails(db: Session, comment: Comment, asset: Asset, body: str,
         # Use explicit user IDs from frontend
         for uid in set(mention_user_ids):
             user = db.query(User).filter(User.id == uid).first()
-            if user and user.id != comment.author_id:
+            if user and user.id != comment.author_id and not user.is_agent:
                 mentioned_users.append(user)
     else:
         # Fallback: parse @email from body
         emails = _parse_mentions(body)
         for email in set(emails):
             user = get_user_by_email(db, email)
-            if user and user.id != comment.author_id:
+            if user and user.id != comment.author_id and not user.is_agent:
                 mentioned_users.append(user)
 
     if not mentioned_users:
@@ -618,12 +626,13 @@ def delete_comment(
 @router.post("/comments/{comment_id}/resolve", response_model=CommentResponse)
 def resolve_comment(
     comment_id: uuid.UUID,
+    resolved: Optional[bool] = Query(None, description="Set explicitly; toggles when omitted"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     comment, asset = _get_comment_context(db, comment_id)
     _require_can_comment(db, asset, current_user)
-    comment.resolved = not comment.resolved
+    comment.resolved = (not comment.resolved) if resolved is None else resolved
     db.commit()
     db.refresh(comment)
     return _build_comment_response(comment, db, current_user_id=current_user.id)
@@ -653,6 +662,38 @@ def toggle_cut(
     db.commit()
     db.refresh(comment)
     return _build_comment_response(comment, db, current_user_id=current_user.id)
+
+
+# ── Annotation snapshots ───────────────────────────────────────────────────────
+
+_SNAPSHOT_MAX_BYTES = 5 * 1024 * 1024
+
+
+@router.put("/comments/{comment_id}/snapshot", status_code=status.HTTP_204_NO_CONTENT)
+async def put_annotation_snapshot(
+    comment_id: uuid.UUID,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Store the browser's JPEG of the video frame with the drawing on top, so
+    agents reading feedback see exactly what was circled. Raw image/jpeg body."""
+    comment, asset = _get_comment_context(db, comment_id)
+    if comment.author_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Can only add a snapshot to your own comment")
+    _require_can_comment(db, asset, current_user)
+    annotation = db.query(Annotation).filter(Annotation.comment_id == comment.id).first()
+    if not annotation:
+        raise HTTPException(status_code=404, detail="Comment has no drawing")
+    if _normalize_content_type(request.headers.get("content-type", "")) != "image/jpeg":
+        raise HTTPException(status_code=415, detail="Snapshot must be image/jpeg")
+    data = await request.body()
+    if not 0 < len(data) <= _SNAPSHOT_MAX_BYTES:
+        raise HTTPException(status_code=413, detail="Snapshot must be at most 5 MB")
+    key = f"comment-snapshots/{comment.id}.jpg"
+    s3_service.put_object(key, data, content_type="image/jpeg")
+    annotation.snapshot_s3_key = key
+    db.commit()
 
 
 # ── Attachments ────────────────────────────────────────────────────────────────

@@ -39,6 +39,8 @@ class Annotation(Base):
     comment_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("comments.id"), nullable=False)
     drawing_data: Mapped[dict] = mapped_column(JSONB, nullable=False)
     frame_number: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # JPEG of the video frame with the drawing on top, captured by the browser
+    snapshot_s3_key: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
 
 class CommentAttachment(Base):
     __tablename__ = "comment_attachments"

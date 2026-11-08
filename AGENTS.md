@@ -13,7 +13,11 @@ FreeFrame. Weigh new features against this lens — don't drift.
 
 People model: ONE owner (the superadmin created at setup), their editor
 (invited account; project role `editor` uploads, versions, comments, approves,
-shares), and guests (brands/clients) reviewing via asset or folder share links.
+shares), guests (brands/clients) reviewing via asset or folder share links, and
+agent accounts (`users.is_agent`): one per preset (Claude, ChatGPT, Muse,
+Gemini; `services/agent_service.py`), connected in Settings > Agents. They drive
+the `ffd` CLI with an API token, act as editor on every project, and can't log
+in, approve, reject or create projects (creating one would make them owner).
 Project roles are only `owner` and `editor`. There are no notifications feed,
 activity log, metadata fields/collections, assignments/due dates, admin panel,
 public projects, direct user shares, project-wide/multi-item share links, project
@@ -28,6 +32,11 @@ Monorepo:
 - `apps/web` — Next.js 14 App Router + React 18 + Tailwind. Zustand for
   client state, SWR for server state, hls.js for video. Components in
   `components/`, API client in `lib/api.ts`, stores in `stores/`.
+- `apps/cli` — `ffd.py`, a stdlib-only CLI for agents (upload, wait for a
+  decision, read feedback, reply/resolve) plus the `freeframed-review` Claude
+  Code skill. It composes existing endpoints; keep it dependency-free. Both
+  Dockerfiles copy it into the API image, which serves `GET /cli/ffd` and
+  `GET /cli/guide` so agents install it from the instance they talk to.
 - `packages/transcoder` — Python ffmpeg pipeline (short-edge HLS ladder,
   thumbnails, hwaccel selection in `hwaccel.py`).
 - `deploy/` + `Dockerfile.allinone` — single-container deployment
@@ -79,6 +88,13 @@ Full stack: `docker compose -f docker-compose.dev.yml up --build`
   listed file, update the tripwire in the same commit.
 
 ## Gotchas
+
+- Agent review loop: a person's approve/reject on the newest version is the
+  agent's hand-off signal (`ffd wait` polls approvals). Agent tokens start with
+  `ffd_` and are checked in `middleware/auth.py` before JWT decoding; only the
+  sha256 is stored. Drawn comments get a browser-captured JPEG of the frame plus
+  drawing (`PUT /comments/{id}/snapshot`, `annotations.snapshot_s3_key`) so
+  agents see what was circled.
 
 - Share links: a link targets exactly one asset or one folder (DB check
   `ck_share_link_asset_or_folder`). Guest access flows through

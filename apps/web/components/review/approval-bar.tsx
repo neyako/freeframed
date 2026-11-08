@@ -34,7 +34,7 @@ const statusConfig: Record<
   },
   rejected: {
     icon: <XCircle className="h-4 w-4" />,
-    label: 'Rejected',
+    label: 'Changes requested',
     className: 'text-accent',
   },
   pending: {
@@ -54,14 +54,16 @@ interface ApprovalBarProps {
   className?: string
 }
 
-// ─── Reject note dialog (inline) ─────────────────────────────────────────────
+// ─── Request-changes note dialog (inline) ────────────────────────────────────
 
 interface RejectNoteProps {
   onConfirm: (note: string) => Promise<void>
   onCancel: () => void
+  /** "Send to Claude" when an agent made this version: it wakes on this */
+  confirmLabel: string
 }
 
-function RejectNoteDialog({ onConfirm, onCancel }: RejectNoteProps) {
+function RejectNoteDialog({ onConfirm, onCancel, confirmLabel }: RejectNoteProps) {
   const [note, setNote] = React.useState('')
   const [submitting, setSubmitting] = React.useState(false)
 
@@ -77,13 +79,10 @@ function RejectNoteDialog({ onConfirm, onCancel }: RejectNoteProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div role="dialog" aria-modal="true" aria-labelledby="reject-note-title" className="w-full max-w-sm rounded border border-border bg-bg-elevated p-5">
-        <h3 id="reject-note-title" className="text-sm font-semibold text-text-primary mb-1">Reject with note</h3>
-        <p className="text-xs text-text-tertiary mb-3">
-          Optionally add a note explaining why this version is being rejected.
-        </p>
+        <h3 id="reject-note-title" className="text-sm font-semibold text-text-primary mb-3">Request changes</h3>
         <textarea
           className="w-full resize-none rounded-md border border-border bg-bg-secondary px-3 py-2 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-accent min-h-[80px]"
-          placeholder="Optional rejection note…"
+          placeholder="Anything the comments don't cover (optional)"
           value={note}
           onChange={(e) => setNote(e.target.value)}
           autoFocus
@@ -98,7 +97,7 @@ function RejectNoteDialog({ onConfirm, onCancel }: RejectNoteProps) {
             onClick={handleConfirm}
             loading={submitting}
           >
-            Reject
+            {confirmLabel}
           </Button>
         </div>
       </div>
@@ -124,6 +123,12 @@ export function ApprovalBar({ assetId, versionId, currentUserId, versionCreatedB
   const approvals = Array.isArray(data) ? data : data?.approvals ?? []
   const myApproval = approvals.find((a) => a.user_id === currentUserId)
   const isUploader = Boolean(versionCreatedBy && versionCreatedBy === currentUserId)
+  const { data: uploaders } = useSWR<User[]>(
+    versionCreatedBy && !isUploader ? `/users?ids=${versionCreatedBy}` : null,
+    (key: string) => api.get<User[]>(key),
+    { revalidateOnFocus: false },
+  )
+  const agentUploader = uploaders?.[0]?.is_agent ? uploaders[0] : null
 
   async function handleApprove() {
     setApproving(true)
@@ -157,7 +162,7 @@ export function ApprovalBar({ assetId, versionId, currentUserId, versionCreatedB
       await api.post(`/assets/${assetId}/reject`, { version_id: versionId, note })
       await mutate()
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Failed to reject')
+      setActionError(err instanceof Error ? err.message : 'Failed to request changes')
       throw err
     } finally {
       setShowRejectDialog(false)
@@ -186,6 +191,7 @@ export function ApprovalBar({ assetId, versionId, currentUserId, versionCreatedB
         <RejectNoteDialog
           onConfirm={handleReject}
           onCancel={() => setShowRejectDialog(false)}
+          confirmLabel={agentUploader ? `Send to ${agentUploader.name}` : 'Request changes'}
         />
       )}
 
@@ -227,8 +233,8 @@ export function ApprovalBar({ assetId, versionId, currentUserId, versionCreatedB
               })}
             </div>
 
-            {/* Summary */}
-            <div className="flex items-center gap-2 ml-2 shrink-0">
+            {/* Summary; on phones the avatars' status icons and "You ..." say it */}
+            <div className="hidden sm:flex items-center gap-2 ml-2 shrink-0">
               {approvedCount > 0 && (
                 <span className="text-[12.5px] text-text-secondary">
                   {approvedCount} approved
@@ -236,7 +242,7 @@ export function ApprovalBar({ assetId, versionId, currentUserId, versionCreatedB
               )}
               {rejectedCount > 0 && (
                 <span className="text-[12.5px] text-accent">
-                  {rejectedCount} rejected
+                  {rejectedCount} requested changes
                 </span>
               )}
               {pendingCount > 0 && (
@@ -270,7 +276,7 @@ export function ApprovalBar({ assetId, versionId, currentUserId, versionCreatedB
             {myApproval?.status === 'rejected' && (
               <span className="inline-flex items-center gap-1 text-xs text-accent font-medium">
                 <XCircle className="h-4 w-4" />
-                You rejected
+                You requested changes
               </span>
             )}
             {(myApproval?.status === 'approved' || myApproval?.status === 'rejected') && (
@@ -288,7 +294,7 @@ export function ApprovalBar({ assetId, versionId, currentUserId, versionCreatedB
                   className="text-accent hover:bg-accent-muted"
                 >
                   <XCircle className="h-4 w-4" />
-                  Reject
+                  Request changes
                 </Button>
                 <Button
                   variant="primary"

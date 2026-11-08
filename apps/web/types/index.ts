@@ -25,6 +25,8 @@ export interface User {
   avatar_url: string | null;
   status: UserStatus;
   is_superadmin: boolean;
+  /** Non-login account an AI agent drives with an API token */
+  is_agent?: boolean;
   email_verified: boolean;
   preferences: Record<string, unknown>;
   created_at: string;
@@ -122,6 +124,7 @@ export interface CommentAuthor {
   id: string;
   name: string;
   avatar_url: string | null;
+  is_agent?: boolean;
 }
 
 export interface GuestAuthor {
@@ -155,6 +158,8 @@ export interface Annotation {
   comment_id: string;
   drawing_data: Record<string, unknown>;
   frame_number: number | null;
+  /** Presigned JPEG of the frame with the drawing on top (for agents) */
+  snapshot_url?: string | null;
 }
 
 export interface CommentAttachment {

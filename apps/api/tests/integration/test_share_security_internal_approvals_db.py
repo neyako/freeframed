@@ -133,7 +133,7 @@ def test_concurrent_internal_approval_upserts_one_row(
         session = session_factory()
         try:
             route_start_gate.wait()
-            actor = SimpleNamespace(id=reviewer.id, name=reviewer.name, email=reviewer.email, is_superadmin=False)
+            actor = SimpleNamespace(id=reviewer.id, name=reviewer.name, email=reviewer.email, is_superadmin=False, is_agent=False)
             body = ApprovalCreate(version_id=version.id)
             if action == "approve":
                 approvals.approve_asset(asset.id, body, session, actor)

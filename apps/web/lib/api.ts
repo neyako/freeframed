@@ -96,18 +96,20 @@ async function request<T>(
   return JSON.parse(text) as T
 }
 
-async function uploadRequest<T>(path: string, formData: FormData): Promise<T> {
+async function uploadRequest<T>(path: string, body: FormData | Blob, method: 'POST' | 'PUT' = 'POST'): Promise<T> {
   const buildHeaders = (token: string | null): Record<string, string> => {
     const headers: Record<string, string> = {}
     if (token) headers['Authorization'] = `Bearer ${token}`
+    // FormData sets its own multipart boundary; a raw Blob carries its type
+    if (body instanceof Blob && body.type) headers['Content-Type'] = body.type
     return headers
   }
 
   const execute = async (token: string | null): Promise<Response> => {
     return fetch(`${API_URL}${path}`, {
-      method: 'POST',
+      method,
       headers: buildHeaders(token),
-      body: formData,
+      body,
       credentials: 'include',
     })
   }
@@ -152,5 +154,9 @@ export const api = {
 
   upload: <T>(path: string, formData: FormData) =>
     uploadRequest<T>(path, formData),
+
+  /** Raw binary body (e.g. an image/jpeg Blob), sent as-is with its type */
+  putBlob: <T>(path: string, blob: Blob) =>
+    uploadRequest<T>(path, blob, 'PUT'),
 }
 

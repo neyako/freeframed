@@ -26,6 +26,7 @@ export interface CommentWithReplies extends Comment {
     id: string
     name: string
     avatar_url: string | null
+    is_agent?: boolean
   } | null
   guest_author: {
     id: string

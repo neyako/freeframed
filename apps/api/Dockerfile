@@ -15,6 +15,7 @@ RUN pip install --no-cache-dir -r /workspace/apps/api/requirements.txt
 # Copy transcoder package and API
 COPY packages/transcoder /workspace/packages/transcoder
 COPY apps/api /workspace/apps/api
+COPY apps/cli /workspace/apps/cli
 
 # Stay in /workspace so imports work as packages
 WORKDIR /workspace

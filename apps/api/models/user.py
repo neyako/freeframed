@@ -26,6 +26,10 @@ class User(Base):
     password_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     status: Mapped[UserStatus] = mapped_column(Enum(UserStatus), default=UserStatus.active)
     is_superadmin: Mapped[bool] = mapped_column(default=False)
+    # Agent accounts can't log in; an AI agent drives them with an API token.
+    # They act as an editor on every project and can't approve or reject.
+    is_agent: Mapped[bool] = mapped_column(default=False, server_default="false")
+    api_token_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, unique=True, index=True)
     email_verified: Mapped[bool] = mapped_column(default=False)
     invited_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     invite_token: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
