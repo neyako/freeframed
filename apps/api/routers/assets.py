@@ -79,6 +79,7 @@ def list_assets(
     project_id: uuid.UUID,
     include_failed: bool = Query(False, description="Include assets whose latest version failed processing"),
     folder_id: Optional[str] = Query(None, description="Filter by folder. 'root' for root level, UUID for specific folder."),
+    limit: Optional[int] = Query(None, ge=1, le=100, description="Only the newest N assets (project tile previews)"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -119,6 +120,10 @@ def list_assets(
                 ).distinct().all()
             )
             assets = [a for a in assets if a.id in usable or a.id not in has_any_version]
+
+    if limit is not None:
+        # Newest first, and only those get presigned thumbnails built
+        assets = sorted(assets, key=lambda a: a.created_at, reverse=True)[:limit]
 
     return _build_asset_responses_bulk(assets, db)
 

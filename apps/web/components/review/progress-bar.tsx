@@ -220,7 +220,8 @@ function CommentMarker({
   return (
     <div
       ref={markerRef}
-      className={cn('absolute top-0 -translate-x-1/2 cursor-pointer duration-300 ease-out hover:z-10', isFocused && 'z-10')}
+      data-comment-marker
+      className={cn('group/marker absolute top-0 -translate-x-1/2 cursor-pointer hover:z-10', isFocused && 'z-10')}
       style={{ left: `${leftPercent}%` }}
       onMouseEnter={onHover}
       onMouseLeave={onLeave}
@@ -228,20 +229,16 @@ function CommentMarker({
       onPointerMove={stopMouse}
       onClick={handleClick}
     >
-      {/* Avatar dot — reviewer photo when available, mono initials otherwise */}
-      <div
-        className={cn(
-          'relative w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white border-2 transition-transform hover:scale-110',
-          isFocused ? 'border-accent scale-125 ring-2 ring-accent/40' : 'border-bg-primary',
-        )}
-        style={avatarUrl ? undefined : { backgroundColor: avatarGray(authorName) }}
-      >
-        {avatarUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={avatarUrl} alt={authorName} className="w-full h-full rounded-full object-cover" />
-        ) : (
-          initials
-        )}
+      {/* A frame tick: red while the note is open, gray once resolved, white
+          when focused. Who wrote it shows on hover, so the bar stays a ruler. */}
+      <div className="flex h-5 w-3 items-start justify-center pointer-coarse:w-5">
+        <span
+          className={cn(
+            'block w-[2px] rounded-[1px] transition-[height,background-color] duration-100',
+            isFocused ? 'h-4 bg-text-primary' : comment.resolved ? 'h-2.5 bg-text-tertiary' : 'h-3 bg-accent',
+            !isFocused && 'group-hover/marker:h-4',
+          )}
+        />
       </div>
 
       {/* Tooltip — portaled to document.body to escape all overflow */}
@@ -257,7 +254,7 @@ function CommentMarker({
             pointerEvents: 'none',
           }}
         >
-          <div className="bg-bg-elevated border border-border rounded-lg p-3">
+          <div className="bg-bg-elevated border border-border-strong rounded-md p-2.5 shadow-xl">
             <div className="flex items-center gap-2 mb-1.5">
               {avatarUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -276,14 +273,14 @@ function CommentMarker({
               )}
               <span className="text-xs font-medium text-text-primary truncate">{authorName}</span>
               {comment.timecode_start !== null && (
-                <span className="ml-auto text-[10px] font-mono tabular-nums text-accent bg-accent-muted px-1.5 py-0.5 rounded whitespace-nowrap">
+                <span className="ml-auto text-[10.5px] font-mono tabular-nums text-text-secondary whitespace-nowrap">
                   {formatTimecode(comment.timecode_start, fps)}
                   {comment.timecode_end != null &&
                     ` – ${formatTimecode(comment.timecode_end, fps)}`}
                 </span>
               )}
             </div>
-            <p className="text-xs text-text-secondary line-clamp-2 leading-relaxed">
+            <p className="text-xs text-text-primary line-clamp-2 leading-relaxed">
               {comment.body}
             </p>
           </div>
@@ -450,7 +447,7 @@ export function ProgressBar({
           style={{ width: `${bufferedPercent}%` }}
         />
 
-        {/* Playback progress: neutral, so red stays reserved for cuts */}
+        {/* Played range stays neutral: red marks only "now" (the playhead), open notes and cuts */}
         <div
           className="absolute inset-y-0 left-0 rounded-full bg-text-primary/35"
           style={{ width: `${playPercent}%` }}
@@ -513,15 +510,15 @@ export function ProgressBar({
 
         {/* Playhead thumb */}
         <div
-          className="absolute top-1/2 -translate-y-1/2 w-1 h-3.5 rounded-full bg-text-primary pointer-events-none z-10"
+          className="absolute top-1/2 -translate-y-1/2 w-[3px] h-4 rounded-[1px] bg-accent pointer-events-none z-10"
           style={{ left: `${playPercent}%`, transform: 'translateX(-50%) translateY(-50%)' }}
         />
       </div>
 
-      {/* Comment markers row — below the progress bar. Every avatar shows;
-          close ones overlap and the hovered one comes to the front. */}
+      {/* Comment markers row: one tick per note under the bar; the hovered
+          one comes to the front. */}
       {pointMarkers.length > 0 && (
-        <div className="relative w-full h-6 mt-0.5">
+        <div className="relative w-full h-5 mt-1">
           {pointMarkers.map((c) => {
             const authorName = c.author?.name ?? c.guest_author?.name ?? 'Unknown'
             return (

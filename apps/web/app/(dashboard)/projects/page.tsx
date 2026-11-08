@@ -222,7 +222,7 @@ export default function ProjectsPage() {
             }
           >
             <Inbox />
-            Review home
+            Review
           </Button>
           <Segmented
             options={[

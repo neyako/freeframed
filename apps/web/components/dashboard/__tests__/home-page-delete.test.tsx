@@ -146,7 +146,7 @@ describe("HomePage asset delete", () => {
     expect(screen.queryByRole("button", { name: "Show more" })).not.toBeInTheDocument();
   });
 
-  it("hydrates greeting and relative asset time from deterministic initial markup", async () => {
+  it("hydrates relative asset time from deterministic initial markup", async () => {
     // Given
     let clientRender = false;
     const getHoursSpy = vi
@@ -175,7 +175,6 @@ describe("HomePage asset delete", () => {
 
       // Then
       await waitFor(() => {
-        expect(container).toHaveTextContent("Good evening, Neya");
         expect(container).toHaveTextContent("18 hours ago");
       });
       expect(recoverableErrors).toHaveLength(0);

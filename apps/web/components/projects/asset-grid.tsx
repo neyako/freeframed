@@ -65,12 +65,12 @@ interface AssetGridProps {
 // its media's shape needs, and rows stretch a little to fill the width.
 const rowHeightMap = { S: 140, M: 200, L: 280 }
 
-// Folder cards stay on a plain grid (they have no media shape)
-const gridColsMap = {
-  S: 'grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6',
-  M: 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3',
-  L: 'grid-cols-1 sm:grid-cols-1 lg:grid-cols-2',
-}
+// Narrowest a card may get, so a 9:16 video keeps a readable title and
+// poster instead of being squeezed to its row-height width
+const minCardWidthMap = { S: 104, M: 150, L: 200 }
+
+// Folders are compact rows on a plain grid, whatever the card size
+const folderGridClass = 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4'
 
 
 export function AssetGrid({
@@ -212,7 +212,7 @@ export function AssetGrid({
 
       {/* Grid view: folders */}
       {showFolders && layout === 'grid' && (
-        <div className={cn('grid gap-x-3 gap-y-4', gridColsMap[cardSize])}>
+        <div className={cn('grid gap-2', folderGridClass)}>
           {folders!.map((folder) => {
             const isFolderSelected = selectedFolderIds.has(folder.id)
             return (
@@ -222,10 +222,11 @@ export function AssetGrid({
                   aria-label={isFolderSelected ? `Deselect ${folder.name}` : `Select ${folder.name}`}
                   aria-pressed={isFolderSelected}
                   className={cn(
-                    'absolute left-1.5 top-1.5 z-10 flex h-5 w-5 items-center justify-center rounded-sm transition-colors duration-100',
+                    // Sits over the folder icon; an empty box on touch, a hint on hover
+                    'absolute left-2.5 top-1/2 z-10 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-sm border transition-colors duration-100',
                     isFolderSelected
-                      ? 'bg-text-primary text-bg-primary'
-                      : 'bg-black/60 text-transparent opacity-0 group-hover/folder:opacity-100 group-hover/folder:text-white/60 pointer-coarse:opacity-100',
+                      ? 'border-text-primary bg-text-primary text-bg-primary'
+                      : 'border-border-strong bg-bg-secondary text-transparent opacity-0 group-hover/folder:opacity-100 group-hover/folder:text-text-tertiary pointer-coarse:opacity-100',
                   )}
                   onClick={(e) => { e.stopPropagation(); toggleFolderSelect(folder.id) }}
                 >
@@ -252,14 +253,14 @@ export function AssetGrid({
           action={onUpload ? { label: 'Upload', onClick: onUpload } : undefined}
         />
       ) : layout === 'grid' && filtered.length > 0 ? (
-        <div className={cn('flex flex-wrap gap-x-3 gap-y-4', showFolders && 'mt-3')}>
+        <div className={cn('flex flex-wrap gap-x-3 gap-y-4', showFolders && 'mt-2')}>
           {filtered.map((asset) => {
             const aspect = mediaAspect(asset)
             return (
             <div
               key={asset.id}
               className="min-w-0"
-              style={{ flexGrow: aspect, flexBasis: aspect * rowHeightMap[cardSize] }}
+              style={{ flexGrow: aspect, flexBasis: Math.max(aspect * rowHeightMap[cardSize], minCardWidthMap[cardSize]) }}
               onClick={() => onAssetOpen?.(asset)}
             >
               <AssetCard

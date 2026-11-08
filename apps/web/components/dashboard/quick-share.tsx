@@ -169,7 +169,17 @@ export function QuickShare() {
             dragKind === "video" ? "text-text-primary" : dragKind === "other" ? "text-accent" : "text-text-secondary",
           )}
         >
-          {dragKind === "video" ? "Release to upload" : dragKind === "other" ? "Videos only" : "Drop a video here"}
+          {dragKind === "video" ? (
+            "Release to upload"
+          ) : dragKind === "other" ? (
+            "Videos only"
+          ) : (
+            <>
+              {/* Phones can't drop files; say what the button gets you instead */}
+              <span className="pointer-coarse:hidden">Drop a video here</span>
+              <span className="hidden pointer-coarse:inline">Upload, get a review link</span>
+            </>
+          )}
         </p>
         <Button type="button" variant="secondary" size="sm" onClick={handleChooseClick}>
           Choose video

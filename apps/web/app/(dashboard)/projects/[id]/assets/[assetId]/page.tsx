@@ -437,9 +437,10 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
               setTimeout(() => refetchVersions(), 800)
             }}
           />
-          <Button variant="ghost" size="sm" className="hidden md:inline-flex" onClick={() => versionFileInputRef.current?.click()}>
+          {/* Icon-only on phones, so an editor can send v2 from the couch */}
+          <Button variant="ghost" size="sm" onClick={() => versionFileInputRef.current?.click()} title="Upload a new version" aria-label="New version">
             <Upload />
-            New version
+            <span className="hidden md:inline">New version</span>
           </Button>
           <Button variant="ghost" size="sm" onClick={handleDownload} disabled={downloading} title="Download original file">
             <Download />

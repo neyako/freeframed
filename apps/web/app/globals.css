@@ -15,11 +15,14 @@
   --border-primary: #292929;
   --border-secondary: #1a1a1a;
   --border-strong: #3d3d3d;
-  --border-focus: #D71921;
+  /* Focus is neutral: red is reserved for "now" (playhead, open notes, the
+     active tab) and for destructive actions */
+  --border-focus: #6b6b6b;
 
   --text-primary: #f4f4f4;
-  --text-secondary: #9b9b9b;
-  --text-tertiary: #5a5a5a;
+  --text-secondary: #a8a8a8;
+  /* 5:1 on black; metadata must stay readable, not look disabled */
+  --text-tertiary: #7c7c7c;
   --text-inverse: #000000;
 
   --accent: #D71921;
@@ -76,11 +79,11 @@
   --border-primary: #cfcabb;
   --border-secondary: #ddd8cb;
   --border-strong: #b0aa98;
-  --border-focus: #D71921;
+  --border-focus: #8b877a;
 
   --text-primary: #0a0a0a;
-  --text-secondary: #57544c;
-  --text-tertiary: #8b877a;
+  --text-secondary: #4f4c45;
+  --text-tertiary: #6f6b60;
   --text-inverse: #f1efe9;
 
   --accent: #D71921;

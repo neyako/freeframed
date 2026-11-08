@@ -12,7 +12,7 @@ const themes = [
 ] as const satisfies readonly { value: Theme; label: string }[]
 
 const homeModes = [
-  { value: 'review', label: 'Review feed' },
+  { value: 'review', label: 'Review' },
   { value: 'projects', label: 'Projects' },
 ] as const satisfies readonly { value: HomeMode; label: string }[]
 

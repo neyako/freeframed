@@ -125,10 +125,10 @@ export function AssetCard({
             aria-pressed={selected}
             onClick={(e) => { e.stopPropagation(); onSelect(e) }}
             className={cn(
-              'absolute left-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-sm transition-colors duration-100',
+              'absolute left-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-sm border transition-colors duration-100',
               selected
-                ? 'bg-text-primary text-bg-primary'
-                : 'bg-black/60 text-white/60 opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100',
+                ? 'border-text-primary bg-text-primary text-bg-primary'
+                : 'border-white/70 bg-black/40 text-transparent opacity-0 group-hover:opacity-100 group-hover:text-white/70 pointer-coarse:opacity-100',
             )}
           >
             <Check className="h-3.5 w-3.5" />

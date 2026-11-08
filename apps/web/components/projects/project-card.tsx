@@ -2,6 +2,7 @@
 
 import * as React from 'react'
 import Link from 'next/link'
+import useSWR from 'swr'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { Folder, MoreHorizontal, Settings, Trash2 } from 'lucide-react'
 import { cn, formatBytes } from '@/lib/utils'
@@ -15,7 +16,26 @@ import {
 } from '@/components/ui/surface'
 import { useToast } from '@/components/shared/toast'
 import { ProjectSettingsDialog } from './project-settings-dialog'
-import type { Project } from '@/types'
+import type { AssetResponse, Project } from '@/types'
+
+/** Without a chosen poster, the tile shows its newest frames side by side */
+function FrameStrip({ projectId }: { projectId: string }) {
+  const { data } = useSWR<AssetResponse[]>(
+    `/projects/${projectId}/assets?limit=4`,
+    (key: string) => api.get<AssetResponse[]>(key),
+    { revalidateOnFocus: false },
+  )
+  const frames = (data ?? []).filter((a) => a.thumbnail_url)
+  if (frames.length === 0) return <Folder className="h-[15px] w-[15px]" />
+  return (
+    <div className="flex h-full w-full gap-px">
+      {frames.map((a) => (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img key={a.id} src={a.thumbnail_url!} alt="" className="h-full min-w-0 flex-1 object-cover" />
+      ))}
+    </div>
+  )
+}
 
 interface ProjectCardProps {
   project: Project
@@ -50,7 +70,7 @@ export function ProjectCard({
   const meta = [
     assetCount > 0
       ? `${assetCount} item${assetCount !== 1 ? 's' : ''} · ${formatBytes(project.storage_bytes ?? 0)}`
-      : 'Empty',
+      : 'No videos yet',
     project.is_quick_share ? 'Quick shares' : null,
     showRole && project.role && project.role !== 'owner' ? 'Editor' : null,
   ]
@@ -69,6 +89,8 @@ export function ProjectCard({
                 alt={project.name}
                 className="h-full w-full object-cover"
               />
+            ) : assetCount > 0 ? (
+              <FrameStrip projectId={project.id} />
             ) : (
               <Folder className="h-[15px] w-[15px]" />
             )}

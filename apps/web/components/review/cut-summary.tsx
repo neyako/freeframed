@@ -147,7 +147,7 @@ export function CutSummary({ comments, duration, target, onTargetChange }: CutSu
         <span className="font-mono text-[18px] font-semibold tabular-nums text-text-primary">{formatTime(shownAfter)}</span>
         <span className="min-w-0 truncate text-[12.5px] text-text-tertiary">
           {cuts.length === 0
-            ? 'no cuts yet'
+            ? 'runtime'
             : target === null
               ? `after cuts, from ${formatTime(duration)}`
               : `from ${formatTime(duration)}`}

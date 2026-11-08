@@ -172,8 +172,8 @@ describe("CommentInput range comments", () => {
     localStorage.setItem("ff-comment-visibility", "public");
     const onSubmit = setup();
 
-    fireEvent.click(await screen.findByRole("button", { name: /Public/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Internal" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Everyone/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Team only/ }));
 
     expect(localStorage.getItem("ff-comment-visibility")).toBe("internal");
     await typeAndSend("team note");

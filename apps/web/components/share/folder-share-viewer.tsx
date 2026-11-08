@@ -17,6 +17,7 @@ import {
   ArrowLeft,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { Wordmark } from '@/components/shared/wordmark'
 import { clearTokens } from '@/lib/auth'
 import { useAuthStore } from '@/stores/auth-store'
 import { useBrandingStore } from '@/stores/branding-store'
@@ -514,9 +515,9 @@ function ShareCommentList({ comments, loading, canComment, onReply }: ShareComme
                   <span className="text-2xs text-text-tertiary">{formatShortDate(comment.created_at)}</span>
                   <span className="ml-auto text-2xs text-text-tertiary">#{i + 1}</span>
                 </div>
-                <p className="text-sm text-text-secondary mt-1 leading-relaxed"><Linkified text={comment.body} /></p>
+                <p className="text-sm text-text-primary mt-1 whitespace-pre-line leading-relaxed"><Linkified text={comment.body} /></p>
                 {comment.timecode_start != null && (
-                  <span className="inline-flex items-center gap-1 mt-1 text-[10px] text-accent font-mono bg-accent/10 px-1.5 py-0.5 rounded">
+                  <span className="inline-flex items-center gap-1 mt-1 text-[11px] text-text-secondary font-mono tabular-nums">
                     {Math.floor(comment.timecode_start / 60)}:{String(Math.floor(comment.timecode_start % 60)).padStart(2, '0')}
                   </span>
                 )}
@@ -844,14 +845,18 @@ function ShareReviewInner({
               <ArrowLeft className="h-4 w-4" />
             </button>
           )}
+          {!onBack && <Wordmark showName={false} className="mx-1.5 text-[13px]" />}
           <span className="text-[13px] font-medium text-text-primary truncate">{assetName}</span>
+          {versions.length === 0 && currentVersion && (
+            <span className="ml-1.5 shrink-0 font-mono text-[11.5px] tabular-nums text-text-tertiary">v{currentVersion.version_number}</span>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {versions.length > 0 && (
             <VersionSwitcher versions={versions} />
           )}
           {allowDownload && (
-            <button className="flex items-center gap-1.5 h-7 px-3 rounded-md text-xs font-medium text-text-inverse bg-accent hover:bg-accent-hover transition-colors" onClick={() => handleDownload(token, asset.id, shareSession, currentVersion?.id)}>
+            <button className="flex items-center gap-1.5 h-7 px-3 rounded-md text-xs font-medium text-text-inverse bg-text-primary hover:opacity-90 transition-opacity" onClick={() => handleDownload(token, asset.id, shareSession, currentVersion?.id)}>
               <Download className="h-3 w-3" /> Download
             </button>
           )}
@@ -1020,7 +1025,7 @@ function GuestIdentityPrompt({ onSave, onCancel }: { onSave: (name: string, emai
           <button
             disabled={!name.trim() || !email.trim()}
             onClick={() => onSave(name.trim(), email.trim())}
-            className="px-4 py-1.5 rounded-md bg-accent text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-50 transition-colors"
+            className="px-4 py-1.5 rounded-md bg-text-primary text-xs font-medium text-text-inverse hover:opacity-90 disabled:opacity-50 transition-opacity"
           >
             Continue
           </button>
@@ -1338,10 +1343,7 @@ export function FolderShareViewer({
             </div>
           ) : (
             <div className="flex items-center gap-2 shrink-0">
-              <span className="h-2 w-2 rounded-full bg-accent" />
-              <span className="font-mono text-[15px] font-bold text-text-primary">
-                freeframed
-              </span>
+              <Wordmark className="text-[14px]" />
             </div>
           )}
 
@@ -1353,7 +1355,7 @@ export function FolderShareViewer({
         <div className="flex items-center gap-2 shrink-0">
           {allowDownload && (
             <button
-              className="flex items-center gap-1.5 h-7 px-3 rounded-md text-xs font-medium text-white bg-accent hover:bg-accent-hover transition-colors"
+              className="flex items-center gap-1.5 h-7 px-3 rounded-md text-xs font-medium text-text-inverse bg-text-primary hover:opacity-90 transition-opacity"
               onClick={() => handleDownloadAll(token, currentSubfolderId ?? null, shareSession)}
             >
               <Download className="h-3 w-3" />

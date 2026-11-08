@@ -17,7 +17,7 @@ export function useStorageStats() {
 }
 
 /**
- * Storage usage bar: app usage against real disk capacity.
+ * Storage bar: how full the disk is, with the app's share marked in white.
  * `usedBytes` override lets the project sidebar show per-project usage
  * against the same disk total.
  */
@@ -27,25 +27,26 @@ export function StorageMeter({ usedBytes, className }: { usedBytes?: number; cla
   const used = usedBytes ?? data?.used_bytes ?? 0
   const total = data?.disk_total_bytes ?? null
   const free = data?.disk_free_bytes ?? null
-  const pct = total ? Math.min((used / total) * 100, 100) : 0
+  // The bar is the disk itself: everything on it counts toward running out,
+  // not just freeframed's share, so the warning fires when the disk is full
+  const diskPct = total && free !== null ? Math.min(((total - free) / total) * 100, 100) : 0
+  const appPct = total ? Math.min((used / total) * 100, diskPct || 100) : 0
+  const low = diskPct >= 90
 
   return (
     <div className={cn('flex flex-col gap-1 text-[12px]', className)}>
       <div className="flex items-baseline justify-between gap-2">
         <span className="text-text-secondary">Storage</span>
-        <span className={cn('whitespace-nowrap font-mono tabular-nums', pct >= 90 ? 'text-accent' : 'text-text-tertiary')}>
-          {formatBytes(used)}
-          {total !== null && ` / ${formatBytes(total)}`}
+        <span className="whitespace-nowrap font-mono tabular-nums text-text-tertiary">{formatBytes(used)} here</span>
+      </div>
+      <div className="relative h-1 w-full overflow-hidden rounded-full bg-bg-hover" title="Disk in use, with freeframed's share in white">
+        <div className={cn('absolute inset-y-0 left-0', low ? 'bg-accent' : 'bg-text-tertiary')} style={{ width: `${diskPct}%` }} />
+        <div className="absolute inset-y-0 left-0 bg-text-primary" style={{ width: `${Math.max(appPct, used > 0 ? 1 : 0)}%` }} />
+      </div>
+      {free !== null && total !== null && (
+        <span className={cn('font-mono tabular-nums', low ? 'text-accent' : 'text-text-tertiary')}>
+          {formatBytes(free)} free of {formatBytes(total)}
         </span>
-      </div>
-      <div className="h-1 w-full overflow-hidden rounded-full bg-bg-hover">
-        <div
-          className={cn('h-full rounded-full', pct >= 90 ? 'bg-accent' : 'bg-text-primary')}
-          style={{ width: `${Math.max(pct, 1)}%` }}
-        />
-      </div>
-      {free !== null && (
-        <span className="font-mono tabular-nums text-text-tertiary">{formatBytes(free)} free</span>
       )}
     </div>
   )

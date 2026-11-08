@@ -22,9 +22,9 @@ import {
   Film,
   Check,
 } from "lucide-react";
-import { cn, formatTime, formatTimecode, formatFrames, isSendEnter } from "@/lib/utils";
+import { cn, formatTime, isSendEnter } from "@/lib/utils";
 import { formatRange, formatSpan } from "@/lib/cuts";
-import { useReviewStore, selectFps } from "@/stores/review-store";
+import { useReviewStore } from "@/stores/review-store";
 import { useReview } from "./review-provider";
 import { useDrawing } from "@/hooks/use-drawing";
 import { useAutoGrow } from "@/hooks/use-auto-grow";
@@ -178,7 +178,7 @@ function MentionDropdown({
             onSelect(user);
           }}
         >
-          <div className="h-6 w-6 rounded-full bg-accent flex items-center justify-center text-[10px] text-text-primary font-semibold shrink-0">
+          <div className="h-6 w-6 rounded-full bg-bg-hover flex items-center justify-center text-[10px] text-text-primary font-semibold shrink-0">
             {user.name.charAt(0).toUpperCase()}
           </div>
           <div className="flex-1 text-left min-w-0">
@@ -236,7 +236,6 @@ export function CommentInput({
     playheadTime,
     rangeStart,
     rangeEnd,
-    timeFormat,
     pendingAnnotation,
     toggleDrawingMode,
     setIsDrawingMode,
@@ -247,7 +246,6 @@ export function CommentInput({
     setPendingAnnotation,
     setActiveAnnotation,
   } = useReviewStore();
-  const fps = useReviewStore(selectFps);
 
   const { pauseVideo } = useReview();
 
@@ -380,18 +378,7 @@ export function CommentInput({
     return Math.floor((sent / total) * 100);
   })();
 
-  function displayTime(seconds: number): string {
-    switch (timeFormat) {
-      case "frames":
-        return formatFrames(seconds, fps);
-      case "standard":
-        return formatTime(seconds);
-      case "timecode":
-        return formatTimecode(seconds, fps);
-      default:
-        return formatTimecode(seconds, fps);
-    }
-  }
+
   const hasAnnotation =
     !!(annotationData && Object.keys(annotationData).length > 0) ||
     !!(pendingAnnotation && (pendingAnnotation as any)?.objects?.length > 0);
@@ -573,7 +560,7 @@ export function CommentInput({
     >
       {/* Reply indicator */}
       {replyToId && (
-        <div className="flex items-center justify-between px-4 py-2 bg-accent/5 border-b border-accent/10 text-xs text-accent">
+        <div className="flex items-center justify-between px-4 py-2 border-b border-border text-xs text-text-secondary">
           <span>Replying to comment</span>
           <button
             className="text-text-tertiary hover:text-text-primary"
@@ -605,8 +592,8 @@ export function CommentInput({
         >
           <div
             className={cn(
-              "flex flex-col rounded-lg border border-border bg-bg-tertiary focus-within:border-accent/50 focus-within:ring-1 focus-within:ring-accent/20",
-              dragOver && "border-dashed border-accent bg-accent-muted",
+              "flex flex-col rounded-md border border-border bg-bg-tertiary focus-within:border-border-focus",
+              dragOver && "border-dashed border-text-secondary bg-bg-hover",
             )}
           >
             {/* Timecode badge sits above the text so the text gets the full width */}
@@ -637,7 +624,7 @@ export function CommentInput({
                   </>
                 ) : (
                   <>
-                    {displayTime(playheadTime)}
+                    {formatTime(playheadTime)}
                     <button
                       onClick={() => setRangeStart(playheadTime)}
                       className="ml-0.5 text-text-tertiary hover:text-text-primary transition-colors relative after:absolute after:-inset-2.5 after:content-['']"
@@ -655,10 +642,12 @@ export function CommentInput({
               className="block w-full resize-none overflow-y-auto bg-transparent px-2.5 py-2 text-[16px] leading-normal text-text-primary placeholder:text-text-tertiary focus:outline-none max-h-[35vh] md:max-h-[45vh] md:text-[14px]"
               placeholder={
                 replyToId
-                  ? "Write a reply..."
+                  ? "Reply…"
                   : isCut
                     ? "Why cut this? (optional)"
-                    : "Leave your comment..."
+                    : hasTimecode
+                      ? "Note at this frame"
+                      : "Leave a note"
               }
               value={body}
               onChange={handleTextChange}
@@ -678,14 +667,14 @@ export function CommentInput({
           </div>
 
           {dragOver && (
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-lg bg-bg-secondary/85 text-[13px] text-text-primary">
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-md bg-bg-secondary/85 text-[13px] text-text-primary">
               Drop to attach
             </div>
           )}
 
           {/* Mention dropdown */}
           {mentionQuery !== null && (
-            <div className="absolute bottom-full left-0 right-0 mb-1 z-50 rounded-lg border border-border bg-bg-elevated shadow-xl max-h-48 overflow-y-auto animate-ff-rise-in">
+            <div className="absolute bottom-full left-0 right-0 mb-1 z-50 rounded-md border border-border-strong bg-bg-elevated shadow-xl max-h-48 overflow-y-auto animate-ff-rise-in">
               <MentionDropdown
                 query={mentionQuery}
                 projectId={projectId}
@@ -713,7 +702,7 @@ export function CommentInput({
                       {Math.floor(uploadProgress[i] * 100)}%
                     </div>
                     <div className="absolute inset-x-0 bottom-0 h-[3px] bg-white/15">
-                      <div className="h-full bg-accent" style={{ width: `${uploadProgress[i] * 100}%` }} />
+                      <div className="h-full bg-text-primary" style={{ width: `${uploadProgress[i] * 100}%` }} />
                     </div>
                   </>
                 )}
@@ -764,7 +753,7 @@ export function CommentInput({
                   className={cn(
                     "h-7 w-7 flex items-center justify-center rounded-md transition-colors",
                     drawingTool === tool.id
-                      ? "bg-accent/15 text-accent"
+                      ? "bg-bg-hover text-text-primary"
                       : "text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary",
                   )}
                 >
@@ -782,7 +771,7 @@ export function CommentInput({
                 className={cn(
                   "w-5 h-5 rounded-full transition-all shrink-0",
                   drawingColor === color
-                    ? "ring-2 ring-accent ring-offset-1 ring-offset-bg-secondary"
+                    ? "ring-2 ring-text-primary ring-offset-1 ring-offset-bg-secondary"
                     : "hover:scale-110",
                 )}
                 style={{ backgroundColor: color }}
@@ -816,7 +805,7 @@ export function CommentInput({
                   className={cn(
                     "h-7 w-7 flex items-center justify-center rounded-md transition-colors",
                     timecodeAttached
-                      ? "text-accent bg-accent-muted"
+                      ? "text-text-primary bg-bg-hover"
                       : "text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary",
                   )}
                   onClick={() => {
@@ -837,7 +826,7 @@ export function CommentInput({
                   className={cn(
                     "h-7 w-7 flex items-center justify-center rounded-md transition-colors",
                     hasAnnotation
-                      ? "text-accent bg-accent/10"
+                      ? "text-text-primary bg-bg-hover"
                       : "text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary",
                   )}
                   onClick={() => toggleDrawingMode()}
@@ -857,7 +846,7 @@ export function CommentInput({
                   <Smile className="h-4 w-4" />
                 </button>
                 {emojiOpen && (
-                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 rounded-lg border border-border bg-bg-elevated shadow-2xl p-1.5 duration-100 w-[200px] animate-ff-rise-in">
+                  <div className="absolute bottom-full left-0 mb-2 z-50 rounded-md border border-border-strong bg-bg-elevated shadow-2xl p-1.5 duration-100 w-[200px] animate-ff-rise-in">
                     <div className="grid grid-cols-8 gap-px">
                       {EMOJIS.map((e) => (
                         <button
@@ -903,57 +892,49 @@ export function CommentInput({
             </div>
 
             <div className="flex items-center gap-2">
-              {/* Visibility dropdown */}
-              <div className="relative" ref={visRef}>
-                <button
-                  onClick={() => {
-                    if (!visibilityLocked) setVisDropdownOpen((p) => !p);
-                  }}
-                  disabled={visibilityLocked}
-                  className={cn(
-                    "inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md text-[12px] transition-colors border",
-                    commentVisibility === "internal"
-                      ? "text-accent border-accent-line bg-accent-muted"
-                      : "text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary border-border",
+              {/* Who sees the note: the team only, or guests on share links too.
+                  Guests can't choose, so they get no control at all. */}
+              {!visibilityLocked && (
+                <div className="relative" ref={visRef}>
+                  <button
+                    onClick={() => setVisDropdownOpen((p) => !p)}
+                    className="inline-flex items-center gap-1.5 h-7 px-2 rounded-md text-[12px] text-text-secondary border border-border hover:bg-bg-hover hover:text-text-primary transition-colors"
+                    title="Who can see this note"
+                  >
+                    {commentVisibility === "internal" ? (
+                      <Lock className="h-3 w-3" />
+                    ) : (
+                      <Globe className="h-3 w-3" />
+                    )}
+                    {commentVisibility === "internal" ? "Team only" : "Everyone"}
+                    <ChevronDown className="h-3 w-3 text-text-tertiary" />
+                  </button>
+                  {visDropdownOpen && (
+                    <div className="absolute bottom-full right-0 mb-1 z-50 w-56 rounded-md border border-border-strong bg-bg-elevated shadow-2xl p-1 duration-100 animate-ff-rise-in">
+                      {([
+                        ["internal", Lock, "Team only", "You and your editor"],
+                        ["public", Globe, "Everyone", "Also guests on share links"],
+                      ] as const).map(([value, Icon, label, hint]) => (
+                        <button
+                          key={value}
+                          className={cn(
+                            "flex w-full items-start gap-2.5 rounded px-2 py-1.5 text-left transition-colors hover:bg-bg-hover",
+                            commentVisibility === value ? "text-text-primary" : "text-text-secondary",
+                          )}
+                          onClick={() => selectCommentVisibility(value)}
+                        >
+                          <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                          <span>
+                            <span className="block text-[13px]">{label}</span>
+                            <span className="block text-[11.5px] text-text-tertiary">{hint}</span>
+                          </span>
+                          {commentVisibility === value && <Check className="ml-auto mt-0.5 h-3.5 w-3.5 shrink-0" />}
+                        </button>
+                      ))}
+                    </div>
                   )}
-                >
-                  {commentVisibility === "internal" ? (
-                    <Lock className="h-3 w-3" />
-                  ) : (
-                    <Globe className="h-3 w-3" />
-                  )}
-                  {commentVisibility === "internal" ? "Internal" : "Public"}
-                  {!visibilityLocked && <ChevronDown className="h-3 w-3" />}
-                </button>
-                {!visibilityLocked && visDropdownOpen && (
-                  <div className="absolute bottom-full right-0 mb-1 z-50 w-44 rounded-xl border border-border bg-bg-elevated shadow-2xl py-1.5 duration-100 animate-ff-rise-in">
-                    <button
-                      className={cn(
-                        "flex w-full items-center gap-2.5 px-3 py-2 text-[13px] transition-colors",
-                        commentVisibility === "public"
-                          ? "text-text-primary bg-bg-tertiary"
-                          : "text-text-secondary hover:bg-bg-tertiary",
-                      )}
-                      onClick={() => selectCommentVisibility("public")}
-                    >
-                      <Globe className="h-3.5 w-3.5" />
-                      Public
-                    </button>
-                    <button
-                      className={cn(
-                        "flex w-full items-center gap-2.5 px-3 py-2 text-[13px] transition-colors",
-                        commentVisibility === "internal"
-                          ? "text-accent bg-bg-tertiary"
-                          : "text-text-secondary hover:bg-bg-tertiary",
-                      )}
-                      onClick={() => selectCommentVisibility("internal")}
-                    >
-                      <Lock className="h-3.5 w-3.5" />
-                      Internal
-                    </button>
-                  </div>
-                )}
-              </div>
+                </div>
+              )}
 
               {/* Submit: disabled while posting, no spinner */}
               {isCut ? (
@@ -969,7 +950,7 @@ export function CommentInput({
                   onClick={handleSubmit}
                   disabled={!canSubmit || submitting}
                   className={cn(
-                    "inline-flex h-7 min-w-7 items-center justify-center rounded-full bg-accent text-text-primary hover:bg-accent/90 disabled:opacity-30 disabled:cursor-not-allowed transition-colors",
+                    "inline-flex h-7 min-w-7 items-center justify-center rounded-md bg-text-primary text-text-inverse hover:opacity-90 disabled:opacity-25 disabled:cursor-not-allowed transition-opacity",
                     uploadPercent !== null && "px-1.5 disabled:opacity-100",
                   )}
                   title="Send (Enter)"

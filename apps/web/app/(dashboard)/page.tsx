@@ -6,7 +6,6 @@ import Link from "next/link";
 import { Film, LayoutGrid, Trash2 } from "lucide-react";
 import { api } from "@/lib/api";
 import { mediaAspect } from "@/lib/aspect";
-import { useAuthStore } from "@/stores/auth-store";
 import { useHomeModeStore } from "@/stores/home-mode-store";
 import { useRouter } from "next/navigation";
 import { formatRelativeTime } from "@/lib/utils";
@@ -17,12 +16,6 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import type { AssetResponse } from "@/types";
 
-function getGreeting(): string {
-  const hour = new Date().getHours();
-  if (hour < 12) return "Good morning";
-  if (hour < 17) return "Good afternoon";
-  return "Good evening";
-}
 
 // Time/locale-derived text must not be server-rendered: the container renders
 // in UTC while the client hydrates in the viewer's timezone, and any mismatch
@@ -98,7 +91,7 @@ function AssetCard({ asset, onDelete }: AssetCardProps) {
       <button
         type="button"
         onClick={handleDeleteClick}
-        className="pointer-events-none absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-md bg-black/70 text-text-secondary opacity-0 transition-colors duration-100 hover:text-accent group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-text-primary/60 pointer-coarse:pointer-events-auto pointer-coarse:opacity-100"
+        className="pointer-events-none absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-md bg-black/70 text-text-secondary opacity-0 transition-colors duration-100 hover:text-accent group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-text-primary/60"
         aria-label={`Delete ${asset.name}`}
         title={`Delete ${asset.name}`}
       >
@@ -190,7 +183,6 @@ function Section({
 
 export default function HomePage() {
   const mounted = useMounted();
-  const { user } = useAuthStore();
   const router = useRouter();
   const homeMode = useHomeModeStore((s) => s.mode);
   const setHomeMode = useHomeModeStore((s) => s.setMode);
@@ -227,19 +219,17 @@ export default function HomePage() {
   return (
     <div className="mx-auto w-full max-w-[1200px] space-y-8 px-4 pb-16 pt-6 sm:px-6">
       <div className="flex items-center justify-between gap-6">
-        <h1 className="text-[18px] font-semibold text-text-primary">
-          {mounted ? getGreeting() : "Welcome"}, {user?.name?.split(" ")[0] ?? "there"}
-        </h1>
+        <h1 className="text-[18px] font-semibold text-text-primary">Review</h1>
         <div className="hidden shrink-0 items-center gap-4 sm:flex">
           <Button
             type="button"
             variant="ghost"
             size="sm"
             onClick={() => setHomeMode("projects")}
-            title="Use the projects grid as your home screen"
+            title="Make the projects grid your home screen"
           >
             <LayoutGrid />
-            Projects home
+            Projects
           </Button>
           <StorageMeter className="w-48" />
         </div>
@@ -248,7 +238,7 @@ export default function HomePage() {
       <QuickShare />
 
       <Section
-        title="Recent"
+        title="Not approved yet"
         assets={recentAssets}
         isLoading={loadingRecent}
         emptyTitle="No assets yet."

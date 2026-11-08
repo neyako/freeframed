@@ -47,37 +47,19 @@ function ThumbCell({ asset, className }: { asset: AssetResponse; className?: str
   )
 }
 
+/** Up to three real frames from the folder, as a small strip on the row */
 function FolderThumbnails({ projectId, folderId, itemCount }: { projectId: string; folderId: string; itemCount: number }) {
   const { data: assets } = useSWR<AssetResponse[]>(
     itemCount > 0 ? `/projects/${projectId}/assets?folder_id=${folderId}` : null,
     (key: string) => api.get<AssetResponse[]>(key),
     { revalidateOnFocus: false },
   )
-
-  // Prefer assets with thumbnails first, fill with any up to 3
-  const sorted = [...(assets ?? [])].sort((a, b) => (b.thumbnail_url ? 1 : 0) - (a.thumbnail_url ? 1 : 0))
-  const thumbs = sorted.slice(0, 3)
-
-  if (thumbs.length === 0) {
-    return (
-      <div className="flex aspect-[4/3] items-center justify-center overflow-hidden rounded-sm border border-border bg-bg-tertiary transition-colors duration-100 group-hover:border-border-strong">
-        <Folder className="h-[15px] w-[15px] text-text-tertiary" />
-      </div>
-    )
-  }
-
+  const thumbs = (assets ?? []).filter((a) => a.thumbnail_url).slice(0, 3)
+  if (thumbs.length === 0) return null
   return (
-    <div className={cn(
-      'grid aspect-[4/3] gap-px overflow-hidden rounded-sm border border-border bg-bg-tertiary transition-colors duration-100 group-hover:border-border-strong',
-      thumbs.length === 1 && 'grid-cols-1',
-      thumbs.length >= 2 && 'grid-cols-2',
-    )}>
-      {thumbs.map((asset, i) => (
-        <ThumbCell
-          key={asset.id}
-          asset={asset}
-          className={thumbs.length === 3 && i === 0 ? 'row-span-2' : undefined}
-        />
+    <div className="flex shrink-0 gap-px overflow-hidden rounded-sm">
+      {thumbs.map((asset) => (
+        <ThumbCell key={asset.id} asset={asset} className="h-8 w-[18px]" />
       ))}
     </div>
   )
@@ -142,7 +124,12 @@ export function FolderCard({
   return (
     <>
       <div
-        className={cn('group relative cursor-pointer', isDragOver && 'opacity-60', className)}
+        // A compact row: folders are for finding footage, not for looking at
+        className={cn(
+          'group relative flex h-12 cursor-pointer items-center gap-2.5 rounded-sm border border-border bg-bg-secondary pl-3 pr-1.5 transition-colors duration-100 hover:border-border-strong hover:bg-bg-tertiary',
+          isDragOver && 'border-text-secondary bg-bg-hover',
+          className,
+        )}
         draggable
         onDragStart={handleDragStart}
         onDragOver={handleDragOver}
@@ -150,15 +137,10 @@ export function FolderCard({
         onDrop={handleDrop}
         onClick={() => onOpen(folder)}
       >
+        <Folder className="h-4 w-4 shrink-0 text-text-tertiary" strokeWidth={1.75} />
+        <p className="min-w-0 flex-1 truncate text-[13px] text-text-primary">{folder.name}</p>
         <FolderThumbnails projectId={folder.project_id} folderId={folder.id} itemCount={folder.item_count} />
-
-        <div className="mt-1.5 flex items-start gap-1">
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-[12.5px] text-text-primary">{folder.name}</p>
-            <p className="font-mono text-[11.5px] text-text-tertiary">
-              {folder.item_count} {folder.item_count === 1 ? 'item' : 'items'}
-            </p>
-          </div>
+        <span className="shrink-0 font-mono text-[11.5px] tabular-nums text-text-tertiary">{folder.item_count}</span>
           <DropdownMenu.Root>
             <DropdownMenu.Trigger asChild>
               <button
@@ -200,7 +182,6 @@ export function FolderCard({
               </DropdownMenu.Content>
             </DropdownMenu.Portal>
           </DropdownMenu.Root>
-        </div>
       </div>
 
       {/* Rename dialog */}

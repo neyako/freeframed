@@ -3,7 +3,6 @@
 import * as React from "react";
 import {
   CheckCircle2,
-  Clock,
   Scissors,
   ChevronDown,
   ChevronRight,
@@ -12,7 +11,6 @@ import {
   Pencil,
   Link2,
   Trash2,
-  Globe,
   ArrowUpDown,
   Search,
   X,
@@ -148,7 +146,7 @@ function Dropdown({
     <div
       ref={ref}
       className={cn(
-        "absolute z-50 rounded-xl border border-border bg-bg-elevated shadow-2xl py-1.5 duration-100 animate-ff-pop-in",
+        "absolute z-50 rounded-md border border-border-strong bg-bg-elevated shadow-2xl p-1 duration-100 animate-ff-pop-in",
         openUp ? "bottom-full mb-1" : "top-full mt-1",
         align === "right" ? "right-0" : "left-0",
         className,
@@ -200,7 +198,7 @@ function CommentMenu({
       >
         {canEdit && (
           <button
-            className="flex w-full items-center gap-2.5 px-3 py-2 text-[13px] text-text-secondary hover:bg-bg-tertiary transition-colors"
+            className="flex w-full items-center gap-2.5 rounded px-2 py-1.5 text-[13px] text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
             onClick={() => { onEdit(); setOpen(false) }}
           >
             <Pencil className="h-3.5 w-3.5" />
@@ -208,7 +206,7 @@ function CommentMenu({
           </button>
         )}
         <button
-          className="flex w-full items-center gap-2.5 px-3 py-2 text-[13px] text-text-secondary hover:bg-bg-tertiary transition-colors"
+          className="flex w-full items-center gap-2.5 rounded px-2 py-1.5 text-[13px] text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
           onClick={() => {
             let url: URL
             if (assetId && window.location.pathname.match(/\/projects\/[^/]+$/)) {
@@ -223,10 +221,10 @@ function CommentMenu({
           }}
         >
           <Link2 className="h-3.5 w-3.5" />
-          Copy Link
+          Copy link
         </button>
         <button
-          className="flex w-full items-center gap-2.5 px-3 py-2 text-[13px] text-red-400 hover:bg-bg-tertiary transition-colors"
+          className="flex w-full items-center gap-2.5 rounded px-2 py-1.5 text-[13px] text-accent hover:bg-bg-hover transition-colors"
           onClick={() => {
             onDelete(commentId);
             setOpen(false);
@@ -294,8 +292,8 @@ function InlineReplyInput({
       <textarea
         ref={inputRef}
         rows={1}
-        className="block w-full resize-none overflow-y-auto rounded-lg border border-border bg-bg-tertiary px-3 py-2 text-[16px] leading-normal text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20 max-h-[35vh] md:max-h-[45vh] md:text-[14px]"
-        placeholder="Leave your reply here..."
+        className="block w-full resize-none overflow-y-auto rounded-md border border-border bg-bg-tertiary px-3 py-2 text-[16px] leading-normal text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-border-focus max-h-[35vh] md:max-h-[45vh] md:text-[14px]"
+        placeholder="Reply…"
         value={body}
         onChange={(e) => setBody(e.target.value)}
         onKeyDown={(e) => {
@@ -347,7 +345,7 @@ function InlineReplyInput({
           <button
             onClick={handleSubmit}
             disabled={!body.trim() || submitting}
-            className="h-7 w-7 flex items-center justify-center rounded-full bg-accent text-text-inverse hover:bg-accent/90 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            className="h-7 w-7 flex items-center justify-center rounded-md bg-text-primary text-text-inverse hover:opacity-90 disabled:opacity-25 disabled:cursor-not-allowed transition-opacity"
           >
             <Send className="h-3.5 w-3.5" />
           </button>
@@ -512,18 +510,18 @@ function CommentItem({
       {comment.is_cut && depth === 0 && (
         <span className="cut-hatch absolute left-0 inset-y-3 w-[3px]" aria-hidden />
       )}
-      <div className="flex gap-2.5 py-3">
-        {/* Avatar — reviewer photo when available, mono initials otherwise */}
+      <div className={cn("flex gap-2.5", depth > 0 ? "py-2" : "py-2.5")}>
+        {/* Avatar: small, so the note itself leads */}
         {avatarUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={avatarUrl}
             alt={authorName}
-            className="h-8 w-8 rounded-full object-cover shrink-0 mt-0.5"
+            className="h-6 w-6 rounded-full object-cover shrink-0"
           />
         ) : (
           <div
-            className="h-8 w-8 rounded-full flex items-center justify-center text-[11px] font-bold text-white shrink-0 mt-0.5"
+            className="h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-semibold text-white shrink-0"
             style={{ backgroundColor: avatarGray(authorName) }}
           >
             {getInitials(authorName)}
@@ -531,36 +529,14 @@ function CommentItem({
         )}
 
         <div className="flex-1 min-w-0">
-          {/* Header row */}
-          <div className="flex items-center gap-2">
-            <span className="text-[13px] font-semibold text-text-primary leading-none">
-              {authorName}
-            </span>
-            <span className="text-[11px] text-text-tertiary leading-none">
-              {formatRelativeTime(comment.created_at)}
-            </span>
-            <div className="ml-auto flex items-center gap-1.5">
-              {commentNumber !== undefined && depth === 0 && (
-                <span className="text-[11px] text-text-tertiary font-mono">
-                  #{commentNumber}
-                </span>
-              )}
-              {comment.visibility === "internal" ? (
-                <Lock className="h-3.5 w-3.5 text-accent" />
-              ) : (
-                <Globe className="h-3.5 w-3.5 text-text-tertiary" />
-              )}
-            </div>
-          </div>
-
-          {/* Timecode badge + annotation indicator */}
-          <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+          {/* Header: where in the video, then who and when */}
+          <div className="flex min-h-6 items-center gap-2">
             {comment.timecode_start !== null &&
               comment.timecode_start !== undefined && (
                 <button
                   className={cn(
-                    "inline-flex items-center gap-1 font-mono text-[11.5px] tabular-nums hover:text-text-primary",
-                    comment.is_cut ? "text-accent" : "text-text-secondary",
+                    "inline-flex shrink-0 items-center gap-1 font-mono text-[12px] tabular-nums transition-colors",
+                    comment.is_cut ? "text-accent" : "text-text-primary hover:text-text-secondary",
                   )}
                   onClick={() => {
                     seekTo(comment.timecode_start!, true);
@@ -571,23 +547,18 @@ function CommentItem({
                   }}
                   title="Jump to timecode"
                 >
-                  {comment.is_cut ? (
-                    <Scissors className="h-3 w-3" />
-                  ) : (
-                    <Clock className="h-3 w-3" />
-                  )}
-                  {comment.is_cut && "Cut "}
+                  {comment.is_cut && <Scissors className="h-3 w-3" />}
                   {isRange
                     ? formatRange(comment.timecode_start, comment.timecode_end!)
                     : formatTime(comment.timecode_start)}
                   {comment.is_cut && isRange && (
-                    <> · {formatSpan(comment.timecode_end! - comment.timecode_start)}</>
+                    <span className="text-text-tertiary">· {formatSpan(comment.timecode_end! - comment.timecode_start)}</span>
                   )}
                 </button>
               )}
             {comment.annotation && (
               <button
-                className="inline-flex items-center justify-center h-5 w-5 rounded text-text-tertiary hover:text-text-primary hover:bg-bg-tertiary"
+                className="inline-flex items-center justify-center h-5 w-5 -mx-1 rounded text-text-tertiary hover:text-text-primary hover:bg-bg-tertiary"
                 onClick={() => {
                   setActiveAnnotation(comment.annotation!.drawing_data);
                   setFocusedCommentId(comment.id);
@@ -603,6 +574,22 @@ function CommentItem({
                 <Pencil className="h-3 w-3" />
               </button>
             )}
+            <span className="min-w-0 truncate text-[12px] font-medium text-text-secondary">
+              {authorName}
+            </span>
+            <span className="shrink-0 text-[11.5px] text-text-tertiary">
+              {formatRelativeTime(comment.created_at)}
+            </span>
+            <div className="ml-auto flex shrink-0 items-center gap-1.5 text-text-tertiary">
+              {comment.visibility === "internal" && (
+                <Lock className="h-3 w-3" aria-label="Team only" />
+              )}
+              {commentNumber !== undefined && depth === 0 && (
+                <span className="font-mono text-[11px] tabular-nums">
+                  {String(commentNumber).padStart(2, "0")}
+                </span>
+              )}
+            </div>
           </div>
 
           {/* Body */}
@@ -614,7 +601,7 @@ function CommentItem({
                 onChange={(e) => setEditBody(e.target.value)}
                 autoFocus
                 rows={2}
-                className="block w-full resize-none overflow-y-auto rounded-md border border-border bg-bg-tertiary px-2 py-1.5 text-[16px] leading-normal text-text-primary placeholder:text-text-tertiary outline-none focus:border-accent/50 max-h-[35vh] md:max-h-[45vh] md:text-[14px]"
+                className="block w-full resize-none overflow-y-auto rounded-md border border-border bg-bg-tertiary px-2 py-1.5 text-[16px] leading-normal text-text-primary placeholder:text-text-tertiary outline-none focus:border-border-focus max-h-[35vh] md:max-h-[45vh] md:text-[14px]"
               />
               <div className="flex items-center gap-1.5 mt-1">
                 <button
@@ -632,7 +619,7 @@ function CommentItem({
                     } catch { /* silent */ }
                     finally { setSaving(false); }
                   }}
-                  className="rounded-md bg-accent px-2.5 py-1 text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-50 transition-colors"
+                  className="rounded-md bg-text-primary px-2.5 py-1 text-xs font-medium text-text-inverse hover:opacity-90 disabled:opacity-50 transition-opacity"
                 >
                   {saving ? 'Saving...' : 'Save'}
                 </button>
@@ -647,7 +634,12 @@ function CommentItem({
           ) : (
             <>
               {comment.body && (
-                <p className="mt-1 whitespace-pre-line text-[13px] text-text-secondary leading-relaxed break-words">
+                <p
+                  className={cn(
+                    "mt-0.5 whitespace-pre-line text-[13.5px] leading-relaxed break-words",
+                    comment.resolved ? "text-text-tertiary" : "text-text-primary",
+                  )}
+                >
                   <Linkified text={comment.body} />
                 </p>
               )}
@@ -674,26 +666,26 @@ function CommentItem({
                 <button
                   key={r.emoji}
                   className={cn(
-                    "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors",
+                    "inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs transition-colors",
                     r.userReacted
-                      ? "border-accent/40 bg-accent/10 text-accent"
-                      : "border-border bg-bg-tertiary text-text-secondary hover:border-white/20",
+                      ? "border-border-strong bg-bg-hover text-text-primary"
+                      : "border-border bg-bg-tertiary text-text-secondary hover:border-border-strong",
                   )}
                   onClick={() => handleReactionClick(r.emoji, r.userReacted)}
                   disabled={!canReact}
                 >
                   {r.emoji}
-                  <span className="text-[10px]">{r.count}</span>
+                  <span className="font-mono text-[10px] tabular-nums">{r.count}</span>
                 </button>
               ))}
             </div>
           )}
 
           {/* Action row: Reply text + hover icons */}
-          <div className="mt-1.5 flex items-center gap-2">
+          <div className="mt-1 flex min-h-7 items-center gap-2">
             {depth === 0 && onSubmitReply && (
               <button
-                className="text-[13px] font-medium text-text-tertiary hover:text-text-secondary transition-colors"
+                className="text-[12px] font-medium text-text-tertiary hover:text-text-primary transition-colors"
                 onClick={() => onReply(comment.id)}
               >
                 Reply
@@ -712,11 +704,11 @@ function CommentItem({
                     <Smile className="h-4 w-4" />
                   </button>
                   {showEmojiPicker && (
-                    <div className="absolute bottom-full right-0 mb-1 z-50 flex gap-0.5 rounded-xl border border-border bg-bg-elevated p-1.5 shadow-2xl duration-100 animate-ff-rise-in">
+                    <div className="absolute bottom-full right-0 mb-1 z-50 flex gap-0.5 rounded-md border border-border-strong bg-bg-elevated p-1 shadow-2xl duration-100 animate-ff-rise-in">
                       {QUICK_EMOJIS.map((e) => (
                         <button
                           key={e}
-                          className="h-8 w-8 rounded-lg text-base hover:bg-bg-hover transition-colors"
+                          className="h-8 w-8 rounded text-base hover:bg-bg-hover transition-colors"
                           onClick={() => handleQuickEmoji(e)}
                         >
                           {e}
@@ -769,7 +761,7 @@ function CommentItem({
               {/* Resolve — green filled when resolved (clickable to unresolve), outline on hover when unresolved */}
               {comment.resolved ? (
                 <button
-                  className="h-6 w-6 flex items-center justify-center rounded-full bg-emerald-500 text-text-inverse hover:bg-emerald-600 transition-colors disabled:opacity-50"
+                  className="h-6 w-6 flex items-center justify-center rounded-full bg-text-primary text-text-inverse hover:opacity-80 transition-opacity disabled:opacity-50"
                   onClick={handleResolve}
                   disabled={resolving || !onResolve}
                   title={onResolve ? "Unresolve" : "Resolved"}
@@ -778,7 +770,7 @@ function CommentItem({
                 </button>
               ) : onResolve ? (
                 <button
-                  className="h-6 w-6 flex items-center justify-center rounded-full text-text-tertiary hover:text-emerald-400 hover:bg-bg-tertiary transition-colors disabled:opacity-50 opacity-0 group-hover/comment:opacity-100 pointer-coarse:opacity-100 pointer-coarse:h-8 pointer-coarse:w-8"
+                  className="h-6 w-6 flex items-center justify-center rounded-full text-text-tertiary hover:text-text-primary hover:bg-bg-tertiary transition-colors disabled:opacity-50 opacity-0 group-hover/comment:opacity-100 pointer-coarse:opacity-100 pointer-coarse:h-8 pointer-coarse:w-8"
                   onClick={handleResolve}
                   disabled={resolving}
                   title="Resolve"
@@ -804,7 +796,7 @@ function CommentItem({
       {comment.replies && comment.replies.length > 0 && (
         <div>
           <button
-            className="flex items-center gap-1 text-[11px] text-text-tertiary hover:text-text-secondary transition-colors ml-10 mb-1"
+            className="flex items-center gap-1 text-[11.5px] text-text-tertiary hover:text-text-primary transition-colors ml-[34px] mb-1"
             onClick={() => setShowReplies((p) => !p)}
           >
             {showReplies ? (
@@ -1069,7 +1061,7 @@ export function CommentPanel({
               className={cn(
                 "h-[26px] w-[26px] flex items-center justify-center rounded-none transition-colors",
                 sortOpen
-                  ? "text-accent"
+                  ? "text-text-primary"
                   : "text-text-tertiary hover:text-text-primary",
               )}
               title="Sort"
@@ -1085,11 +1077,11 @@ export function CommentPanel({
               align="right"
               className="w-52"
             >
-              <div className="px-3 py-2 text-[12px] text-text-tertiary">
-                Sort thread by...
+              <div className="px-2 py-1.5 text-[12px] text-text-tertiary">
+                Sort by
               </div>
               {[
-                { id: "oldest" as const, label: "Oldest (Default)" },
+                { id: "oldest" as const, label: "Timeline order" },
                 { id: "newest" as const, label: "Newest" },
                 { id: "commenter" as const, label: "Commenter" },
                 { id: "completed" as const, label: "Completed" },
@@ -1097,7 +1089,7 @@ export function CommentPanel({
                 <button
                   key={item.id}
                   className={cn(
-                    "flex w-full items-center justify-between px-3 py-2 text-[13px] transition-colors",
+                    "flex w-full items-center justify-between rounded px-2 py-1.5 text-[13px] transition-colors",
                     sortMode === item.id
                       ? "text-text-primary"
                       : "text-text-secondary hover:bg-bg-tertiary",
@@ -1109,7 +1101,7 @@ export function CommentPanel({
                 >
                   {item.label}
                   {sortMode === item.id && (
-                    <Check className="h-4 w-4 text-accent" />
+                    <Check className="h-4 w-4" />
                   )}
                 </button>
               ))}
@@ -1122,7 +1114,7 @@ export function CommentPanel({
                 className={cn(
                   "h-[26px] w-[26px] flex items-center justify-center rounded-none transition-colors",
                   exportOpen
-                    ? "text-accent"
+                    ? "text-text-primary"
                     : "text-text-tertiary hover:text-text-primary",
                 )}
                 title="Export comments"
@@ -1139,25 +1131,25 @@ export function CommentPanel({
                 align="right"
                 className="w-56"
               >
-                <div className="px-3 py-2 text-[12px] text-text-tertiary">
+                <div className="px-2 py-1.5 text-[12px] text-text-tertiary">
                   Export comments
                 </div>
                 {currentAsset?.asset_type === "video" && (
                   <>
                     <button
-                      className="flex w-full items-center gap-2.5 px-3 py-2 text-[13px] text-text-secondary hover:bg-bg-tertiary transition-colors"
+                      className="flex w-full items-center gap-2.5 rounded px-2 py-1.5 text-[13px] text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
                       onClick={() => handleExport("edl")}
                     >
                       DaVinci Resolve (EDL)
                     </button>
                     <button
-                      className="flex w-full items-center gap-2.5 px-3 py-2 text-[13px] text-text-secondary hover:bg-bg-tertiary transition-colors"
+                      className="flex w-full items-center gap-2.5 rounded px-2 py-1.5 text-[13px] text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
                       onClick={() => handleExport("fcpxml")}
                     >
                       Final Cut Pro (FCPXML)
                     </button>
                     <button
-                      className="flex w-full items-center gap-2.5 px-3 py-2 text-[13px] text-text-secondary hover:bg-bg-tertiary transition-colors"
+                      className="flex w-full items-center gap-2.5 rounded px-2 py-1.5 text-[13px] text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
                       onClick={() => handleExport("premiere_xml")}
                     >
                       Premiere Pro (XML)
@@ -1165,7 +1157,7 @@ export function CommentPanel({
                   </>
                 )}
                 <button
-                  className="flex w-full items-center gap-2.5 px-3 py-2 text-[13px] text-text-secondary hover:bg-bg-tertiary transition-colors"
+                  className="flex w-full items-center gap-2.5 rounded px-2 py-1.5 text-[13px] text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
                   onClick={() => handleExport("csv")}
                 >
                   CSV
@@ -1179,7 +1171,7 @@ export function CommentPanel({
             className={cn(
               "h-[26px] w-[26px] flex items-center justify-center rounded-none transition-colors",
               searchOpen
-                ? "text-accent"
+                ? "text-text-primary"
                 : "text-text-tertiary hover:text-text-primary",
             )}
             title="Search"
