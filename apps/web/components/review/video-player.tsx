@@ -153,6 +153,11 @@ export function VideoPlayer({
   const timeFormatRef = useRef<HTMLDivElement>(null);
   const [qualityOpen, setQualityOpen] = useState(false);
   const qualityRef = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
+  // A press on the picture that only dismissed a dropdown must not also toggle
+  // playback. Cleared at the next stage pointerdown, so a right-click or a drag
+  // off the picture (no click follows) cannot swallow a later click.
+  const swallowStageClickRef = useRef(false);
 
   // Close time format dropdown on outside click
   useEffect(() => {
@@ -161,8 +166,12 @@ export function VideoPlayer({
       if (
         timeFormatRef.current &&
         !timeFormatRef.current.contains(e.target as Node)
-      )
+      ) {
         setTimeFormatOpen(false);
+        if (stageRef.current?.contains(e.target as Node)) {
+          swallowStageClickRef.current = true;
+        }
+      }
     };
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
@@ -171,8 +180,12 @@ export function VideoPlayer({
   useEffect(() => {
     if (!qualityOpen) return;
     const handleClick = (e: MouseEvent) => {
-      if (qualityRef.current && !qualityRef.current.contains(e.target as Node))
+      if (qualityRef.current && !qualityRef.current.contains(e.target as Node)) {
         setQualityOpen(false);
+        if (stageRef.current?.contains(e.target as Node)) {
+          swallowStageClickRef.current = true;
+        }
+      }
     };
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
@@ -380,6 +393,10 @@ export function VideoPlayer({
       holdSuppressClickRef.current = false;
       return;
     }
+    if (swallowStageClickRef.current) {
+      swallowStageClickRef.current = false;
+      return;
+    }
     if (!isDrawingMode) {
       togglePlay();
     }
@@ -459,7 +476,11 @@ export function VideoPlayer({
     >
       {/* Video area — fills available space, object-contain preserves aspect ratio with letterbox */}
       <div
+        ref={stageRef}
         className="flex-1 relative min-h-0 bg-black overflow-hidden cursor-pointer select-none touch-none"
+        onPointerDownCapture={() => {
+          swallowStageClickRef.current = false;
+        }}
         onClick={handleContainerClick}
         onPointerDown={startHold}
         onPointerUp={endHold}

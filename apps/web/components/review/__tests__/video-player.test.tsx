@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { VideoPlayer } from '../video-player'
 
+const mocks = vi.hoisted(() => ({ togglePlay: vi.fn() }))
+
 vi.mock('@/lib/api', () => ({ api: { get: vi.fn(() => new Promise(() => {})) } }))
 vi.mock('../review-provider', () => ({ useReview: () => ({ registerPauseHandler: vi.fn() }) }))
 vi.mock('@/hooks/use-video-player', () => ({
@@ -21,7 +23,7 @@ vi.mock('@/hooks/use-video-player', () => ({
     isFullscreen: false,
     error: null,
     pause: vi.fn(),
-    togglePlay: vi.fn(),
+    togglePlay: mocks.togglePlay,
     seek: vi.fn(),
     setPlaybackRate: vi.fn(),
     setQuality: vi.fn(),
@@ -50,5 +52,23 @@ describe('VideoPlayer transport', () => {
     const trigger = container.querySelector('button[aria-expanded]') as HTMLButtonElement
 
     expect(fireEvent.mouseDown(trigger)).toBe(true) // not prevented
+  })
+
+  it('pressing the picture to dismiss a dropdown does not also toggle playback', () => {
+    mocks.togglePlay.mockClear()
+    const { container } = render(<VideoPlayer assetId="a1" />)
+    const stage = container.querySelector('video')!.parentElement as HTMLElement
+    const press = () => {
+      fireEvent.pointerDown(stage)
+      fireEvent.mouseDown(stage)
+      fireEvent.click(stage)
+    }
+
+    fireEvent.click(container.querySelector('button[aria-expanded]') as HTMLButtonElement)
+    press() // closes the open dropdown
+    expect(mocks.togglePlay).not.toHaveBeenCalled()
+
+    press() // nothing open now: a normal click toggles playback
+    expect(mocks.togglePlay).toHaveBeenCalledTimes(1)
   })
 })
