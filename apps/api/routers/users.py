@@ -14,7 +14,7 @@ from ..tasks.email_tasks import send_invite_email
 from ..tasks.celery_app import send_task_safe
 from ..config import settings
 from ..services.workspace_service import get_workspace_name
-from ..services.auth_service import revoke_user_refresh_tokens
+from ..services.auth_service import get_email_owner, revoke_user_refresh_tokens
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -129,8 +129,9 @@ def remove_avatar(
 @router.post("/invite", response_model=AdminUserResponse, status_code=status.HTTP_201_CREATED)
 def invite_user(body: InviteRequest, db: Session = Depends(get_db), current_user: User = Depends(require_admin)):
     # Look up including soft-deleted rows: the unique email constraint still
-    # holds them, so a deleted user must be resurrected, not re-inserted.
-    existing = db.query(User).filter(User.email == body.email).first()
+    # holds them, so a deleted user must be resurrected, not re-inserted. Any case
+    # counts too, or Bob@x.com could be invited next to bob@x.com.
+    existing = get_email_owner(db, body.email)
     if existing and existing.deleted_at is None:
         raise HTTPException(status_code=400, detail="Email already registered")
 

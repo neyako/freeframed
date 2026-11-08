@@ -5,6 +5,7 @@ import uuid
 from jose import JWTError, jwt
 import bcrypt
 from fastapi import Response
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from ..config import settings
 from ..models.user import RefreshToken, User
@@ -150,7 +151,37 @@ def clear_auth_cookies(response: Response) -> None:
     response.delete_cookie(REFRESH_COOKIE, path="/", samesite="lax")
 
 def get_user_by_email(db: Session, email: str) -> Optional[User]:
-    return db.query(User).filter(User.email == email, User.deleted_at.is_(None)).first()
+    """The live user signing in, or being looked up, by this address.
+
+    Addresses used to be stored as typed and compared exactly, so "Bob@x.com" and
+    "bob@x.com" were two accounts and an account only answered to the case it was
+    created with (a phone's autocapitalised first letter was a failed login).
+    An exact match wins; otherwise a case-insensitive match counts only when it
+    names exactly one account. With two accounts differing only by case a guess
+    could open the wrong one, so each still answers to its exact address only.
+    """
+    email = email.strip()
+    live = db.query(User).filter(User.deleted_at.is_(None))
+    user = live.filter(User.email == email).first()
+    if user:
+        return user
+    matches = live.filter(func.lower(User.email) == func.lower(email)).limit(2).all()
+    return matches[0] if len(matches) == 1 else None
+
+
+def get_email_owner(db: Session, email: str) -> Optional[User]:
+    """Any row, live or soft-deleted, already holding this address in any case.
+
+    For the checks that guard creating a user: the unique constraint on
+    users.email still covers soft-deleted rows. A live row is preferred so the
+    caller can tell "already registered" from "belonged to a deleted user".
+    """
+    return (
+        db.query(User)
+        .filter(func.lower(User.email) == func.lower(email.strip()))
+        .order_by(User.deleted_at.isnot(None))
+        .first()
+    )
 
 def get_user_by_id(db: Session, user_id: uuid.UUID) -> Optional[User]:
     return db.query(User).filter(User.id == user_id, User.deleted_at.is_(None)).first()

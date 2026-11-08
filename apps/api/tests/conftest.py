@@ -75,6 +75,8 @@ def _make_mock_db() -> MagicMock:
     db = MagicMock()
     db.query.return_value = db
     db.filter.return_value = db
+    db.order_by.return_value = db
+    db.limit.return_value = db
     db.first.return_value = None
     db.all.return_value = []
     db.add.return_value = None

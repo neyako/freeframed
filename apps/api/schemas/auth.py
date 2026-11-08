@@ -1,5 +1,6 @@
 from pydantic import AfterValidator, BaseModel, EmailStr, Field, model_validator
 from typing import Annotated, Any
+import string
 import uuid
 from ..models.user import UserStatus
 from ..services.auth_service import BCRYPT_MAX_PASSWORD_BYTES
@@ -30,6 +31,15 @@ def _trimmed_nonblank(v: str) -> str:
 # A person's display name: bounded to what the column holds, then trimmed, and a
 # blank one refused (min_length alone lets "   " through and stores it as "").
 DisplayName = Annotated[str, Field(max_length=255), AfterValidator(_trimmed_nonblank)]
+
+
+# The address a new user is stored under: lowercase, so new accounts never differ
+# only by case. Sign-in schemas keep plain EmailStr on purpose: get_user_by_email
+# needs the address as typed to reach an older mixed-case row. ASCII only: the
+# checks fold with Postgres lower(), which disagrees with str.lower() on some
+# non-ASCII letters, so those are left as typed.
+_ASCII_LOWER = str.maketrans(string.ascii_uppercase, string.ascii_lowercase)
+NewUserEmail = Annotated[EmailStr, AfterValidator(lambda v: v.strip().translate(_ASCII_LOWER))]
 
 
 class RegisterRequest(BaseModel):
@@ -79,7 +89,7 @@ class AdminUserResponse(UserResponse):
     invite_token: str | None = None
 
 class InviteRequest(BaseModel):
-    email: EmailStr
+    email: NewUserEmail
     name: str
 
 # Invite flow
