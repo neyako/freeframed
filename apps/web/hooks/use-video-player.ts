@@ -3,6 +3,7 @@
 import Hls, { type Level } from 'hls.js'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useReviewStore } from '@/stores/review-store'
+import { hlsStartConfig, saveBandwidth } from '@/lib/hls-bandwidth'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -206,6 +207,7 @@ export function useVideoPlayer(src: string | null): UseVideoPlayerReturn {
         enableWorker: true,
         lowLatencyMode: false,
         preferManagedMediaSource: false,
+        ...hlsStartConfig(),
       })
       hlsRef.current = hls
       hls.loadSource(src)
@@ -236,6 +238,14 @@ export function useVideoPlayer(src: string | null): UseVideoPlayerReturn {
 
       hls.on(Hls.Events.LEVEL_SWITCHED, (_event, data) => {
         setCurrentQuality(data.level)
+      })
+
+      // Remember the measured bandwidth so the next video starts on the right
+      // rung. hls.js samples on the same fragment in a listener registered
+      // before this one, so the estimate already includes it.
+      hls.on(Hls.Events.FRAG_BUFFERED, (_event, { frag }) => {
+        if (frag.type !== 'main' || frag.sn === 'initSegment' || frag.stats.aborted) return
+        saveBandwidth(hls.bandwidthEstimate)
       })
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
       // Safari native HLS
