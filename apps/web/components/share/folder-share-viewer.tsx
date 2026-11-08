@@ -586,9 +586,9 @@ function AssetViewer({ token, shareSession, asset, viewerName, permission, allow
 
 /** Lazy-imported review components to avoid circular deps */
 export function ShareReviewScreen({
-  token, shareSession, assetId, assetName, viewerName, permission, allowDownload, watermark, onBack,
+  token, shareSession, assetId, assetName, viewerName, senderName, permission, allowDownload, watermark, onBack,
 }: {
-  token: string; shareSession?: string | null; assetId: string; assetName: string; viewerName?: string | null; permission: SharePermission; allowDownload: boolean; watermark: string | null; onBack?: () => void
+  token: string; shareSession?: string | null; assetId: string; assetName: string; viewerName?: string | null; senderName?: string | null; permission: SharePermission; allowDownload: boolean; watermark: string | null; onBack?: () => void
 }) {
   const [ReviewProvider, setProvider] = React.useState<any>(null)
   const [VideoPlayer, setVideoPlayer] = React.useState<any>(null)
@@ -634,6 +634,7 @@ export function ShareReviewScreen({
         shareSession={shareSession}
         assetName={assetName}
         viewerName={viewerName}
+        senderName={senderName}
         permission={permission}
         allowDownload={allowDownload}
         watermark={watermark}
@@ -651,7 +652,7 @@ export function ShareReviewScreen({
 }
 
 function ShareReviewInner({
-  token, shareSession, assetName, viewerName, permission, allowDownload, watermark, onBack,
+  token, shareSession, assetName, viewerName, senderName, permission, allowDownload, watermark, onBack,
   VideoPlayer, ImageViewer, AudioPlayer, CommentPanel, CommentInput,
   useReviewHook, useReviewStoreHook,
 }: any) {
@@ -660,17 +661,22 @@ function ShareReviewInner({
   const [sidebarOpen, setSidebarOpen] = React.useState(false)
   const [AnnotationOverlay, setAnnotationOverlay] = React.useState<any>(null)
   const [AnnotationCanvas, setAnnotationCanvas] = React.useState<any>(null)
+  const [CutSummary, setCutSummary] = React.useState<any>(null)
   const autoOpenedRef = React.useRef(false)
 
   React.useEffect(() => {
     Promise.all([
       import('@/components/review/annotation-overlay'),
       import('@/components/review/annotation-canvas'),
-    ]).then(([overlayMod, canvasMod]) => {
+      import('@/components/review/cut-summary'),
+    ]).then(([overlayMod, canvasMod, cutMod]) => {
       setAnnotationOverlay(() => overlayMod.AnnotationOverlay)
       setAnnotationCanvas(() => canvasMod.AnnotationCanvas)
+      setCutSummary(() => cutMod.CutSummary)
     })
   }, [])
+  // Guests see the same after-cut runtime as the owner (read-only: no target picker)
+  const runtime = currentVersion?.files?.find((f: { duration_seconds?: number | null }) => f.duration_seconds)?.duration_seconds ?? null
 
   const canComment = permission === 'comment'
   const versionReady = currentVersion?.processing_status === 'ready'
@@ -830,7 +836,7 @@ function ShareReviewInner({
   return (
     <div className="flex flex-col h-dvh bg-bg-primary text-text-primary">
       {/* Top bar — same style as project review */}
-      <div className="flex items-center justify-between border-b border-border px-3 h-12 bg-bg-secondary shrink-0">
+      <div className="flex items-center justify-between border-b border-border px-3 h-12 bg-bg-primary shrink-0">
         <div className="flex items-center gap-1 min-w-0 flex-1">
           {onBack && (
             <button onClick={onBack} className="flex items-center justify-center h-7 w-7 rounded-md text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors shrink-0">
@@ -840,7 +846,11 @@ function ShareReviewInner({
           {!onBack && <Wordmark showName={false} className="mx-1.5 text-[13px]" />}
           <span className="text-[13px] font-medium text-text-primary truncate">{assetName}</span>
           {versions.length === 0 && currentVersion && (
-            <span className="ml-1.5 shrink-0 font-mono text-[11.5px] tabular-nums text-text-tertiary">v{currentVersion.version_number}</span>
+            <span className="ml-1.5 shrink-0 text-[12px] tabular-nums text-text-tertiary">v{currentVersion.version_number}</span>
+          )}
+          {/* Who's asking: the client should know whose cut this is */}
+          {senderName && (
+            <span className="ml-2 hidden shrink-0 truncate text-[12px] text-text-tertiary sm:inline">from {senderName}</span>
           )}
         </div>
         <div className="flex items-center gap-2">
@@ -920,7 +930,7 @@ function ShareReviewInner({
           <div className={cn(
             "w-full md:h-auto md:w-[360px] flex flex-col border-t md:border-t-0 border-l-0 md:border-l border-border bg-bg-secondary shrink-0 animate-ff-rise-in md:animate-ff-slide-in",
             // Drawing on a phone: the sheet shrinks to the composer so the frame gets the room
-            isDrawingMode ? "h-auto" : "h-[55dvh]",
+            isDrawingMode ? "h-auto" : "h-[62dvh]",
           )}>
             <button
               onClick={() => setSidebarOpen(false)}
@@ -932,6 +942,9 @@ function ShareReviewInner({
             {CommentPanel && (
               <>
                 <div className={cn("flex-1 flex flex-col min-h-0 overflow-hidden", isDrawingMode && "hidden md:flex")}>
+                  {CutSummary && runtime !== null && asset.asset_type === 'video' && (
+                    <CutSummary comments={comments} duration={runtime} target={null} />
+                  )}
                   <CommentPanel
                     comments={comments}
                     currentUserId={currentUserId}

@@ -19,7 +19,7 @@ import {
   Lock,
   Download,
 } from "lucide-react";
-import { cn, copyToClipboard, formatRelativeTime, isSendEnter } from "@/lib/utils";
+import { cn, copyToClipboard, formatAgo, isSendEnter } from "@/lib/utils";
 import { formatSpan } from "@/lib/cuts";
 import { Timecode, TimecodeRange } from "@/components/shared/timecode";
 import { avatarGray, getInitials } from "@/lib/avatar";
@@ -482,6 +482,8 @@ function CommentItem({
   }
 
   const flash = flashCommentId === comment.id;
+  // Touch has no hover: a note's actions show once it's tapped (focused)
+  const touchActions = isFocused ? "pointer-coarse:opacity-100" : "";
   return (
     <div
       ref={itemRef}
@@ -513,17 +515,18 @@ function CommentItem({
         <span className="cut-hatch absolute left-0 inset-y-3 w-[3px]" aria-hidden />
       )}
       <div className={cn("flex gap-2.5", depth > 0 ? "py-2" : "py-2.5")}>
-        {/* Avatar: small, so the note itself leads */}
-        {avatarUrl ? (
+        {/* Cue-sheet gutter: the note's number where an avatar would repeat.
+            Replies show the author's face instead, since a thread is a conversation. */}
+        {depth === 0 ? (
+          <span className="w-6 shrink-0 pt-px text-right font-mono text-[11px] leading-6 tabular-nums text-text-tertiary">
+            {commentNumber !== undefined ? String(commentNumber).padStart(2, "0") : ""}
+          </span>
+        ) : avatarUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={avatarUrl}
-            alt={authorName}
-            className="h-6 w-6 rounded-full object-cover shrink-0"
-          />
+          <img src={avatarUrl} alt={authorName} className="h-5 w-5 rounded-full object-cover shrink-0" />
         ) : (
           <div
-            className="h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-semibold text-white shrink-0"
+            className="h-5 w-5 rounded-full flex items-center justify-center text-[9px] font-semibold text-white shrink-0"
             style={{ backgroundColor: avatarGray(authorName) }}
           >
             {getInitials(authorName)}
@@ -539,9 +542,11 @@ function CommentItem({
                 <button
                   className={cn(
                     "inline-flex shrink-0 items-center gap-1 font-mono text-[12px] tabular-nums transition-colors",
-                    comment.is_cut ? "text-accent" : "text-text-primary hover:text-text-secondary",
+                    "text-text-primary hover:text-text-secondary",
                   )}
-                  onClick={() => {
+                  onClick={(e) => {
+                    // The row's own click would seek again
+                    e.stopPropagation();
                     seekTo(comment.timecode_start!, true);
                     setFocusedCommentId(comment.id);
                     if (comment.annotation) {
@@ -550,7 +555,7 @@ function CommentItem({
                   }}
                   title="Jump to timecode"
                 >
-                  {comment.is_cut && <Scissors className="h-3 w-3" />}
+                  {comment.is_cut && <Scissors className="h-3 w-3 text-accent" />}
                   {isRange
                     ? <TimecodeRange start={formatPosition(comment.timecode_start)} end={formatPosition(comment.timecode_end!)} />
                     : <Timecode value={formatPosition(comment.timecode_start)} />}
@@ -588,18 +593,11 @@ function CommentItem({
               {isOwn && comment.author_id ? "You" : authorName}
             </span>
             <span className="shrink-0 text-[11.5px] text-text-tertiary">
-              {formatRelativeTime(comment.created_at)}
+              {formatAgo(comment.created_at)}
             </span>
-            <div className="ml-auto flex shrink-0 items-center gap-1.5 text-text-tertiary">
-              {comment.visibility === "internal" && (
-                <Lock className="h-3 w-3" aria-label="Team only" />
-              )}
-              {commentNumber !== undefined && depth === 0 && (
-                <span className="font-mono text-[11px] tabular-nums">
-                  {String(commentNumber).padStart(2, "0")}
-                </span>
-              )}
-            </div>
+            {comment.visibility === "internal" && (
+              <Lock className="ml-auto h-3 w-3 shrink-0 text-text-tertiary" aria-label="Team only" />
+            )}
           </div>
 
           {/* Body */}
@@ -692,7 +690,8 @@ function CommentItem({
           )}
 
           {/* Action row: Reply text + hover icons */}
-          <div className="mt-1 flex min-h-7 items-center gap-2">
+          {/* Replies have no Reply button, so no reserved row height either */}
+          <div className={cn("mt-1 flex items-center gap-2", depth === 0 && "min-h-7")}>
             {depth === 0 && onSubmitReply && (
               <button
                 className="text-[12px] font-medium text-text-tertiary hover:text-text-primary transition-colors"
@@ -705,7 +704,7 @@ function CommentItem({
             <div className="ml-auto flex items-center gap-0.5">
               {/* Emoji — hover only */}
               {canReact && (
-                <div className="relative opacity-0 group-hover/comment:opacity-100 pointer-coarse:opacity-100 transition-opacity">
+                <div className={cn("relative opacity-0 group-hover/comment:opacity-100 transition-opacity", touchActions)}>
                   <button
                     className="h-7 w-7 flex items-center justify-center rounded-full text-text-tertiary hover:text-text-secondary hover:bg-bg-tertiary transition-colors"
                     onClick={() => setShowEmojiPicker((p) => !p)}
@@ -730,7 +729,7 @@ function CommentItem({
               )}
 
               {/* Context menu — hover on pointer devices, always visible on touch */}
-              <div className="opacity-0 group-hover/comment:opacity-100 pointer-coarse:opacity-100 transition-opacity">
+              <div className={cn("opacity-0 group-hover/comment:opacity-100 transition-opacity", touchActions)}>
                 <CommentMenu
                   isOwn={isOwn}
                   canEdit={!!currentUserId && comment.author_id === currentUserId}
@@ -749,7 +748,7 @@ function CommentItem({
                     "h-6 w-6 flex items-center justify-center rounded-full disabled:opacity-50",
                     comment.is_cut
                       ? "text-accent hover:bg-bg-tertiary"
-                      : "text-text-tertiary hover:text-text-primary hover:bg-bg-tertiary opacity-0 group-hover/comment:opacity-100 pointer-coarse:opacity-100",
+                      : cn("text-text-tertiary hover:text-text-primary hover:bg-bg-tertiary opacity-0 group-hover/comment:opacity-100", touchActions),
                   )}
                   onClick={async (e) => {
                     e.stopPropagation();
@@ -768,10 +767,11 @@ function CommentItem({
                 </button>
               )}
 
-              {/* Resolve — green filled when resolved (clickable to unresolve), outline on hover when unresolved */}
+              {/* Resolve: a quiet outline check once resolved (click to reopen); on hover while open */}
               {comment.resolved ? (
                 <button
-                  className="h-6 w-6 flex items-center justify-center rounded-full bg-text-primary text-text-inverse hover:opacity-80 transition-opacity disabled:opacity-50"
+                  // Resolved is done: a quiet check, so open notes stay the loud ones
+                  className="h-6 w-6 flex items-center justify-center rounded-full border border-border-strong text-text-tertiary hover:text-text-primary transition-colors disabled:opacity-50"
                   onClick={handleResolve}
                   disabled={resolving || !onResolve}
                   title={onResolve ? "Unresolve" : "Resolved"}
@@ -780,7 +780,7 @@ function CommentItem({
                 </button>
               ) : onResolve ? (
                 <button
-                  className="h-6 w-6 flex items-center justify-center rounded-full text-text-tertiary hover:text-text-primary hover:bg-bg-tertiary transition-colors disabled:opacity-50 opacity-0 group-hover/comment:opacity-100 pointer-coarse:opacity-100 pointer-coarse:h-8 pointer-coarse:w-8"
+                  className={cn("h-6 w-6 flex items-center justify-center rounded-full text-text-tertiary hover:text-text-primary hover:bg-bg-tertiary transition-colors disabled:opacity-50 opacity-0 group-hover/comment:opacity-100 pointer-coarse:h-8 pointer-coarse:w-8", touchActions)}
                   onClick={handleResolve}
                   disabled={resolving}
                   title="Resolve"

@@ -145,6 +145,7 @@ export function SharePageClient({
         allowDownload: boolean
         showVersions: boolean
         viewerName: string | null
+        createdByName: string | null
         watermark: string | null
       }
     | {
@@ -270,6 +271,7 @@ export function SharePageClient({
         allowDownload: data.allow_download ?? false,
         showVersions: data.show_versions ?? true,
         viewerName: data.viewer_name ?? null,
+        createdByName: data.created_by_name ?? null,
         watermark,
       })
     } catch {
@@ -348,6 +350,7 @@ export function SharePageClient({
       assetId={state.asset.id}
       assetName={state.asset.name}
       viewerName={state.viewerName}
+      senderName={state.createdByName}
       permission={state.permission}
       allowDownload={state.allowDownload}
       watermark={state.watermark}

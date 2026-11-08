@@ -285,9 +285,19 @@ export function AssetGrid({
               key={asset.id}
               // Phones: two clips per row, whatever their shape, so you browse a library
               // instead of one poster per screen
-              className="min-w-0 max-sm:!grow-0 max-sm:!basis-[calc(50%-6px)]"
+              className="min-w-0 rounded-sm outline-none focus-visible:ring-1 focus-visible:ring-text-secondary max-sm:!grow-0 max-sm:!basis-[calc(50%-6px)]"
               style={{ flexGrow: aspect, flexBasis: Math.max(aspect * rowHeightMap[cardSize], minCardWidthMap[cardSize]) }}
               onClick={() => (selectMode ? toggleAssetSelect(asset.id) : onAssetOpen?.(asset))}
+              // Reachable by keyboard: Tab to a clip, Enter opens it
+              role="link"
+              tabIndex={0}
+              aria-label={asset.name}
+              onKeyDown={(e) => {
+                if (e.key !== 'Enter' || e.target !== e.currentTarget) return
+                e.preventDefault()
+                if (selectMode) toggleAssetSelect(asset.id)
+                else onAssetOpen?.(asset)
+              }}
             >
               <AssetCard
                 asset={asset}

@@ -116,7 +116,7 @@ function AssetCard({ asset, onDelete }: AssetCardProps) {
   );
 }
 
-const ROW_HEIGHT = 240;
+const ROW_HEIGHT = 200;
 const PAGE_SIZE = 40;
 
 // Each page peeks one item past PAGE_SIZE: if it comes back, there is more.
