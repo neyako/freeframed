@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { cn, formatTime } from "@/lib/utils";
 import { Timecode } from "@/components/shared/timecode";
-import { afterCutSeconds, cutAt, mergedCuts, toEditTime, toSourceTime } from "@/lib/cuts";
+import { cutAt, mergedCuts, toEditTime, toSourceTime } from "@/lib/cuts";
 import { api } from "@/lib/api";
 import { useReviewStore, useFormatPosition, type TimeFormat } from "@/stores/review-store";
 import { useVideoPlayer } from "@/hooks/use-video-player";
@@ -631,27 +631,13 @@ export function VideoPlayer({
             className="flex items-center gap-1.5 rounded-sm px-2 py-1 hover:bg-bg-hover transition-colors"
           >
             <span className="font-mono tabular-nums text-[13px] sm:text-[16px] font-semibold text-text-primary tracking-[-0.01em]">
+              {/* Just where you are: the length lives in the panel header
+                  ("0:15 after cuts, from 0:18"), so it isn't repeated here */}
               {editCuts ? (
-                // The edit's own clock, against its after-cut runtime
-                <>
-                  {formatTime(toEditTime(currentTime, editCuts))}{" "}
-                  <span className="text-text-tertiary">/</span>{" "}
-                  {formatTime(afterCutSeconds(duration, editCuts))}
-                </>
-              ) : timeFormat === "timecode" ? (
-                <>
-                  <Timecode value={displayTime(currentTime)} />
-                  {/* Total only where there's room; the frame count needs the width */}
-                  <span className="hidden font-normal text-text-tertiary lg:inline">
-                    {" "}/ {displayTime(duration)}
-                  </span>
-                </>
+                // The edit's own clock while playing it as cut
+                formatTime(toEditTime(currentTime, editCuts))
               ) : (
-                <>
-                  {displayTime(currentTime)}{" "}
-                  <span className="text-text-tertiary">/</span>{" "}
-                  {displayTime(duration)}
-                </>
+                <Timecode value={displayTime(currentTime)} />
               )}
             </span>
             <ChevronUp
