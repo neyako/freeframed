@@ -27,6 +27,7 @@ import { formatRange, formatSpan } from "@/lib/cuts";
 import { useReviewStore } from "@/stores/review-store";
 import { useReview } from "./review-provider";
 import { useDrawing } from "@/hooks/use-drawing";
+import { useAutoGrow } from "@/hooks/use-auto-grow";
 import { api } from "@/lib/api";
 import type { User } from "@/types";
 
@@ -271,6 +272,7 @@ export function CommentInput({
   const [mentionQuery, setMentionQuery] = React.useState<string | null>(null);
   const [mentionStart, setMentionStart] = React.useState<number>(0);
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+  useAutoGrow(textareaRef, body);
 
   // Pending image attachments (guests can't upload — the endpoint needs auth)
   const canAttach = !visibilityLocked;
@@ -602,15 +604,15 @@ export function CommentInput({
         >
           <div
             className={cn(
-              "flex items-start gap-0 rounded-lg border border-border bg-bg-tertiary focus-within:border-accent/50 focus-within:ring-1 focus-within:ring-accent/20",
+              "flex flex-col rounded-lg border border-border bg-bg-tertiary focus-within:border-accent/50 focus-within:ring-1 focus-within:ring-accent/20",
               dragOver && "border-dashed border-accent bg-accent-muted",
             )}
           >
-            {/* Inline timecode badge — show when timecode attached (normal mode) or in drawing mode */}
+            {/* Timecode badge sits above the text so the text gets the full width */}
             {hasTimecode && (timecodeAttached || isDrawingMode) && (
               <span
                 className={cn(
-                  "shrink-0 ml-2.5 mt-2.5 flex items-center gap-1 whitespace-nowrap rounded border px-1.5 py-0 font-mono text-[11px] leading-[19.5px] select-none",
+                  "self-start ml-2.5 mt-2 flex items-center gap-1 whitespace-nowrap rounded border px-1.5 py-0 font-mono text-[11px] leading-[19.5px] select-none",
                   // Red only when a range is actively marked; quiet mono at rest
                   rangeStart !== null || rangeEnd !== null
                     ? "bg-accent-muted border-accent-line text-accent"
@@ -648,7 +650,8 @@ export function CommentInput({
             )}
             <textarea
               ref={textareaRef}
-              className="flex-1 resize-none bg-transparent px-2.5 py-2.5 text-[13px] text-text-primary placeholder:text-text-tertiary focus:outline-none min-h-[38px] max-h-[120px]"
+              // Grows with the text, then scrolls; 16px on phones so iOS doesn't zoom
+              className="block w-full resize-none overflow-y-auto bg-transparent px-2.5 py-2 text-[16px] leading-normal text-text-primary placeholder:text-text-tertiary focus:outline-none max-h-[35vh] md:max-h-[45vh] md:text-[14px]"
               placeholder={
                 replyToId
                   ? "Write a reply..."

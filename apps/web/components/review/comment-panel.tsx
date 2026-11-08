@@ -26,6 +26,7 @@ import { cn, copyToClipboard, formatTime, formatRelativeTime } from "@/lib/utils
 import { formatRange, formatSpan } from "@/lib/cuts";
 import { avatarGray, getInitials } from "@/lib/avatar";
 import { useReviewStore } from "@/stores/review-store";
+import { useAutoGrow } from "@/hooks/use-auto-grow";
 import { Linkified } from "@/components/review/linkified";
 import { LinkEmbed, firstEmbeddableUrl } from "@/components/review/link-embed";
 import { CommentAttachment } from "@/components/review/comment-attachment";
@@ -235,8 +236,9 @@ function InlineReplyInput({
   const [body, setBody] = React.useState("");
   const [submitting, setSubmitting] = React.useState(false);
   const [emojiOpen, setEmojiOpen] = React.useState(false);
-  const inputRef = React.useRef<HTMLInputElement>(null);
+  const inputRef = React.useRef<HTMLTextAreaElement>(null);
   const emojiRef = React.useRef<HTMLDivElement>(null);
+  useAutoGrow(inputRef, body);
 
   React.useEffect(() => {
     inputRef.current?.focus();
@@ -271,10 +273,10 @@ function InlineReplyInput({
 
   return (
     <div className="mt-2 border-t border-border pt-3 pb-1">
-      <input
+      <textarea
         ref={inputRef}
-        type="text"
-        className="w-full rounded-lg border border-border bg-bg-tertiary px-3 py-2 text-[13px] text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20"
+        rows={1}
+        className="block w-full resize-none overflow-y-auto rounded-lg border border-border bg-bg-tertiary px-3 py-2 text-[16px] leading-normal text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/20 max-h-[35vh] md:max-h-[45vh] md:text-[14px]"
         placeholder="Leave your reply here..."
         value={body}
         onChange={(e) => setBody(e.target.value)}
@@ -396,6 +398,9 @@ function CommentItem({
   const [resolving, setResolving] = React.useState(false);
   const [editing, setEditing] = React.useState(false);
   const [editBody, setEditBody] = React.useState(comment.body);
+  const editRef = React.useRef<HTMLTextAreaElement>(null);
+  // Keyed on the open state too, so the box fits the text the moment it opens
+  useAutoGrow(editRef, editing ? editBody : "");
   const [saving, setSaving] = React.useState(false);
 
   // Scroll into view when focused from progress bar marker click
@@ -589,11 +594,12 @@ function CommentItem({
           {editing ? (
             <div className="mt-1">
               <textarea
+                ref={editRef}
                 value={editBody}
                 onChange={(e) => setEditBody(e.target.value)}
                 autoFocus
                 rows={2}
-                className="w-full rounded-md border border-border bg-bg-tertiary px-2 py-1.5 text-[13px] text-text-primary placeholder:text-text-tertiary outline-none focus:border-accent/50 resize-none"
+                className="block w-full resize-none overflow-y-auto rounded-md border border-border bg-bg-tertiary px-2 py-1.5 text-[16px] leading-normal text-text-primary placeholder:text-text-tertiary outline-none focus:border-accent/50 max-h-[35vh] md:max-h-[45vh] md:text-[14px]"
               />
               <div className="flex items-center gap-1.5 mt-1">
                 <button
