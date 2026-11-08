@@ -241,6 +241,7 @@ export function VideoPlayer({
     playbackRate,
     qualityLevels,
     currentQuality,
+    selectedQuality,
     isLoading,
     isFullscreen,
     error,
@@ -253,6 +254,15 @@ export function VideoPlayer({
     toggleMute,
     toggleFullscreen,
   } = player;
+
+  // The picker shows what the viewer chose; on Auto it also names the rung
+  // hls.js is playing, instead of flipping to that rung's label.
+  const activeQualityLabel = qualityLevels.find((l) => l.index === currentQuality)?.label;
+  const autoQualityLabel = activeQualityLabel ? `Auto (${activeQualityLabel})` : "Auto";
+  const selectedQualityLabel =
+    selectedQuality === -1
+      ? autoQualityLabel
+      : (qualityLevels.find((l) => l.index === selectedQuality)?.label ?? "Auto");
 
   // Edit view plays the video as it will be cut: the bar and clock run on
   // after-cut time and playback jumps over each cut. Source view is untouched.
@@ -719,10 +729,7 @@ export function VideoPlayer({
                 className="flex items-center gap-1 rounded border border-border px-2 py-1 text-[12.5px] text-text-secondary hover:border-border-strong hover:text-text-primary transition-colors"
                 aria-label="Quality"
               >
-                {currentQuality === -1
-                  ? "Auto"
-                  : (qualityLevels.find((l) => l.index === currentQuality)
-                      ?.label ?? "Auto")}
+                {selectedQualityLabel}
                 <ChevronUp
                   className={cn(
                     "h-3 w-3 text-text-tertiary transition-transform",
@@ -735,7 +742,7 @@ export function VideoPlayer({
                   <button
                     className={cn(
                       "flex w-full items-center justify-between px-3 py-2 text-[13px] transition-colors",
-                      currentQuality === -1
+                      selectedQuality === -1
                         ? "text-text-primary"
                         : "text-text-secondary hover:bg-bg-hover",
                     )}
@@ -744,8 +751,8 @@ export function VideoPlayer({
                       setQualityOpen(false);
                     }}
                   >
-                    Auto{" "}
-                    {currentQuality === -1 && (
+                    {autoQualityLabel}{" "}
+                    {selectedQuality === -1 && (
                       <Check className="h-4 w-4 text-accent" />
                     )}
                   </button>
@@ -754,7 +761,7 @@ export function VideoPlayer({
                       key={level.index}
                       className={cn(
                         "flex w-full items-center justify-between px-3 py-2 text-[13px] transition-colors",
-                        currentQuality === level.index
+                        selectedQuality === level.index
                           ? "text-text-primary"
                           : "text-text-secondary hover:bg-bg-hover",
                       )}
@@ -764,7 +771,7 @@ export function VideoPlayer({
                       }}
                     >
                       {level.label}{" "}
-                      {currentQuality === level.index && (
+                      {selectedQuality === level.index && (
                         <Check className="h-4 w-4 text-accent" />
                       )}
                     </button>

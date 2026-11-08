@@ -19,6 +19,7 @@ vi.mock('@/hooks/use-video-player', () => ({
     playbackRate: 1,
     qualityLevels: [],
     currentQuality: -1,
+    selectedQuality: -1,
     isLoading: false,
     isFullscreen: false,
     error: null,

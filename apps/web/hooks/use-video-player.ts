@@ -34,7 +34,10 @@ export interface VideoPlayerState {
   isMuted: boolean
   playbackRate: number
   qualityLevels: QualityLevel[]
+  /** The rendition playing now (-1 until hls.js reports one). */
   currentQuality: number
+  /** What the viewer picked: -1 is Auto, which stays Auto while hls.js switches. */
+  selectedQuality: number
   isLoading: boolean
   isFullscreen: boolean
   error: string | null
@@ -70,7 +73,8 @@ export function useVideoPlayer(src: string | null): UseVideoPlayerReturn {
   const [isMuted, setIsMuted] = useState(false)
   const [playbackRate, setPlaybackRateState] = useState(1)
   const [qualityLevels, setQualityLevels] = useState<QualityLevel[]>([])
-  const [currentQuality, setCurrentQuality] = useState(-1) // -1 = auto
+  const [currentQuality, setCurrentQuality] = useState(-1) // -1 = no rung reported yet
+  const [selectedQuality, setSelectedQuality] = useState(-1) // -1 = auto
   const [isLoading, setIsLoading] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -218,7 +222,8 @@ export function useVideoPlayer(src: string | null): UseVideoPlayerReturn {
             : `${Math.round(level.bitrate / 1000)}kbps`,
         }))
         setQualityLevels(levels)
-        setCurrentQuality(-1) // start on auto
+        setCurrentQuality(-1) // wait for the first active rung
+        setSelectedQuality(-1) // every new manifest starts on auto
         setIsLoading(false)
       })
 
@@ -310,7 +315,7 @@ export function useVideoPlayer(src: string | null): UseVideoPlayerReturn {
     const hls = hlsRef.current
     if (!hls) return
     hls.currentLevel = levelIndex // -1 = auto
-    setCurrentQuality(levelIndex)
+    setSelectedQuality(levelIndex)
   }, [])
 
   const setVolume = useCallback((vol: number) => {
@@ -374,6 +379,7 @@ export function useVideoPlayer(src: string | null): UseVideoPlayerReturn {
     playbackRate,
     qualityLevels,
     currentQuality,
+    selectedQuality,
     isLoading,
     isFullscreen,
     error,
