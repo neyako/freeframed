@@ -33,7 +33,7 @@ import {
   Download,
   Columns2,
   MessageSquare,
-  Upload,
+  FilePlus2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { usePageTitle } from '@/hooks/use-page-title'
@@ -439,7 +439,7 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
           />
           {/* Icon-only on phones, so an editor can send v2 from the couch */}
           <Button variant="ghost" size="sm" onClick={() => versionFileInputRef.current?.click()} title="Upload a new version" aria-label="New version">
-            <Upload />
+            <FilePlus2 />
             <span className="hidden md:inline">New version</span>
           </Button>
           <Button variant="ghost" size="sm" onClick={handleDownload} disabled={downloading} title="Download original file">

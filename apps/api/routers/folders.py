@@ -398,7 +398,14 @@ def get_folder_tree(
         else:
             roots.append(node)
 
-    return roots
+    # Name order at every level, the same order the project grid shows
+    def by_name(nodes: list[FolderTreeNode]) -> list[FolderTreeNode]:
+        nodes.sort(key=lambda n: n.name.casefold())
+        for n in nodes:
+            by_name(n.children)
+        return nodes
+
+    return by_name(roots)
 
 
 @router.patch("/folders/{folder_id}", response_model=FolderResponse)

@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 import os
 import uuid
@@ -9,6 +10,7 @@ from ..middleware.auth import get_current_user
 from ..models.user import User
 from ..models.asset import Asset, AssetVersion, MediaFile, AssetType, FileType, ProcessingStatus
 from ..models.project import ProjectRole
+from ..models.comment import Comment
 from ..schemas.asset import AssetResponse, AssetVersionResponse, AssetUpdate, StreamUrlResponse, MediaFileResponse
 from ..services.permissions import require_project_role, require_asset_access
 from ..services.s3_service import generate_presigned_get_url, build_download_filename
@@ -53,6 +55,20 @@ def _build_asset_responses_bulk(assets: list[Asset], db: Session) -> list[AssetR
     for f in all_files:
         files_by_version.setdefault(f.version_id, []).append(f)
 
+    # Open notes on the version people are looking at: top-level, unresolved
+    latest_ids = [v.id for v in latest_by_asset.values()]
+    open_counts: dict = dict(
+        db.query(Comment.version_id, func.count(Comment.id))
+        .filter(
+            Comment.version_id.in_(latest_ids),
+            Comment.parent_id.is_(None),
+            Comment.resolved.is_(False),
+            Comment.deleted_at.is_(None),
+        )
+        .group_by(Comment.version_id)
+        .all()
+    ) if latest_ids else {}
+
     result = []
     for asset in assets:
         version_response = None
@@ -70,6 +86,7 @@ def _build_asset_responses_bulk(assets: list[Asset], db: Session) -> list[AssetR
         asset_resp = AssetResponse.model_validate(asset)
         asset_resp.latest_version = version_response
         asset_resp.thumbnail_url = thumbnail_url
+        asset_resp.open_comment_count = int(open_counts.get(latest.id, 0)) if latest else 0
         result.append(asset_resp)
     return result
 

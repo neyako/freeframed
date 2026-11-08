@@ -45,7 +45,7 @@ export function LoginForm() {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-[18px] font-semibold text-text-primary">Sign in</h2>
+      <h2 className="text-display text-text-primary">Sign in</h2>
 
       <form onSubmit={handleClassicLogin} className="flex flex-col gap-3">
         {classicError && (

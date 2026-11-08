@@ -67,7 +67,7 @@ const rowHeightMap = { S: 140, M: 200, L: 280 }
 
 // Narrowest a card may get, so a 9:16 video keeps a readable title and
 // poster instead of being squeezed to its row-height width
-const minCardWidthMap = { S: 104, M: 150, L: 200 }
+const minCardWidthMap = { S: 120, M: 180, L: 240 }
 
 // Folders are compact rows on a plain grid, whatever the card size
 const folderGridClass = 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4'
@@ -137,9 +137,14 @@ export function AssetGrid({
     })
   }
 
+  // Touch has no hover, so selecting is a mode: "Select" shows the boxes and
+  // a tap toggles instead of opening. Pointer devices use the hover boxes.
+  const [selectMode, setSelectMode] = React.useState(false)
+
   const clearSelection = () => {
     setSelectedAssetIds(new Set())
     setSelectedFolderIds(new Set())
+    setSelectMode(false)
   }
 
   // A selection belongs to the folder it was made in
@@ -164,6 +169,7 @@ export function AssetGrid({
   }
 
   const totalSelected = selectedAssetIds.size + selectedFolderIds.size
+  const selecting = selectMode || totalSelected > 0
   const selectedTotalSize = Array.from(selectedAssetIds).reduce((sum, id) => sum + (fileSizes[id] ?? 0), 0)
 
   const filtered = React.useMemo(
@@ -171,7 +177,12 @@ export function AssetGrid({
     [assets, sortKey, sortDirection],
   )
 
-  const showFolders = !flattenFolders && folders && folders.length > 0
+  // Same order as the folder sidebar, so a folder sits in one place everywhere
+  const orderedFolders = React.useMemo(
+    () => [...(folders ?? [])].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true })),
+    [folders],
+  )
+  const showFolders = !flattenFolders && orderedFolders.length > 0
   const folderCount = showFolders ? folders!.length : 0
 
   if (isLoading) {
@@ -203,6 +214,14 @@ export function AssetGrid({
       <div className="flex flex-wrap items-center gap-1">
         <span className="mr-2 text-[12.5px] text-text-secondary">{countLabel}</span>
         <div className="grow" />
+        <Button
+          variant="ghost"
+          size="sm"
+          className="hidden pointer-coarse:inline-flex"
+          onClick={() => (selectMode ? clearSelection() : setSelectMode(true))}
+        >
+          {selectMode ? 'Done' : 'Select'}
+        </Button>
         <SortPopover />
         <div className="hidden lg:block">
           <AppearancePopover />
@@ -213,7 +232,7 @@ export function AssetGrid({
       {/* Grid view: folders */}
       {showFolders && layout === 'grid' && (
         <div className={cn('grid gap-2', folderGridClass)}>
-          {folders!.map((folder) => {
+          {orderedFolders.map((folder) => {
             const isFolderSelected = selectedFolderIds.has(folder.id)
             return (
               <div key={folder.id} className="group/folder relative">
@@ -229,7 +248,7 @@ export function AssetGrid({
                       : cn(
                           'border-border-strong bg-bg-secondary text-transparent opacity-0 group-hover/folder:opacity-100 group-hover/folder:text-text-tertiary',
                           // On touch, folders show their icon until a selection is under way
-                          totalSelected > 0 && 'pointer-coarse:opacity-100',
+                          selecting && 'pointer-coarse:opacity-100',
                         ),
                   )}
                   onClick={(e) => { e.stopPropagation(); toggleFolderSelect(folder.id) }}
@@ -238,7 +257,7 @@ export function AssetGrid({
                 </button>
                 <FolderCard
                   folder={folder}
-                  onOpen={onFolderOpen!}
+                  onOpen={(f) => (selectMode ? toggleFolderSelect(f.id) : onFolderOpen?.(f))}
                   onRename={onFolderRename}
                   onDelete={onFolderDelete}
                   onShare={onFolderShare}
@@ -265,7 +284,7 @@ export function AssetGrid({
               key={asset.id}
               className="min-w-0"
               style={{ flexGrow: aspect, flexBasis: Math.max(aspect * rowHeightMap[cardSize], minCardWidthMap[cardSize]) }}
-              onClick={() => onAssetOpen?.(asset)}
+              onClick={() => (selectMode ? toggleAssetSelect(asset.id) : onAssetOpen?.(asset))}
             >
               <AssetCard
                 asset={asset}
@@ -274,6 +293,7 @@ export function AssetGrid({
                 thumbnailUrl={thumbnails[asset.id]}
                 fileSize={fileSizes[asset.id] ?? null}
                 selected={selectedAssetIds.has(asset.id)}
+                selecting={selecting}
                 onSelect={() => toggleAssetSelect(asset.id)}
                 showInfo={showCardInfo}
                 showFileSize={showFileSize}
@@ -314,7 +334,7 @@ export function AssetGrid({
             <div className="w-6 shrink-0" />
           </div>
 
-          {showFolders && folders!.map((folder) => {
+          {showFolders && orderedFolders.map((folder) => {
             const isFolderSelected = selectedFolderIds.has(folder.id)
             return (
               <div

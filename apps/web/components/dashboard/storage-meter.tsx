@@ -35,19 +35,19 @@ export function StorageMeter({ usedBytes, className }: { usedBytes?: number; cla
 
   return (
     <div className={cn('flex flex-col gap-1 text-[12px]', className)}>
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="text-text-secondary">Storage</span>
-        <span className="whitespace-nowrap font-mono tabular-nums text-text-tertiary">{formatBytes(used)} here</span>
+      <div className="flex items-baseline justify-between gap-2 whitespace-nowrap">
+        <span className="text-text-secondary">Disk</span>
+        {free !== null && (
+          <span className={cn('font-mono tabular-nums', low ? 'text-accent' : 'text-text-tertiary')}>
+            {formatBytes(free)} free
+          </span>
+        )}
       </div>
-      <div className="relative h-1 w-full overflow-hidden rounded-full bg-bg-hover" title="Disk in use, with freeframed's share in white">
+      <div className="relative h-1 w-full overflow-hidden rounded-full bg-bg-hover" title="Disk in use; the white part is your footage">
         <div className={cn('absolute inset-y-0 left-0', low ? 'bg-accent' : 'bg-text-tertiary')} style={{ width: `${diskPct}%` }} />
         <div className="absolute inset-y-0 left-0 bg-text-primary" style={{ width: `${Math.max(appPct, used > 0 ? 1 : 0)}%` }} />
       </div>
-      {free !== null && total !== null && (
-        <span className={cn('font-mono tabular-nums', low ? 'text-accent' : 'text-text-tertiary')}>
-          {formatBytes(free)} free of {formatBytes(total)}
-        </span>
-      )}
+      <span className="whitespace-nowrap font-mono tabular-nums text-text-tertiary">{formatBytes(used)} of footage</span>
     </div>
   )
 }

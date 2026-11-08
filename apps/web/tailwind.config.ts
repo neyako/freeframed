@@ -74,6 +74,8 @@ const config: Config = {
       },
       fontSize: {
         '2xs': ['0.625rem', { lineHeight: '0.875rem' }],
+        // One display size per screen: the page title is the only loud type
+        display: ['1.75rem', { lineHeight: '2rem', letterSpacing: '-0.025em', fontWeight: '600' }],
       },
       // Motion ("Snappy"): one-shot, compositor-only (opacity + translate/scale),
       // 130ms in / 90ms out. Uses the standalone `translate`/`scale` properties

@@ -3,9 +3,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import Hls from 'hls.js'
-import { cn, formatTimecode } from '@/lib/utils'
+import { cn } from '@/lib/utils'
 import { avatarGray, getInitials } from '@/lib/avatar'
-import { useReviewStore, selectFps } from '@/stores/review-store'
+import { useReviewStore, useFormatPosition } from '@/stores/review-store'
 import { canUseHlsJs } from '@/hooks/use-video-player'
 import { afterCutSeconds, toEditTime, toSourceTime, type CutRange } from '@/lib/cuts'
 import type { Comment } from '@/types'
@@ -188,7 +188,7 @@ function CommentMarker({
   const setFocusedCommentId = useReviewStore((s) => s.setFocusedCommentId)
   const setActiveAnnotation = useReviewStore((s) => s.setActiveAnnotation)
   const seekTo = useReviewStore((s) => s.seekTo)
-  const fps = useReviewStore(selectFps)
+  const formatPosition = useFormatPosition()
   const [tooltipPos, setTooltipPos] = useState<{ left: number; top: number } | null>(null)
 
   // Recalculate tooltip position when hovered to avoid viewport clipping
@@ -274,9 +274,9 @@ function CommentMarker({
               <span className="text-xs font-medium text-text-primary truncate">{authorName}</span>
               {comment.timecode_start !== null && (
                 <span className="ml-auto text-[10.5px] font-mono tabular-nums text-text-secondary whitespace-nowrap">
-                  {formatTimecode(comment.timecode_start, fps)}
+                  {formatPosition(comment.timecode_start)}
                   {comment.timecode_end != null &&
-                    ` – ${formatTimecode(comment.timecode_end, fps)}`}
+                    `–${formatPosition(comment.timecode_end)}`}
                 </span>
               )}
             </div>
@@ -316,7 +316,7 @@ export function ProgressBar({
   const [hoverX, setHoverX] = useState(0)
   const [hoveredCommentId, setHoveredCommentId] = useState<string | null>(null)
   const focusedCommentId = useReviewStore((s) => s.focusedCommentId)
-  const fps = useReviewStore(selectFps)
+  const formatPosition = useFormatPosition()
   const setFocusedCommentId = useReviewStore((s) => s.setFocusedCommentId)
   const rangeStart = useReviewStore((s) => s.rangeStart)
   const rangeEnd = useReviewStore((s) => s.rangeEnd)
@@ -559,7 +559,7 @@ export function ProgressBar({
           {/* Time label */}
           <div className="flex justify-center">
             <span className="bg-bg-elevated border border-border text-text-primary text-[11px] font-mono tabular-nums px-2 py-0.5 rounded-md">
-              {formatTimecode(hoverTime, fps)}
+              {formatPosition(hoverTime)}
             </span>
           </div>
         </div>

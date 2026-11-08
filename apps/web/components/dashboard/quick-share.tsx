@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Upload } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { FrameCorners } from "@/components/shared/wordmark";
 import { cn } from "@/lib/utils";
 import { ProgressTrack } from "@/components/ui/progress";
 import { CopyButton } from "@/components/review/share-link-control-primitives";
@@ -149,14 +150,15 @@ export function QuickShare() {
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         className={cn(
-          "flex cursor-pointer items-center gap-3 rounded-md border border-dashed px-3 py-3 transition-colors duration-100",
+          "relative flex cursor-pointer items-center gap-3 rounded-sm border border-dashed px-3 py-2.5 transition-colors duration-100",
           dragKind === "video"
-            ? "border-text-primary bg-white/[0.04]"
+            ? "border-transparent bg-white/[0.04]"
             : dragKind === "other"
               ? "border-accent/70"
               : "border-border-strong hover:border-text-secondary",
         )}
       >
+        {dragKind === "video" && <FrameCorners className="inset-0" />}
         <Upload
           className={cn(
             "h-[15px] w-[15px] shrink-0 transition-[transform,color] duration-100",

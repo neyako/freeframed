@@ -80,7 +80,8 @@ function ProjectSection({
   userId,
   onMutate,
 }: {
-  title: string;
+  /** Left out when it would only repeat the page title */
+  title?: string;
   projects: Project[];
   viewMode: ViewMode;
   showRole?: boolean;
@@ -91,12 +92,14 @@ function ProjectSection({
 
   return (
     <section className="space-y-2">
-      <h2 className="flex items-baseline gap-2 text-[13px] font-medium text-text-primary">
-        {title}
-        <span className="font-mono text-[12px] font-normal text-text-tertiary">
-          {projects.length}
-        </span>
-      </h2>
+      {title && (
+        <h2 className="flex items-baseline gap-2 text-[13px] font-medium text-text-primary">
+          {title}
+          <span className="font-mono text-[12px] font-normal text-text-tertiary">
+            {projects.length}
+          </span>
+        </h2>
+      )}
 
       {viewMode === "grid" ? (
         <div className="grid grid-cols-2 gap-x-3 gap-y-4 sm:grid-cols-[repeat(auto-fill,minmax(200px,1fr))]">
@@ -203,7 +206,7 @@ export default function ProjectsPage() {
   return (
     <div className="mx-auto w-full max-w-[1200px] space-y-6 px-4 pb-16 pt-6 sm:px-6">
       <div className="flex items-center justify-between gap-3">
-        <h1 className="text-[18px] font-semibold text-text-primary">Projects</h1>
+        <h1 className="text-display text-text-primary">Projects</h1>
 
         <div className="flex items-center gap-2">
           <Button
@@ -317,7 +320,7 @@ export default function ProjectsPage() {
       ) : (
         <div className="space-y-8">
           <ProjectSection
-            title="My projects"
+            title={sharedProjects.length > 0 ? "My projects" : undefined}
             projects={myProjects}
             viewMode={viewMode}
             userId={user?.id}

@@ -19,10 +19,10 @@ import {
   Lock,
   Download,
 } from "lucide-react";
-import { cn, copyToClipboard, formatTime, formatRelativeTime, isSendEnter } from "@/lib/utils";
-import { formatRange, formatSpan } from "@/lib/cuts";
+import { cn, copyToClipboard, formatRelativeTime, isSendEnter } from "@/lib/utils";
+import { formatSpan } from "@/lib/cuts";
 import { avatarGray, getInitials } from "@/lib/avatar";
-import { useReviewStore } from "@/stores/review-store";
+import { useReviewStore, useFormatPosition } from "@/stores/review-store";
 import { useAutoGrow } from "@/hooks/use-auto-grow";
 import { Linkified } from "@/components/review/linkified";
 import { LinkEmbed, firstEmbeddableUrl } from "@/components/review/link-embed";
@@ -405,6 +405,7 @@ function CommentItem({
   const seekTo = useReviewStore((s) => s.seekTo);
   const setActiveAnnotation = useReviewStore((s) => s.setActiveAnnotation);
   const setFocusedCommentId = useReviewStore((s) => s.setFocusedCommentId);
+  const formatPosition = useFormatPosition();
   const itemRef = React.useRef<HTMLDivElement>(null);
   const [showReplies, setShowReplies] = React.useState(true);
   const [showEmojiPicker, setShowEmojiPicker] = React.useState(false);
@@ -549,8 +550,8 @@ function CommentItem({
                 >
                   {comment.is_cut && <Scissors className="h-3 w-3" />}
                   {isRange
-                    ? formatRange(comment.timecode_start, comment.timecode_end!)
-                    : formatTime(comment.timecode_start)}
+                    ? `${formatPosition(comment.timecode_start)}–${formatPosition(comment.timecode_end!)}`
+                    : formatPosition(comment.timecode_start)}
                   {comment.is_cut && isRange && (
                     <span className="text-text-tertiary">· {formatSpan(comment.timecode_end! - comment.timecode_start)}</span>
                   )}

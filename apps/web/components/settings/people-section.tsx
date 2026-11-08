@@ -229,9 +229,12 @@ export function PeopleSection() {
       )}
 
       {error && <p className="text-xs text-status-error">{error}</p>}
-      <p className="text-xs text-text-tertiary">
-        Deactivated people are signed out everywhere and can&apos;t sign in. Their comments stay.
-      </p>
+      {/* Only relevant once there's someone besides you to deactivate */}
+      {people && people.length > 1 && (
+        <p className="text-xs text-text-tertiary">
+          Deactivated people are signed out everywhere and can&apos;t sign in. Their comments stay.
+        </p>
+      )}
 
       <ConfirmDialog
         open={toDeactivate !== null}

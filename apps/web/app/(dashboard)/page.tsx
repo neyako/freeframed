@@ -8,7 +8,8 @@ import { api } from "@/lib/api";
 import { mediaAspect } from "@/lib/aspect";
 import { useHomeModeStore } from "@/stores/home-mode-store";
 import { useRouter } from "next/navigation";
-import { formatRelativeTime } from "@/lib/utils";
+import { formatAgo } from "@/lib/utils";
+import { MediaBadges } from "@/components/projects/asset-card";
 import { QuickShare } from "@/components/dashboard/quick-share";
 import { StorageMeter } from "@/components/dashboard/storage-meter";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -67,7 +68,7 @@ function AssetCard({ asset, onDelete }: AssetCardProps) {
     <div className="group relative min-w-0" style={{ flexGrow: aspect, flexBasis: aspect * ROW_HEIGHT }}>
       <Link href={`/projects/${asset.project_id}/assets/${asset.id}`} className="block">
         <div
-          className="flex w-full items-center justify-center overflow-hidden rounded-sm border border-border bg-bg-tertiary text-text-tertiary transition-colors duration-100 group-hover:border-border-strong"
+          className="relative flex w-full items-center justify-center overflow-hidden rounded-sm border border-border bg-bg-tertiary text-text-tertiary transition-colors duration-100 group-hover:border-border-strong"
           style={{ aspectRatio: aspect }}
         >
           {asset.thumbnail_url && !imgError ? (
@@ -82,10 +83,11 @@ function AssetCard({ asset, onDelete }: AssetCardProps) {
           ) : (
             <Film className="h-[15px] w-[15px]" />
           )}
+          <MediaBadges asset={asset} />
         </div>
-        <p className="mt-1.5 truncate text-[12.5px] text-text-primary">{asset.name}</p>
-        <p className="text-[11.5px] text-text-tertiary">
-          {mounted ? formatRelativeTime(asset.updated_at) : "\u00a0"}
+        <p className="mt-1.5 truncate text-[13.5px] text-text-primary">{asset.name}</p>
+        <p className="font-mono text-[11.5px] tabular-nums text-text-tertiary">
+          {mounted ? [asset.latest_version && asset.latest_version.version_number > 1 ? `v${asset.latest_version.version_number}` : null, formatAgo(asset.updated_at)].filter(Boolean).join(" · ") : "\u00a0"}
         </p>
       </Link>
       <button
@@ -219,7 +221,7 @@ export default function HomePage() {
   return (
     <div className="mx-auto w-full max-w-[1200px] space-y-8 px-4 pb-16 pt-6 sm:px-6">
       <div className="flex items-center justify-between gap-6">
-        <h1 className="text-[18px] font-semibold text-text-primary">Review</h1>
+        <h1 className="text-display text-text-primary">Review</h1>
         <div className="hidden shrink-0 items-center gap-4 sm:flex">
           <Button
             type="button"
@@ -238,7 +240,7 @@ export default function HomePage() {
       <QuickShare />
 
       <Section
-        title="Not approved yet"
+        title="Awaiting approval"
         assets={recentAssets}
         isLoading={loadingRecent}
         emptyTitle="No assets yet."

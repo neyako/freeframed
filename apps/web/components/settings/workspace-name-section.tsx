@@ -55,9 +55,12 @@ export function WorkspaceNameSection() {
             className="h-[34px] text-[13px]"
           />
         </div>
-        <Button type="submit" size="sm" disabled={saving || !trimmed || trimmed === orgName}>
-          {saving ? 'Saving…' : 'Save'}
-        </Button>
+        {/* Save appears once there's something to save */}
+        {(saving || (trimmed && trimmed !== orgName)) && (
+          <Button type="submit" size="sm" disabled={saving}>
+            {saving ? 'Saving…' : 'Save'}
+          </Button>
+        )}
       </form>
       {error && <p className="text-xs text-status-error">{error}</p>}
     </section>

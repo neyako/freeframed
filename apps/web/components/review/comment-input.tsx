@@ -22,9 +22,8 @@ import {
   Film,
   Check,
 } from "lucide-react";
-import { cn, formatTime, isSendEnter } from "@/lib/utils";
-import { formatRange, formatSpan } from "@/lib/cuts";
-import { useReviewStore } from "@/stores/review-store";
+import { cn, isSendEnter } from "@/lib/utils";
+import { useReviewStore, useFormatPosition } from "@/stores/review-store";
 import { useReview } from "./review-provider";
 import { useDrawing } from "@/hooks/use-drawing";
 import { useAutoGrow } from "@/hooks/use-auto-grow";
@@ -248,6 +247,7 @@ export function CommentInput({
   } = useReviewStore();
 
   const { pauseVideo } = useReview();
+  const formatPosition = useFormatPosition();
 
   const { clear, undo, getJSON } = useDrawing();
 
@@ -554,7 +554,8 @@ export function CommentInput({
   return (
     <div
       className={cn(
-        "border-t border-border bg-bg-secondary shrink-0",
+        // Focus lights the tray's top edge instead of drawing another box
+        "border-t border-border bg-bg-secondary shrink-0 transition-colors duration-100 focus-within:border-border-focus",
         className,
       )}
     >
@@ -571,8 +572,8 @@ export function CommentInput({
         </div>
       )}
 
-      {/* Input area */}
-      <div className="px-4 pt-3 pb-2">
+      {/* Input area: the text sits right on the tray, no box inside a box */}
+      <div className="px-4 pt-2.5 pb-1">
         <div
           className="relative"
           onDragOver={(e) => {
@@ -592,19 +593,17 @@ export function CommentInput({
         >
           <div
             className={cn(
-              "flex flex-col rounded-md border border-border bg-bg-tertiary focus-within:border-border-focus",
-              dragOver && "border-dashed border-text-secondary bg-bg-hover",
+              "flex flex-col rounded-sm",
+              dragOver && "outline-dashed outline-1 outline-text-secondary bg-bg-hover",
             )}
           >
             {/* Timecode badge sits above the text so the text gets the full width */}
             {hasTimecode && (timecodeAttached || isDrawingMode) && (
               <span
                 className={cn(
-                  "self-start ml-2.5 mt-2 flex items-center gap-1 whitespace-nowrap rounded border px-1.5 py-0 font-mono text-[11px] leading-[19.5px] select-none",
-                  // Red only when a range is actively marked; quiet mono at rest
-                  rangeStart !== null || rangeEnd !== null
-                    ? "bg-accent-muted border-accent-line text-accent"
-                    : "bg-bg-secondary border-border text-text-secondary",
+                  "self-start flex items-center gap-1.5 whitespace-nowrap font-mono text-[12px] tabular-nums leading-5 select-none",
+                  // Red only while a range is marked (that's a cut); plain mono at rest
+                  rangeStart !== null || rangeEnd !== null ? "text-accent" : "text-text-secondary",
                 )}
               >
                 {rangeStart !== null || rangeEnd !== null ? (
@@ -612,8 +611,8 @@ export function CommentInput({
                   <>
                     {isCut && <Scissors className="h-3 w-3" aria-label="Cut" />}
                     {markedRange
-                      ? formatRange(markedRange.start, markedRange.end)
-                      : formatTime(rangeStart ?? rangeEnd ?? playheadTime)}
+                      ? `${formatPosition(markedRange.start)}–${formatPosition(markedRange.end)}`
+                      : formatPosition(rangeStart ?? rangeEnd ?? playheadTime)}
                     <button
                       onClick={() => clearRange()}
                       className="ml-0.5 text-accent/60 hover:text-accent transition-colors relative after:absolute after:-inset-2.5 after:content-['']"
@@ -624,7 +623,9 @@ export function CommentInput({
                   </>
                 ) : (
                   <>
-                    {formatTime(playheadTime)}
+                    {/* Before playback a note is about the whole video; it only
+                        gets a time once the playhead has moved (see attachTime) */}
+                    {playheadTime > 0 ? formatPosition(playheadTime) : "General"}
                     <button
                       onClick={() => setRangeStart(playheadTime)}
                       className="ml-0.5 text-text-tertiary hover:text-text-primary transition-colors relative after:absolute after:-inset-2.5 after:content-['']"
@@ -639,7 +640,7 @@ export function CommentInput({
             <textarea
               ref={textareaRef}
               // Grows with the text, then scrolls; 16px on phones so iOS doesn't zoom
-              className="block w-full resize-none overflow-y-auto bg-transparent px-2.5 py-2 text-[16px] leading-normal text-text-primary placeholder:text-text-tertiary focus:outline-none max-h-[35vh] md:max-h-[45vh] md:text-[14px]"
+              className="block w-full resize-none overflow-y-auto bg-transparent px-0 py-1.5 text-[16px] leading-normal text-text-primary placeholder:text-text-tertiary focus:outline-none max-h-[35vh] md:max-h-[45vh] md:text-[14px]"
               placeholder={
                 replyToId
                   ? "Reply…"
@@ -735,7 +736,7 @@ export function CommentInput({
           <div className="flex items-center gap-1">
             <button
               onClick={() => exitDrawingMode()}
-              className="h-7 w-7 flex items-center justify-center rounded-md text-text-tertiary hover:bg-bg-tertiary hover:text-text-primary transition-colors"
+              className="h-7 w-7 pointer-coarse:h-9 pointer-coarse:w-9 flex items-center justify-center rounded-md text-text-tertiary hover:bg-bg-tertiary hover:text-text-primary transition-colors"
               title="Exit drawing"
             >
               <ChevronLeft className="h-4 w-4" />
@@ -751,7 +752,7 @@ export function CommentInput({
                   onClick={() => setDrawingTool(tool.id as DrawingTool)}
                   title={tool.label}
                   className={cn(
-                    "h-7 w-7 flex items-center justify-center rounded-md transition-colors",
+                    "h-7 w-7 pointer-coarse:h-9 pointer-coarse:w-9 flex items-center justify-center rounded-md transition-colors",
                     drawingTool === tool.id
                       ? "bg-bg-hover text-text-primary"
                       : "text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary",
@@ -782,14 +783,14 @@ export function CommentInput({
 
             <button
               onClick={undo}
-              className="h-7 w-7 flex items-center justify-center rounded-md text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary transition-colors"
+              className="h-7 w-7 pointer-coarse:h-9 pointer-coarse:w-9 flex items-center justify-center rounded-md text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary transition-colors"
               title="Undo"
             >
               <RotateCcw className="h-3.5 w-3.5" />
             </button>
             <button
               onClick={clear}
-              className="h-7 w-7 flex items-center justify-center rounded-md text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary transition-colors"
+              className="h-7 w-7 pointer-coarse:h-9 pointer-coarse:w-9 flex items-center justify-center rounded-md text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary transition-colors"
               title="Clear"
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -803,7 +804,7 @@ export function CommentInput({
               {hasTimecode && (
                 <button
                   className={cn(
-                    "h-7 w-7 flex items-center justify-center rounded-md transition-colors",
+                    "h-7 w-7 pointer-coarse:h-9 pointer-coarse:w-9 flex items-center justify-center rounded-md transition-colors",
                     timecodeAttached
                       ? "text-text-primary bg-bg-hover"
                       : "text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary",
@@ -824,7 +825,7 @@ export function CommentInput({
               {canAnnotate && (
                 <button
                   className={cn(
-                    "h-7 w-7 flex items-center justify-center rounded-md transition-colors",
+                    "h-7 w-7 pointer-coarse:h-9 pointer-coarse:w-9 flex items-center justify-center rounded-md transition-colors",
                     hasAnnotation
                       ? "text-text-primary bg-bg-hover"
                       : "text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary",
@@ -839,7 +840,7 @@ export function CommentInput({
               {/* Emoji */}
               <div className="relative" ref={emojiRef}>
                 <button
-                  className="h-7 w-7 flex items-center justify-center rounded-md text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary transition-colors"
+                  className="h-7 w-7 pointer-coarse:h-9 pointer-coarse:w-9 flex items-center justify-center rounded-md text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary transition-colors"
                   title="Add emoji"
                   onClick={() => setEmojiOpen((p) => !p)}
                 >
@@ -881,7 +882,7 @@ export function CommentInput({
                     }}
                   />
                   <button
-                    className="h-7 w-7 flex items-center justify-center rounded-md text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary transition-colors"
+                    className="h-7 w-7 pointer-coarse:h-9 pointer-coarse:w-9 flex items-center justify-center rounded-md text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary transition-colors"
                     title="Attach image or video"
                     onClick={() => fileInputRef.current?.click()}
                   >
@@ -898,7 +899,7 @@ export function CommentInput({
                 <div className="relative" ref={visRef}>
                   <button
                     onClick={() => setVisDropdownOpen((p) => !p)}
-                    className="inline-flex items-center gap-1.5 h-7 px-2 rounded-md text-[12px] text-text-secondary border border-border hover:bg-bg-hover hover:text-text-primary transition-colors"
+                    className="inline-flex items-center gap-1.5 h-7 px-2 rounded-md text-[12px] text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
                     title="Who can see this note"
                   >
                     {commentVisibility === "internal" ? (
@@ -950,7 +951,7 @@ export function CommentInput({
                   onClick={handleSubmit}
                   disabled={!canSubmit || submitting}
                   className={cn(
-                    "inline-flex h-7 min-w-7 items-center justify-center rounded-md bg-text-primary text-text-inverse hover:opacity-90 disabled:opacity-25 disabled:cursor-not-allowed transition-opacity",
+                    "inline-flex h-7 min-w-7 pointer-coarse:h-9 pointer-coarse:min-w-9 items-center justify-center rounded-md bg-text-primary text-text-inverse hover:opacity-90 disabled:opacity-25 disabled:cursor-not-allowed transition-opacity",
                     uploadPercent !== null && "px-1.5 disabled:opacity-100",
                   )}
                   title="Send (Enter)"

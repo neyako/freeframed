@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Wordmark } from '@/components/shared/wordmark'
+import { avatarGray } from '@/lib/avatar'
 import { clearTokens } from '@/lib/auth'
 import { useAuthStore } from '@/stores/auth-store'
 import { useBrandingStore } from '@/stores/branding-store'
@@ -304,7 +305,7 @@ function AssetGridCard({ asset, allowDownload, token, shareSession, isSelected, 
           />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-bg-hover text-text-secondary">
+            <div className="flex h-14 w-14 items-center justify-center rounded-md bg-bg-hover text-text-secondary">
               <TypeIcon className="h-7 w-7" />
             </div>
           </div>
@@ -462,16 +463,7 @@ function RightPanel({ selectedAsset, token, shareSession, permission }: RightPan
 
 // ─── Share Comment List (matches project review panel style) ─────────────────
 
-const AVATAR_COLORS = [
-  'bg-purple-500', 'bg-blue-500', 'bg-green-500', 'bg-orange-500',
-  'bg-pink-500', 'bg-cyan-500', 'bg-indigo-500', 'bg-rose-500',
-]
-
-function getAvatarColor(name: string): string {
-  let hash = 0
-  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash)
-  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length]
-}
+// Mono avatars, the same grays as the owner's review panel
 
 interface ShareCommentListProps {
   comments: GuestComment[]
@@ -501,12 +493,12 @@ function ShareCommentList({ comments, loading, canComment, onReply }: ShareComme
     <div className="px-4 py-3 space-y-1">
       {comments.map((comment, i) => {
         const name = comment.author?.name || comment.guest_author?.name || comment.guest_name || comment.author_name || 'User'
-        const color = getAvatarColor(name)
+        const color = avatarGray(name)
         return (
           <div key={comment.id} className="py-3 border-b border-border last:border-0">
             {/* Comment header */}
             <div className="flex items-start gap-3">
-              <div className={cn('h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold text-text-primary shrink-0', color)}>
+              <div className="h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-semibold text-white shrink-0" style={{ backgroundColor: color }}>
                 {name.charAt(0).toUpperCase()}
               </div>
               <div className="flex-1 min-w-0">
@@ -534,10 +526,10 @@ function ShareCommentList({ comments, loading, canComment, onReply }: ShareComme
               <div className="ml-11 mt-2 space-y-2 border-l-2 border-border pl-3">
                 {comment.replies.map((r) => {
                   const rName = r.author?.name || r.guest_author?.name || r.guest_name || r.author_name || 'User'
-                  const rColor = getAvatarColor(rName)
+                  const rColor = avatarGray(rName)
                   return (
                     <div key={r.id} className="flex items-start gap-2.5 py-1">
-                      <div className={cn('h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-bold text-text-primary shrink-0', rColor)}>
+                      <div className="h-5 w-5 rounded-full flex items-center justify-center text-[9px] font-semibold text-white shrink-0" style={{ backgroundColor: rColor }}>
                         {rName.charAt(0).toUpperCase()}
                       </div>
                       <div className="flex-1 min-w-0">
@@ -1309,7 +1301,7 @@ export function FolderShareViewer({
             <div ref={viewerMenuRef} className="relative group shrink-0">
               <button
                 onClick={() => setViewerMenuOpen((v) => !v)}
-                className="flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold text-text-primary bg-green-600 hover:ring-2 hover:ring-green-400/50 transition-all"
+                className="flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold text-text-primary bg-bg-hover hover:ring-1 hover:ring-border-strong transition-all"
               >
                 {viewerName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
               </button>
@@ -1335,7 +1327,7 @@ export function FolderShareViewer({
                   onClick={() => {
                     clearTokens()
                   }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 transition-colors"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-accent hover:bg-bg-hover transition-colors"
                 >
                   Log out
                 </button>

@@ -70,8 +70,7 @@ export function ProjectCard({
   const meta = [
     assetCount > 0
       ? `${assetCount} item${assetCount !== 1 ? 's' : ''} · ${formatBytes(project.storage_bytes ?? 0)}`
-      : 'No videos yet',
-    project.is_quick_share ? 'Quick shares' : null,
+      : 'Empty',
     showRole && project.role && project.role !== 'owner' ? 'Editor' : null,
   ]
     .filter(Boolean)

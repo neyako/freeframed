@@ -1,12 +1,8 @@
 'use client'
 
 import * as React from 'react'
-import {
-  Lock,
-  AlertTriangle,
-  Clock,
-  } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Wordmark } from '@/components/shared/wordmark'
 import { FolderShareViewer, ShareReviewScreen } from '@/components/share/folder-share-viewer'
 import type { Asset, SharePermission, ShareLinkAppearance } from '@/types'
 
@@ -80,18 +76,8 @@ function PasswordGate({ onSubmit, error, loading }: PasswordGateProps) {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-bg-primary p-4">
-      <div className="w-full max-w-sm rounded-xl border border-border bg-bg-secondary p-6 shadow-xl">
-        <div className="mb-4 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-accent-muted">
-            <Lock className="h-5 w-5 text-accent" />
-          </div>
-          <div>
-            <h1 className="text-sm font-semibold text-text-primary">Password required</h1>
-            <p className="text-xs text-text-tertiary">Enter the password to access this link</p>
-          </div>
-        </div>
-        <form onSubmit={handleSubmit} className="space-y-3">
+    <GateScreen title="This link has a password" note="Ask the person who sent it.">
+        <form onSubmit={handleSubmit} className="mt-5 space-y-3">
           <input
             type="password"
             value={password}
@@ -102,11 +88,10 @@ function PasswordGate({ onSubmit, error, loading }: PasswordGateProps) {
           />
           {error && <p className="text-xs text-status-error">{error}</p>}
           <Button type="submit" size="sm" className="w-full" loading={loading}>
-            Access link
+            Open
           </Button>
         </form>
-      </div>
-    </div>
+    </GateScreen>
   )
 }
 
@@ -118,25 +103,22 @@ interface ErrorStateProps {
 
 function ErrorState({ expired }: ErrorStateProps) {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-bg-primary p-4">
-      <div className="w-full max-w-sm rounded-xl border border-border bg-bg-secondary p-6 text-center shadow-xl">
-        <div className="mb-4 flex justify-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-status-error/10">
-            {expired ? (
-              <Clock className="h-6 w-6 text-status-error" />
-            ) : (
-              <AlertTriangle className="h-6 w-6 text-status-error" />
-            )}
-          </div>
-        </div>
-        <h1 className="text-sm font-semibold text-text-primary">
-          {expired ? 'Link expired' : 'Link not found'}
-        </h1>
-        <p className="mt-1 text-xs text-text-tertiary">
-          {expired
-            ? 'This share link has expired and is no longer accessible.'
-            : 'This share link is invalid or has been removed.'}
-        </p>
+    <GateScreen
+      title={expired ? 'This link has expired' : 'This link doesn\u2019t work'}
+      note={expired ? 'Ask the sender for a new one.' : 'It may have been turned off. Ask the sender for a new one.'}
+    />
+  )
+}
+
+/** Plain full-page notice for guests: the mark, one line, one action */
+function GateScreen({ title, note, children }: { title: string; note?: string; children?: React.ReactNode }) {
+  return (
+    <div className="flex min-h-dvh items-center justify-center bg-bg-primary px-4">
+      <div className="w-full max-w-[320px]">
+        <Wordmark className="text-[14px]" />
+        <h1 className="mt-8 text-[20px] font-semibold tracking-[-0.015em] text-text-primary">{title}</h1>
+        {note && <p className="mt-1.5 text-[13px] text-text-secondary">{note}</p>}
+        {children}
       </div>
     </div>
   )
@@ -328,25 +310,15 @@ export function SharePageClient({
 
   if (state.stage === 'auth_required') {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-bg-primary p-4">
-        <div className="w-full max-w-sm rounded-xl border border-border bg-bg-secondary p-6 shadow-xl text-center">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-accent-muted">
-            <Lock className="h-6 w-6 text-accent" />
-          </div>
-          <h1 className="text-lg font-semibold text-text-primary">
-            {state.title || 'Secure Share Link'}
-          </h1>
-          <p className="mt-2 text-sm text-text-tertiary">
-            This link is private. Please sign in to view the shared content.
-          </p>
-          <a
-            href="/login"
-            className="mt-4 inline-flex w-full items-center justify-center rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-white hover:bg-accent/90 transition-colors"
-          >
-            Sign in to continue
-          </a>
-        </div>
-      </div>
+      <GateScreen title={state.title || 'Sign in to open this link'} note="It's shared with accounts only.">
+        <a
+          // Come back to this link after signing in
+          href={`/login?from=${encodeURIComponent(typeof window !== 'undefined' ? window.location.pathname : '/')}`}
+          className="mt-5 inline-flex h-[34px] w-full items-center justify-center rounded-md bg-text-primary text-[13px] font-medium text-text-inverse hover:opacity-90 transition-opacity"
+        >
+          Sign in
+        </a>
+      </GateScreen>
     )
   }
 

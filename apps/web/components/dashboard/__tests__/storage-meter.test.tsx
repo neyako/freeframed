@@ -17,6 +17,6 @@ describe('StorageMeter', () => {
     const disk = container.querySelector('[title] > div') as HTMLDivElement
     expect(disk.style.width).toBe('95%')
     expect(disk.className).toContain('bg-accent')
-    expect(screen.getByText(/free of/).className).toContain('text-accent')
+    expect(screen.getByText(/ free$/).className).toContain('text-accent')
   })
 })

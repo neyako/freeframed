@@ -175,11 +175,11 @@ describe("HomePage asset delete", () => {
 
       // Then
       await waitFor(() => {
-        expect(container).toHaveTextContent("18 hours ago");
+        expect(container).toHaveTextContent("18h");
       });
       expect(recoverableErrors).toHaveLength(0);
       expect(serverHtml).not.toContain("Good morning");
-      expect(serverHtml).not.toContain("8 hours ago");
+      expect(serverHtml).not.toContain("8h");
     } finally {
       await act(async () => root?.unmount());
       container.remove();

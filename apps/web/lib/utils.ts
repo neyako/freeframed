@@ -89,6 +89,19 @@ export function formatRelativeTime(date: string): string {
   return `${diffYears} year${diffYears !== 1 ? 's' : ''} ago`
 }
 
+/** Compact age for dense metadata: "now", "12m", "7h", "3d", "2mo", "1y" */
+export function formatAgo(date: string, now: number = Date.now()): string {
+  const mins = Math.floor((now - new Date(date).getTime()) / 60000)
+  if (mins < 1) return 'now'
+  if (mins < 60) return `${mins}m`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours}h`
+  const days = Math.floor(hours / 24)
+  if (days < 30) return `${days}d`
+  const months = Math.floor(days / 30)
+  return months < 12 ? `${months}mo` : `${Math.floor(months / 12)}y`
+}
+
 /**
  * Truncate a string to the given length, appending "..." if truncated
  */

@@ -7,6 +7,7 @@ import {
   truncate,
   cn,
   isSendEnter,
+  formatAgo,
 } from '../utils'
 
 describe('formatTime', () => {
@@ -153,5 +154,16 @@ describe('isSendEnter', () => {
   it('Return is a newline on touch keyboards', () => {
     pointer(true)
     expect(isSendEnter(key())).toBe(false)
+  })
+})
+
+describe('formatAgo', () => {
+  it('compacts an age to one unit', () => {
+    const now = Date.parse('2026-11-09T12:00:00Z')
+    expect(formatAgo('2026-11-09T11:59:40Z', now)).toBe('now')
+    expect(formatAgo('2026-11-09T11:48:00Z', now)).toBe('12m')
+    expect(formatAgo('2026-11-09T05:00:00Z', now)).toBe('7h')
+    expect(formatAgo('2026-11-06T12:00:00Z', now)).toBe('3d')
+    expect(formatAgo('2026-08-01T12:00:00Z', now)).toBe('3mo')
   })
 })

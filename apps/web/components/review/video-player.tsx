@@ -15,10 +15,10 @@ import {
   RotateCw,
   Download,
 } from "lucide-react";
-import { cn, formatTime, formatTimecode, formatFrames } from "@/lib/utils";
+import { cn, formatTime } from "@/lib/utils";
 import { afterCutSeconds, cutAt, mergedCuts, toEditTime, toSourceTime } from "@/lib/cuts";
 import { api } from "@/lib/api";
-import { useReviewStore, selectFps, type TimeFormat } from "@/stores/review-store";
+import { useReviewStore, useFormatPosition, type TimeFormat } from "@/stores/review-store";
 import { useVideoPlayer } from "@/hooks/use-video-player";
 import { resolveStreamUrl } from "@/components/share/share-stream";
 import { useReview } from "./review-provider";
@@ -148,7 +148,6 @@ export function VideoPlayer({
   const { isDrawingMode, timeFormat, setTimeFormat, setPlayheadTime } =
     useReviewStore();
   const versionId = useReviewStore((s) => s.currentVersion?.id);
-  const fps = useReviewStore(selectFps);
   const { registerPauseHandler } = useReview();
   const [timeFormatOpen, setTimeFormatOpen] = useState(false);
   const timeFormatRef = useRef<HTMLDivElement>(null);
@@ -192,18 +191,8 @@ export function VideoPlayer({
     return () => document.removeEventListener("mousedown", handleClick);
   }, [qualityOpen]);
 
-  function displayTime(seconds: number): string {
-    switch (timeFormat) {
-      case "frames":
-        return formatFrames(seconds, fps);
-      case "standard":
-        return formatTime(seconds);
-      case "timecode":
-        return formatTimecode(seconds, fps);
-      default:
-        return formatTimecode(seconds, fps);
-    }
-  }
+  const displayTime = useFormatPosition();
+
 
   // Load the stream URL — reset immediately on asset/version change so the old
   // video doesn't keep playing while the new URL is being fetched.
@@ -637,9 +626,10 @@ export function VideoPlayer({
           <button
             onClick={() => setTimeFormatOpen((p) => !p)}
             aria-expanded={timeFormatOpen}
-            className="flex items-center gap-1.5 rounded-md border border-border bg-bg-tertiary px-3.5 py-1 hover:border-border-strong transition-colors"
+            // A bare readout, like a deck's counter: no box, the digits are the UI
+            className="flex items-center gap-1.5 rounded-sm px-2 py-1 hover:bg-bg-hover transition-colors"
           >
-            <span className="font-mono tabular-nums text-xs sm:text-[15px] font-bold text-text-primary tracking-[0.02em]">
+            <span className="font-mono tabular-nums text-[13px] sm:text-[16px] font-semibold text-text-primary tracking-[-0.01em]">
               {editCuts ? (
                 // The edit's own clock, against its after-cut runtime
                 <>
@@ -648,7 +638,13 @@ export function VideoPlayer({
                   {formatTime(afterCutSeconds(duration, editCuts))}
                 </>
               ) : timeFormat === "timecode" ? (
-                displayTime(currentTime)
+                <>
+                  {displayTime(currentTime)}
+                  {/* Total only where there's room; the frame count needs the width */}
+                  <span className="hidden font-normal text-text-tertiary lg:inline">
+                    {" "}/ {displayTime(duration)}
+                  </span>
+                </>
               ) : (
                 <>
                   {displayTime(currentTime)}{" "}
@@ -665,9 +661,9 @@ export function VideoPlayer({
             />
           </button>
           {timeFormatOpen && (
-            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 w-48 rounded border border-border bg-bg-elevated py-1.5 duration-100 animate-ff-rise-in">
-              <div className="px-3 py-2 text-[12px] text-text-tertiary">
-                Time Format
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 w-48 rounded-md border border-border-strong bg-bg-elevated p-1 shadow-2xl duration-100 animate-ff-rise-in">
+              <div className="px-2 py-1.5 text-[12px] text-text-tertiary">
+                Time format
               </div>
               {(
                 [
@@ -727,7 +723,7 @@ export function VideoPlayer({
               <button
                 onClick={() => setQualityOpen((p) => !p)}
                 aria-expanded={qualityOpen}
-                className="flex items-center gap-1 rounded border border-border px-2 py-1 text-[12.5px] text-text-secondary hover:border-border-strong hover:text-text-primary transition-colors"
+                className="flex items-center gap-1 rounded-sm px-2 py-1 font-mono text-[12px] text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
                 aria-label="Quality"
               >
                 {/* Phones drop the "(1080p)" so the fullscreen button keeps its room */}

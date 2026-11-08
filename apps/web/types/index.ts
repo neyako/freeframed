@@ -89,6 +89,8 @@ export interface AssetResponse extends Asset {
   thumbnail_url: string | null;
   /** Runtime goal (e.g. 180 for Shorts), compared to the after-cut runtime */
   target_duration_seconds?: number | null;
+  /** Unresolved top-level notes on the latest version (list endpoints) */
+  open_comment_count?: number;
 }
 
 export interface MediaFile {
