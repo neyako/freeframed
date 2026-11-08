@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirna
 
 from .celery_app import celery_app
 from ..database import SessionLocal
-from ..models.asset import AssetVersion, MediaFile, ProcessingStatus, AssetType
+from ..models.asset import AssetVersion, FileType, MediaFile, ProcessingStatus, AssetType
 from ..models.asset import Asset
 from ..services.s3_service import get_s3_client
 from ..config import settings
@@ -126,6 +126,18 @@ def _process_video(db, asset, version, media_file, s3, output_prefix):
         })
 
     result = _run_async(transcoder.transcode(job, progress_callback=_on_progress))
+
+    if result.no_video_stream:
+        # Browsers type an audio-only .mp4/.mpg as video/*, which routed it here.
+        # The file is fine; it just is not video. Retype it and use the audio
+        # pipeline instead of failing an upload the user had no reason to doubt.
+        log.info("asset %s has no video stream; processing it as audio", asset.id)
+        asset.asset_type = AssetType.audio
+        media_file.file_type = FileType.audio
+        db.flush()
+        _process_audio(db, asset, version, media_file, s3, output_prefix)
+        return
+
     if not result.success:
         raise TranscodeProcessingError(result.error)
 

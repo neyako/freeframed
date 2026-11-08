@@ -188,13 +188,25 @@ class FFmpegTranscoder:
             # Assume audio when the probe fails, matching the old behavior.
             has_audio = True
             rotated = False
+            probed_streams = False
             try:
                 probe_data = json.loads(probe.stdout)
                 meta = parse_probe_metadata(probe_data)
                 has_audio = has_audio_stream(probe_data)
                 rotated = is_rotated_90(probe_data)
+                probed_streams = bool(probe_data.get("streams"))
             except (ValueError, TypeError, IndexError, json.JSONDecodeError):
                 meta = None
+            if meta is None and probed_streams:
+                # Streams were read and none is video (a .mp4/.mpg that only
+                # carries audio). Every rung would be empty and ffmpeg would die
+                # on "[v:0] matches no streams", which says nothing about the
+                # real cause. Report it so the caller can process it as audio.
+                return TranscodeResult(
+                    success=False,
+                    no_video_stream=True,
+                    error=f"No video stream in {job.input_s3_key}",
+                )
             duration = meta.duration_seconds if meta else 0.0
 
             # 3. Build the quality ladder from the source's display size
