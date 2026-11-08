@@ -65,7 +65,7 @@ function AssetCard({ asset, onDelete }: AssetCardProps) {
   const aspect = mediaAspect(asset);
   return (
     // Justified row item: as wide as the media's shape needs at ROW_HEIGHT
-    <div className="group relative min-w-0 max-sm:!grow-0 max-sm:!basis-[calc(50%-6px)]" style={{ flexGrow: aspect, flexBasis: aspect * ROW_HEIGHT }}>
+    <div className="group relative min-w-0 max-sm:!grow-0 max-sm:!basis-[calc(50%-6px)]" style={{ flexGrow: aspect, flexBasis: Math.max(aspect * ROW_HEIGHT, 160) }}>
       <Link href={`/projects/${asset.project_id}/assets/${asset.id}`} className="block">
         <div
           className="relative flex w-full items-center justify-center overflow-hidden rounded-sm border border-border bg-bg-tertiary text-text-tertiary transition-colors duration-100 group-hover:border-border-strong max-sm:![aspect-ratio:4/5]"

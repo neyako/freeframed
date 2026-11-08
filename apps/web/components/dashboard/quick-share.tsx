@@ -177,7 +177,7 @@ export function QuickShare() {
             <>
               {/* Phones can't drop files; say what the button gets you instead */}
               <span className="pointer-coarse:hidden">Drop a video here</span>
-              <span className="hidden pointer-coarse:inline">Upload, get a review link</span>
+              <span className="hidden pointer-coarse:inline">Upload from your phone</span>
             </>
           )}
         </p>

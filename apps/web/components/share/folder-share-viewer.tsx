@@ -850,7 +850,7 @@ function ShareReviewInner({
           )}
           {/* Who's asking: the client should know whose cut this is */}
           {senderName && (
-            <span className="ml-2 hidden shrink-0 truncate text-[12px] text-text-tertiary sm:inline">from {senderName}</span>
+            <span className="ml-2 min-w-0 truncate text-[12px] text-text-tertiary">from {senderName}</span>
           )}
         </div>
         <div className="flex items-center gap-2">
@@ -930,7 +930,7 @@ function ShareReviewInner({
           <div className={cn(
             "w-full md:h-auto md:w-[360px] flex flex-col border-t md:border-t-0 border-l-0 md:border-l border-border bg-bg-secondary shrink-0 animate-ff-rise-in md:animate-ff-slide-in",
             // Drawing on a phone: the sheet shrinks to the composer so the frame gets the room
-            isDrawingMode ? "h-auto" : "h-[62dvh]",
+            isDrawingMode ? "h-auto" : "h-[50dvh]",
           )}>
             <button
               onClick={() => setSidebarOpen(false)}

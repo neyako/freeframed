@@ -1231,7 +1231,7 @@ export function CommentPanel({
       )}
 
       {/* ─── Comment list ─────────────────────────────────────────── */}
-      <div ref={listRef} className="flex-1 overflow-y-auto">
+      <div ref={listRef} className="flex-1 overflow-y-auto pb-4">
         {isLoading && (
           <p className="px-4 py-6 text-[12.5px] text-text-tertiary">Loading comments…</p>
         )}

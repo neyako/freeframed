@@ -491,7 +491,7 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
           <div
             className={cn(
               'w-full flex flex-col border-t md:border-t-0 border-l-0 md:border-l border-border bg-bg-secondary shrink-0 animate-ff-rise-in md:animate-ff-slide-in md:h-auto md:w-[372px]',
-              isDrawingMode ? 'h-auto' : 'h-[62dvh]',
+              isDrawingMode ? 'h-auto' : 'h-[50dvh]',
             )}
           >
             <button
