@@ -54,6 +54,7 @@ RUN $VENV/bin/pip install --no-cache-dir -r /workspace/apps/api/requirements.txt
 WORKDIR /workspace
 COPY packages/transcoder /workspace/packages/transcoder
 COPY apps/api /workspace/apps/api
+COPY apps/cli /workspace/apps/cli
 
 COPY --from=web-builder /app/.next/standalone /app/web
 COPY --from=web-builder /app/.next/static /app/web/.next/static

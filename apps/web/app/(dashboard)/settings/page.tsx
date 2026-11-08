@@ -3,6 +3,7 @@
 import { useAuthStore } from '@/stores/auth-store'
 import { WorkspaceNameSection } from '@/components/settings/workspace-name-section'
 import { PeopleSection } from '@/components/settings/people-section'
+import { AgentsSection } from '@/components/settings/agents-section'
 import { ProfileSection } from '@/components/settings/profile-section'
 import { AppearanceSection } from '@/components/settings/appearance-section'
 
@@ -14,6 +15,7 @@ export default function SettingsPage() {
       <h1 className="text-lg font-semibold">Settings</h1>
       {isOwner && <WorkspaceNameSection />}
       {isOwner && <PeopleSection />}
+      {isOwner && <AgentsSection />}
       <ProfileSection />
       <AppearanceSection />
     </div>

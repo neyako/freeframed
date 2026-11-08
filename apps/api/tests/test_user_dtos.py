@@ -18,6 +18,7 @@ def _user_with_invite_token() -> User:
         password_hash=None,
         status=UserStatus.pending_invite,
         is_superadmin=False,
+        is_agent=False,
         email_verified=False,
         invited_by_id=None,
         invite_token="fixed-synthetic-invite-token",

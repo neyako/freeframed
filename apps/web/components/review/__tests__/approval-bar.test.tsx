@@ -43,7 +43,7 @@ describe('ApprovalBar', () => {
 
     expect(screen.getByText('You approved')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Reject' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Request changes' })).not.toBeInTheDocument()
   })
 
   it('refreshes after approving and renders the refreshed list state', async () => {
@@ -79,7 +79,7 @@ describe('ApprovalBar', () => {
 
     expect(screen.getByText('Unable to load approvals')).toHaveClass('text-accent')
     expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Reject' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Request changes' })).not.toBeInTheDocument()
   })
 
   it('keeps the reviewer list but hides actions for the version uploader', () => {
@@ -98,6 +98,6 @@ describe('ApprovalBar', () => {
     expect(screen.getByText('1 approved')).toBeInTheDocument()
     expect(screen.getByText('Your upload')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Reject' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Request changes' })).not.toBeInTheDocument()
   })
 })

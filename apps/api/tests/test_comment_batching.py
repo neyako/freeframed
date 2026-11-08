@@ -51,6 +51,7 @@ def test_assemble_comment_response_preserves_nested_maps_and_reactions() -> None
         avatar_url="https://example.test/avatar.png",
         status=UserStatus.active,
         email_verified=True,
+        is_agent=False,
     )
     guest = GuestUser(
         id=guest_id,

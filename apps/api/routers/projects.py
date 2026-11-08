@@ -43,6 +43,12 @@ def _project_to_response(project: Project) -> ProjectResponse:
         is_quick_share=project.is_quick_share,
     )
 
+def _require_human_creator(user: User) -> None:
+    # Creating a project makes its creator owner; agents stay at editor
+    if user.is_agent:
+        raise HTTPException(status_code=403, detail="Agents can't create projects")
+
+
 def _require_project_owner(db: Session, project_id: uuid.UUID, user: User) -> ProjectMember:
     member = db.query(ProjectMember).filter(
         ProjectMember.project_id == project_id,
@@ -90,6 +96,7 @@ def _guard_active_owner(
 
 @router.post("", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
 def create_project(body: ProjectCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    _require_human_creator(current_user)
     project = Project(
         name=body.name,
         description=body.description,
@@ -105,6 +112,7 @@ def create_project(body: ProjectCreate, db: Session = Depends(get_db), current_u
 
 @router.post("/quick-share", response_model=ProjectResponse, status_code=status.HTTP_200_OK)
 def get_or_create_quick_share_project(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    _require_human_creator(current_user)
     project = _find_owned_active_quick_share(db, current_user.id)
     if project is not None:
         return project
@@ -147,9 +155,11 @@ def list_projects(db: Session = Depends(get_db), current_user: User = Depends(ge
     ).all()
     membership_map = {m.project_id: m.role for m in memberships}
     # The workspace owner sees every project (e.g. editors' Quick Shares) and
-    # acts as owner on them, matching require_project_role.
+    # acts as owner on them, matching require_project_role. Agent accounts see
+    # every project as editor.
     project_query = db.query(Project).filter(Project.deleted_at.is_(None))
-    if not current_user.is_superadmin:
+    sees_all = current_user.is_superadmin or current_user.is_agent
+    if not sees_all:
         if not membership_map:
             return []
         project_query = project_query.filter(Project.id.in_(list(membership_map.keys())))
@@ -197,7 +207,8 @@ def list_projects(db: Session = Depends(get_db), current_user: User = Depends(ge
         resp.asset_count = asset_counts.get(p.id, 0)
         resp.storage_bytes = storage_map.get(p.id, 0)
         resp.member_count = member_counts.get(p.id, 0)
-        resp.role = membership_map.get(p.id, ProjectRole.owner if current_user.is_superadmin else None)
+        default_role = ProjectRole.owner if current_user.is_superadmin else ProjectRole.editor if sees_all else None
+        resp.role = membership_map.get(p.id, default_role)
         result.append(resp)
 
     return result

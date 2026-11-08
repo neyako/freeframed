@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, model_validator
+from pydantic import BaseModel, EmailStr, field_validator, model_validator
 from typing import Any
 import uuid
 from ..models.user import UserStatus
@@ -29,9 +29,16 @@ class UserResponse(BaseModel):
     status: UserStatus
     email_verified: bool = False
     is_superadmin: bool = False
+    is_agent: bool = False
     preferences: dict = {}
 
     model_config = {"from_attributes": True}
+
+    @field_validator("is_agent", mode="before")
+    @classmethod
+    def _unflushed_is_not_agent(cls, v):
+        # Column default only applies on INSERT; unflushed rows carry None
+        return bool(v)
 
     @model_validator(mode="before")
     @classmethod
