@@ -15,6 +15,7 @@ from ..models.asset import AssetVersion, FileType, MediaFile, ProcessingStatus, 
 from ..models.asset import Asset
 from ..services.s3_service import get_s3_client
 from ..config import settings
+from packages.transcoder.redact import redact_presigned_urls
 
 log = logging.getLogger("celery.transcode")
 
@@ -89,9 +90,11 @@ def process_asset(self, asset_id: str, version_id: str):
                 raise self.retry(exc=exc)
             version.processing_status = ProcessingStatus.failed
             db.commit()
+            # Every project member receives this event, so never let a presigned
+            # URL (signature + access key id) through in it.
             _publish_event(str(asset.project_id), "transcode_failed", {
                 "asset_id": asset_id,
-                "error": str(exc),
+                "error": redact_presigned_urls(str(exc)),
             })
             raise
 
@@ -254,7 +257,8 @@ def backfill_media_metadata(self):
             except Exception as exc:
                 db.rollback()
                 skipped += 1
-                log.warning("backfill: skipping media_file %s: %s", row_id, exc)
+                # A probe timeout quotes its argv, presigned URL included.
+                log.warning("backfill: skipping media_file %s: %s", row_id, redact_presigned_urls(str(exc)))
                 continue
         return {"updated": updated, "skipped": skipped}
     finally:

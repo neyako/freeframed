@@ -10,6 +10,7 @@ from typing import Callable, Optional
 
 from .base import TranscodeJob, TranscodeResult, VideoMetadata
 from .hwaccel import build_hls_command, resolve_backend
+from .redact import redact_presigned_urls
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +46,24 @@ def _parse_progress_percent(line: str, duration: float) -> float | None:
 def _stderr_tail(stderr: str | bytes | None, sensitive_url: str) -> str:
     if isinstance(stderr, bytes):
         stderr = stderr.decode("utf-8", errors="replace")
-    return (stderr or "").replace(sensitive_url, "<redacted input URL>")[-2000:]
+    scrubbed = (stderr or "").replace(sensitive_url, "<redacted input URL>")
+    return redact_presigned_urls(scrubbed)[-2000:]
+
+
+def _failure_message(error: Exception, sensitive_url: str) -> str:
+    """What a failed transcode reports. A CalledProcessError's own text is only
+    the argv (which holds the presigned input URL), so report ffmpeg's stderr
+    instead: that is what says why it failed. Always scrubbed of signed URLs,
+    since this text reaches the transcode_failed event and the logs."""
+    if isinstance(error, subprocess.CalledProcessError):
+        cmd = error.cmd if isinstance(error.cmd, (list, tuple)) and error.cmd else ["ffmpeg"]
+        text = (
+            f"{Path(str(cmd[0])).name} exited {error.returncode}: "
+            f"{_stderr_tail(error.stderr, sensitive_url) or 'no stderr output'}"
+        )
+    else:
+        text = str(error)
+    return redact_presigned_urls(text)
 
 
 def _reset_hls_dir(hls_dir: Path) -> None:
@@ -337,7 +355,7 @@ class FFmpegTranscoder:
             try:
                 subprocess.run(thumb_cmd, capture_output=True, timeout=300)
             except subprocess.SubprocessError as error:
-                logger.warning("Thumbnail generation failed: %s", error)
+                logger.warning("Thumbnail generation failed: %s", redact_presigned_urls(str(error)))
             if thumb_path.exists():
                 thumbnail_key = f"{job.output_s3_prefix}/thumbnail.jpg"
                 self.s3.upload_file(
@@ -357,7 +375,7 @@ class FFmpegTranscoder:
             )
 
         except Exception as e:  # noqa  # noqa: BROAD_EXCEPT_OK - boundary converts failure to result.
-            return TranscodeResult(success=False, error=str(e))
+            return TranscodeResult(success=False, error=_failure_message(e, input_url))
         finally:
             shutil.rmtree(work_dir, ignore_errors=True)
 
