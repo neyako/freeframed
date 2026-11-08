@@ -21,21 +21,14 @@ import {
 } from '@/components/ui/surface'
 import { useToast } from '@/components/shared/toast'
 import { useViewStore } from '@/stores/view-store'
-import type { Asset, AssetResponse, AssetStatus, Folder, FolderTreeNode } from '@/types'
+import type { Asset, AssetResponse, Folder, FolderTreeNode } from '@/types'
 import { mediaAspect } from '@/lib/aspect'
+import { sortAssets } from '@/lib/sort-assets'
 
 const assetTypeIcons: Record<string, React.ElementType> = {
   video: Film,
   audio: Music,
   image: ImageIcon,
-}
-
-const statusOrder: Record<AssetStatus, number> = {
-  in_review: 0,
-  draft: 1,
-  approved: 2,
-  rejected: 3,
-  archived: 4,
 }
 
 interface AssetGridProps {
@@ -160,27 +153,10 @@ export function AssetGrid({
   const totalSelected = selectedAssetIds.size + selectedFolderIds.size
   const selectedTotalSize = Array.from(selectedAssetIds).reduce((sum, id) => sum + (fileSizes[id] ?? 0), 0)
 
-  const filtered = React.useMemo(() => {
-    const result = [...assets]
-
-    if (sortKey !== 'custom') {
-      result.sort((a, b) => {
-        let cmp = 0
-        if (sortKey === 'date') {
-          cmp = new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime()
-        } else if (sortKey === 'name') {
-          cmp = a.name.localeCompare(b.name)
-        } else if (sortKey === 'status') {
-          cmp = statusOrder[a.status] - statusOrder[b.status]
-        } else if (sortKey === 'type') {
-          cmp = a.asset_type.localeCompare(b.asset_type)
-        }
-        return sortDirection === 'asc' ? cmp : -cmp
-      })
-    }
-
-    return result
-  }, [assets, sortKey, sortDirection])
+  const filtered = React.useMemo(
+    () => sortAssets(assets, sortKey, sortDirection),
+    [assets, sortKey, sortDirection],
+  )
 
   const showFolders = !flattenFolders && folders && folders.length > 0
   const folderCount = showFolders ? folders!.length : 0
