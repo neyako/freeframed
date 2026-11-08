@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, model_validator
+from pydantic import BaseModel, EmailStr, Field, model_validator
 from typing import Any
 import uuid
 from ..models.user import UserStatus
@@ -72,7 +72,8 @@ class ResetPasswordRequest(BaseModel):
 
 class ChangePasswordRequest(BaseModel):
     current_password: str
-    new_password: str
+    # bcrypt only reads the first 72 bytes
+    new_password: str = Field(min_length=8, max_length=72)
 
 class UpdateProfileRequest(BaseModel):
     name: str | None = None

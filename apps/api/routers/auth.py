@@ -255,17 +255,25 @@ def get_me(current_user: User = Depends(get_current_user)):
 )
 def change_password(
     body: ChangePasswordRequest,
+    response: Response,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Change the signed-in user's password (the settings page calls this)."""
+    """Change the signed-in user's password (the settings page calls this).
+
+    Every session is revoked, so a device that held the old password is signed
+    out; this browser gets a fresh pair back in the response cookies."""
     if current_user.password_hash is None:
         raise HTTPException(status_code=400, detail="This account has no password yet")
     if not verify_password(body.current_password, current_user.password_hash):
         raise HTTPException(status_code=400, detail="Current password is incorrect")
     current_user.password_hash = hash_password(body.new_password)
+    revoke_user_refresh_tokens(db, current_user.id)
+    refresh = issue_refresh_token(db, current_user.id)
+    access = create_access_token(str(current_user.id))
+    set_auth_cookies(response, access, refresh)
     db.commit()
-    return {"message": "Password changed"}
+    return TokenResponse(access_token=access, refresh_token=refresh)
 
 
 @router.patch("/me/preferences", response_model=UserResponse)

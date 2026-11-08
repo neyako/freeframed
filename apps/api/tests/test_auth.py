@@ -329,10 +329,13 @@ def test_get_me(client, auth_headers, test_user):
     assert resp.json()["email"] == test_user.email
 
 
-def test_change_password_sets_the_new_hash(client, auth_headers, mock_db, test_user):
+def test_change_password_sets_the_new_hash_and_resets_sessions(client, auth_headers, mock_db, test_user):
     with (
         patch(_VERIFY_PATCH, return_value=True),
         patch(_HASH_PATCH, return_value="new-hash"),
+        patch("apps.api.routers.auth.revoke_user_refresh_tokens") as revoke_tokens,
+        patch("apps.api.routers.auth.issue_refresh_token", return_value="fixed-refresh-token"),
+        patch("apps.api.routers.auth.create_access_token", return_value="fixed-access-token"),
     ):
         resp = client.patch(
             "/auth/change-password",
@@ -342,7 +345,22 @@ def test_change_password_sets_the_new_hash(client, auth_headers, mock_db, test_u
 
     assert resp.status_code == 200
     assert test_user.password_hash == "new-hash"
+    revoke_tokens.assert_called_once_with(mock_db, test_user.id)
     mock_db.commit.assert_called_once()
+    _assert_auth_cookies(resp)
+
+
+@pytest.mark.parametrize("new_password", ["short", "x" * 73])
+def test_change_password_enforces_the_length_bounds(client, auth_headers, mock_db, new_password):
+    with patch(_VERIFY_PATCH, return_value=True):
+        resp = client.patch(
+            "/auth/change-password",
+            json={"current_password": "old-password", "new_password": new_password},
+            headers=auth_headers,
+        )
+
+    assert resp.status_code == 422
+    mock_db.commit.assert_not_called()
 
 
 def test_change_password_rejects_a_wrong_current_password(client, auth_headers, mock_db, test_user):
