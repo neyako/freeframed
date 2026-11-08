@@ -5,6 +5,7 @@ import { Link2 } from "lucide-react";
 
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Segmented } from "@/components/ui/segmented";
+import { dateInputValue, endOfDayISO } from "@/lib/utils";
 import type { SharePermission } from "@/types";
 import {
   ControlRow,
@@ -36,14 +37,9 @@ function getShareUrl(link: Pick<ShareLinkCandidate, "token" | "url">) {
   );
 }
 
-function formatDateInput(value: string | null | undefined) {
-  if (!value) return "";
-  return value.slice(0, 10);
-}
-
 function toExpirationValue(value: string) {
   if (!value) return null;
-  return new Date(`${value}T23:59:59.000Z`).toISOString();
+  return endOfDayISO(value);
 }
 
 function isSharePermission(value: string): value is SharePermission {
@@ -186,7 +182,7 @@ export function LinkControls({
         <input
           type="date"
           aria-label="Expiration date"
-          value={formatDateInput(link.expires_at)}
+          value={dateInputValue(link.expires_at)}
           onChange={(event) =>
             onPatch({ expires_at: toExpirationValue(event.target.value) })
           }

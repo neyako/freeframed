@@ -98,6 +98,33 @@ export function truncate(str: string, length: number): string {
 }
 
 /**
+ * The expiry instant for a day picked in an `<input type="date">`: the last
+ * millisecond of that day in the user's local time zone, as an ISO string.
+ *
+ * Do not build it with `new Date('YYYY-MM-DDT23:59:59Z')`: that is the end of
+ * the day in UTC, so a link expired hours before (west of UTC) or after (east of
+ * it) the end of the day the user picked.
+ */
+export function endOfDayISO(dateStr: string): string {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  return new Date(y, m - 1, d, 23, 59, 59, 999).toISOString()
+}
+
+/**
+ * The value for an `<input type="date">` showing a stored `expires_at`: the
+ * calendar day that instant falls on in the user's local time zone. The inverse
+ * of `endOfDayISO`; slicing the ISO string would show the UTC day, which is the
+ * wrong one for anyone west of UTC.
+ */
+export function dateInputValue(iso: string | null | undefined): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
+/**
  * Copy text to the clipboard. Returns true only when the text was written.
  *
  * Uses the async Clipboard API when the page has it. Plain-HTTP origins (a LAN
