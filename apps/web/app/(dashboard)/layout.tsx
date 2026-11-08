@@ -41,7 +41,7 @@ export default function DashboardLayout({
   }, []);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-bg-primary">
+    <div className="flex h-dvh overflow-hidden bg-bg-primary">
       <main className="flex flex-1 flex-col overflow-hidden">
         {!isAssetViewer && <Header onSearchOpen={() => setCommandOpen(true)} />}
 

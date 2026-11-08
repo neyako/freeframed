@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import useSWR from 'swr'
+import { useToast } from '@/components/shared/toast'
 import { ReviewProvider, useReview } from '@/components/review/review-provider'
 import { VideoPlayer } from '@/components/review/video-player'
 import { AudioPlayer } from '@/components/review/audio-player'
@@ -61,6 +62,7 @@ function findPath(
 
 function ReviewScreenInner({ projectId }: { projectId: string }) {
   const router = useRouter()
+  const toast = useToast()
   const searchParams = useSearchParams()
   const { asset, versions, isLoading, error: reviewError, refetchVersions } = useReview()
   const { currentVersion, isDrawingMode, focusedCommentId, seekTo, setCurrentVersion, setFocusedCommentId, setActiveAnnotation } = useReviewStore()
@@ -159,6 +161,7 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
 
   const {
     comments,
+    isLoading: commentsLoading,
     createComment,
     resolveComment,
     toggleCut,
@@ -257,8 +260,22 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
     return (
       <div className="flex flex-1 items-center justify-center px-6 text-center">
         <div>
-          <h1 className="text-base font-semibold text-text-primary">Access denied</h1>
-          <p className="mt-1 text-sm text-text-tertiary">Your access to this asset is no longer active.</p>
+          <h1 className="text-base font-semibold text-text-primary">
+            {projectDenied ? 'Access denied' : "Couldn't open this asset"}
+          </h1>
+          <p className="mt-1 text-sm text-text-tertiary">
+            {projectDenied ? 'Your access to this asset is no longer active.' : reviewError}
+          </p>
+          <div className="mt-4 flex justify-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => router.push(`/projects/${projectId}`)}>
+              Back
+            </Button>
+            {!projectDenied && (
+              <Button variant="secondary" size="sm" onClick={() => window.location.reload()}>
+                Retry
+              </Button>
+            )}
+          </div>
         </div>
       </div>
     )
@@ -276,7 +293,13 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
       annotation: draft.annotation || annotationData || undefined,
     })
     if (draft.attachments?.length) {
-      await uploadCommentAttachments(created.id, draft.attachments, draft.onAttachmentProgress)
+      // The comment is already posted; a failed upload must not leave the
+      // draft in the box, or sending again posts it twice
+      try {
+        await uploadCommentAttachments(created.id, draft.attachments, draft.onAttachmentProgress)
+      } catch (err) {
+        toast.error(`Comment posted, but the attachment failed: ${err instanceof Error ? err.message : 'upload error'}`)
+      }
       await mutateComments()
     }
     setAnnotationData(null)
@@ -467,7 +490,7 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
           <div
             className={cn(
               'w-full flex flex-col border-t md:border-t-0 border-l-0 md:border-l border-border bg-bg-secondary shrink-0 animate-ff-rise-in md:animate-ff-slide-in md:h-auto md:w-[372px]',
-              isDrawingMode ? 'h-auto' : 'h-[55vh]',
+              isDrawingMode ? 'h-auto' : 'h-[55dvh]',
             )}
           >
             <button
@@ -494,6 +517,7 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
                 )}
                 <CommentPanel
                   comments={comments as any}
+                  isLoading={commentsLoading}
                   currentUserId={user?.id}
                   onResolve={resolveComment}
                   onToggleCut={toggleCut}

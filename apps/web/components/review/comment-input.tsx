@@ -22,9 +22,9 @@ import {
   Film,
   Check,
 } from "lucide-react";
-import { cn, formatTime, formatTimecode, formatFrames } from "@/lib/utils";
+import { cn, formatTime, formatTimecode, formatFrames, isSendEnter } from "@/lib/utils";
 import { formatRange, formatSpan } from "@/lib/cuts";
-import { useReviewStore } from "@/stores/review-store";
+import { useReviewStore, selectFps } from "@/stores/review-store";
 import { useReview } from "./review-provider";
 import { useDrawing } from "@/hooks/use-drawing";
 import { useAutoGrow } from "@/hooks/use-auto-grow";
@@ -247,6 +247,7 @@ export function CommentInput({
     setPendingAnnotation,
     setActiveAnnotation,
   } = useReviewStore();
+  const fps = useReviewStore(selectFps);
 
   const { pauseVideo } = useReview();
 
@@ -382,13 +383,13 @@ export function CommentInput({
   function displayTime(seconds: number): string {
     switch (timeFormat) {
       case "frames":
-        return formatFrames(seconds);
+        return formatFrames(seconds, fps);
       case "standard":
         return formatTime(seconds);
       case "timecode":
-        return formatTimecode(seconds);
+        return formatTimecode(seconds, fps);
       default:
-        return formatTimecode(seconds);
+        return formatTimecode(seconds, fps);
     }
   }
   const hasAnnotation =
@@ -434,7 +435,7 @@ export function CommentInput({
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Escape") setMentionQuery(null);
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (isSendEnter(e)) {
       e.preventDefault();
       handleSubmit();
     }
@@ -628,7 +629,7 @@ export function CommentInput({
                       : formatTime(rangeStart ?? rangeEnd ?? playheadTime)}
                     <button
                       onClick={() => clearRange()}
-                      className="ml-0.5 text-accent/60 hover:text-accent transition-colors"
+                      className="ml-0.5 text-accent/60 hover:text-accent transition-colors relative after:absolute after:-inset-2.5 after:content-['']"
                       title="Clear range"
                     >
                       <X className="h-3 w-3" />
@@ -639,7 +640,7 @@ export function CommentInput({
                     {displayTime(playheadTime)}
                     <button
                       onClick={() => setRangeStart(playheadTime)}
-                      className="ml-0.5 text-text-tertiary hover:text-text-primary transition-colors"
+                      className="ml-0.5 text-text-tertiary hover:text-text-primary transition-colors relative after:absolute after:-inset-2.5 after:content-['']"
                       title="Set range start (I)"
                     >
                       <Plus className="h-3 w-3" />
@@ -726,7 +727,7 @@ export function CommentInput({
                     onClick={() =>
                       setPendingFiles((prev) => prev.filter((_, j) => j !== i))
                     }
-                    className="absolute top-0.5 right-0.5 h-4 w-4 flex items-center justify-center rounded-full bg-black/60 text-white opacity-0 group-hover/att:opacity-100 transition-opacity"
+                    className="absolute top-0.5 right-0.5 h-4 w-4 flex items-center justify-center rounded-full bg-black/60 text-white opacity-0 group-hover/att:opacity-100 pointer-coarse:opacity-100 pointer-coarse:h-6 pointer-coarse:w-6 transition-opacity"
                     title="Remove"
                   >
                     <X className="h-2.5 w-2.5" />

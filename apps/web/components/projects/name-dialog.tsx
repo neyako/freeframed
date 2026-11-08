@@ -21,7 +21,8 @@ interface NameDialogProps {
   placeholder?: string
   defaultValue?: string
   submitLabel?: string
-  onSubmit: (name: string) => void
+  /** May return a promise; a rejection keeps the dialog open with its message */
+  onSubmit: (name: string) => void | Promise<void>
 }
 
 export function NameDialog({
@@ -35,18 +36,31 @@ export function NameDialog({
   onSubmit,
 }: NameDialogProps) {
   const [value, setValue] = React.useState(defaultValue)
+  const [busy, setBusy] = React.useState(false)
+  const [error, setError] = React.useState<string | null>(null)
   const inputRef = React.useRef<HTMLInputElement>(null)
 
   React.useEffect(() => {
-    if (open) setValue(defaultValue)
+    if (open) {
+      setValue(defaultValue)
+      setError(null)
+    }
   }, [open, defaultValue])
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const trimmed = value.trim()
-    if (!trimmed) return
-    onSubmit(trimmed)
-    onOpenChange(false)
+    if (!trimmed || busy) return
+    setBusy(true)
+    setError(null)
+    try {
+      await onSubmit(trimmed)
+      onOpenChange(false)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong')
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
@@ -82,6 +96,7 @@ export function NameDialog({
               placeholder={placeholder}
               autoComplete="off"
             />
+            {error && <p className="text-[12px] text-accent">{error}</p>}
             <div className="flex justify-end gap-2">
               <Button
                 type="button"
@@ -91,7 +106,7 @@ export function NameDialog({
               >
                 Cancel
               </Button>
-              <Button type="submit" size="sm" disabled={!value.trim()}>
+              <Button type="submit" size="sm" disabled={!value.trim()} loading={busy}>
                 {submitLabel}
               </Button>
             </div>

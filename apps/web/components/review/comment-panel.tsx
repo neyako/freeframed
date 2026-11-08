@@ -16,13 +16,12 @@ import {
   ArrowUpDown,
   Search,
   X,
-  Paperclip,
   Check,
   Send,
   Lock,
   Download,
 } from "lucide-react";
-import { cn, copyToClipboard, formatTime, formatRelativeTime } from "@/lib/utils";
+import { cn, copyToClipboard, formatTime, formatRelativeTime, isSendEnter } from "@/lib/utils";
 import { formatRange, formatSpan } from "@/lib/cuts";
 import { avatarGray, getInitials } from "@/lib/avatar";
 import { useReviewStore } from "@/stores/review-store";
@@ -281,7 +280,7 @@ function InlineReplyInput({
         value={body}
         onChange={(e) => setBody(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === "Enter" && !e.shiftKey) {
+          if (isSendEnter(e)) {
             e.preventDefault();
             handleSubmit();
           }
@@ -290,9 +289,6 @@ function InlineReplyInput({
       />
       <div className="flex items-center justify-between mt-2">
         <div className="flex items-center gap-1">
-          <button className="h-7 w-7 flex items-center justify-center rounded-md text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary transition-colors">
-            <Paperclip className="h-4 w-4" />
-          </button>
           <div className="relative" ref={emojiRef}>
             <button
               onClick={() => setEmojiOpen((p) => !p)}
@@ -688,7 +684,7 @@ function CommentItem({
             <div className="ml-auto flex items-center gap-0.5">
               {/* Emoji — hover only */}
               {canReact && (
-                <div className="relative opacity-0 group-hover/comment:opacity-100 transition-opacity">
+                <div className="relative opacity-0 group-hover/comment:opacity-100 pointer-coarse:opacity-100 transition-opacity">
                   <button
                     className="h-7 w-7 flex items-center justify-center rounded-full text-text-tertiary hover:text-text-secondary hover:bg-bg-tertiary transition-colors"
                     onClick={() => setShowEmojiPicker((p) => !p)}
@@ -763,7 +759,7 @@ function CommentItem({
                 </button>
               ) : onResolve ? (
                 <button
-                  className="h-6 w-6 flex items-center justify-center rounded-full text-text-tertiary hover:text-emerald-400 hover:bg-bg-tertiary transition-colors disabled:opacity-50 opacity-0 group-hover/comment:opacity-100"
+                  className="h-6 w-6 flex items-center justify-center rounded-full text-text-tertiary hover:text-emerald-400 hover:bg-bg-tertiary transition-colors disabled:opacity-50 opacity-0 group-hover/comment:opacity-100 pointer-coarse:opacity-100 pointer-coarse:h-8 pointer-coarse:w-8"
                   onClick={handleResolve}
                   disabled={resolving}
                   title="Resolve"

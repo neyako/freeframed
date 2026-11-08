@@ -27,13 +27,16 @@ describe('toggleFullscreen', () => {
     expect(requestFullscreen).toHaveBeenCalledTimes(1)
   })
 
-  it('falls back to the video player on an iPhone, which has no element fullscreen', () => {
+  it('fills the viewport on an iPhone, keeping the review controls, and toggles back', () => {
     const { hook, video, container } = setup()
     video.webkitEnterFullscreen = vi.fn()
 
     expect(() => act(() => hook.result.current.toggleFullscreen(container))).not.toThrow()
+    expect(hook.result.current.isFullscreen).toBe(true)
+    expect(video.webkitEnterFullscreen).not.toHaveBeenCalled()
 
-    expect(video.webkitEnterFullscreen).toHaveBeenCalledTimes(1)
+    act(() => hook.result.current.toggleFullscreen(container))
+    expect(hook.result.current.isFullscreen).toBe(false)
   })
 
   it('exits through the document when already fullscreen', () => {

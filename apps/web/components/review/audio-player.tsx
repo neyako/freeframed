@@ -347,7 +347,7 @@ export function AudioPlayer({ asset, version, comments = [], className }: AudioP
             <ChevronUp className={cn('h-3 w-3 text-text-tertiary transition-transform', timeFormatOpen && 'rotate-180')} />
           </button>
           {timeFormatOpen && (
-            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 w-48 rounded-xl border border-white/10 bg-[#2a2a30] shadow-2xl py-1.5 duration-100 animate-ff-rise-in">
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 w-48 rounded-xl border border-border bg-bg-elevated shadow-2xl py-1.5 duration-100 animate-ff-rise-in">
               <div className="px-3 py-2 text-[12px] text-text-tertiary">
                 Time Format
               </div>
@@ -360,7 +360,7 @@ export function AudioPlayer({ asset, version, comments = [], className }: AudioP
                   key={item.id}
                   className={cn(
                     'flex w-full items-center justify-between px-3 py-2 text-[13px] transition-colors',
-                    timeFormat === item.id ? 'text-text-primary' : 'text-text-secondary hover:bg-white/5',
+                    timeFormat === item.id ? 'text-text-primary' : 'text-text-secondary hover:bg-bg-hover',
                   )}
                   onClick={() => { setTimeFormat(item.id); setTimeFormatOpen(false) }}
                 >

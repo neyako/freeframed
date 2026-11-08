@@ -78,6 +78,8 @@ export function useVideoPlayer(src: string | null): UseVideoPlayerReturn {
   const [selectedQuality, setSelectedQuality] = useState(-1) // -1 = auto
   const [isLoading, setIsLoading] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
+  // True while the CSS fill stands in for fullscreen (iPhone)
+  const pseudoFullscreenRef = useRef(false)
   const [error, setError] = useState<string | null>(null)
 
   // Sync playhead to store at ~4fps to avoid excessive re-renders
@@ -129,8 +131,9 @@ export function useVideoPlayer(src: string | null): UseVideoPlayerReturn {
   }, [seekTarget])
 
   // Fullscreen state. Element fullscreen reports through the document, standard
-  // or Safari-prefixed (iPadOS, desktop); an iPhone only has the video element's
-  // native player, whose begin/end events are attached with the element below.
+  // or Safari-prefixed (iPadOS, desktop). An iPhone uses a CSS fill (see
+  // toggleFullscreen); the native-player events below still cover a user who
+  // opens Safari's own player.
   useEffect(() => {
     const doc = document as Document & { webkitFullscreenElement?: Element | null }
     const readDoc = () => setIsFullscreen(!!(document.fullscreenElement || doc.webkitFullscreenElement))
@@ -344,28 +347,32 @@ export function useVideoPlayer(src: string | null): UseVideoPlayerReturn {
 
   // An iPhone has no element fullscreen: Element.requestFullscreen is undefined
   // there, so this used to throw "not a function" and the button did nothing.
-  // Safari on iPadOS and desktop has the prefixed element API; an iPhone has only
-  // the video's own native player (which replaces our controls while it is up).
-  // Try them in that order.
+  // Safari on iPadOS and desktop has the prefixed element API; an iPhone gets a
+  // CSS fill instead. Try them in that order.
   const toggleFullscreen = useCallback((containerEl: HTMLElement) => {
     const doc = document as Document & {
       webkitFullscreenElement?: Element | null
       webkitExitFullscreen?: () => Promise<void> | void
     }
     const el = containerEl as HTMLElement & { webkitRequestFullscreen?: () => Promise<void> | void }
-    const video = videoRef.current as (HTMLVideoElement & {
-      webkitEnterFullscreen?: () => void
-      webkitDisplayingFullscreen?: boolean
-    }) | null
 
+    if (pseudoFullscreenRef.current) {
+      pseudoFullscreenRef.current = false
+      setIsFullscreen(false)
+      return
+    }
     const active = !!(document.fullscreenElement || doc.webkitFullscreenElement)
-    if (!active && !video?.webkitDisplayingFullscreen) {
+    if (!active) {
       if (typeof el.requestFullscreen === 'function') {
         void Promise.resolve(el.requestFullscreen()).catch(() => {})
       } else if (typeof el.webkitRequestFullscreen === 'function') {
         void Promise.resolve(el.webkitRequestFullscreen()).catch(() => {})
-      } else if (video && typeof video.webkitEnterFullscreen === 'function') {
-        video.webkitEnterFullscreen()
+      } else {
+        // iPhone: fill the viewport with CSS (the container goes fixed
+        // inset-0) rather than the native video player, which would hide our
+        // controls, comment markers and annotations
+        pseudoFullscreenRef.current = true
+        setIsFullscreen(true)
       }
       return
     }

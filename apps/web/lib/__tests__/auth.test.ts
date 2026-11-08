@@ -79,4 +79,26 @@ describe('Token management', () => {
     // Then
     expect(window.location.href).toBe('http://localhost/login')
   })
+
+  it('refresh keeps the session through a network error or 5xx; a 401 ends it', async () => {
+    const { refreshAccessToken } = await import('../auth')
+    Object.defineProperty(window, 'location', {
+      value: { href: '', pathname: '/projects/p1', search: '?folder=f1' },
+      writable: true,
+    })
+    const logoutCalls = () =>
+      vi.mocked(fetch).mock.calls.filter(([url]) => String(url).includes('/auth/logout')).length
+
+    vi.mocked(fetch).mockRejectedValueOnce(new TypeError('Failed to fetch'))
+    expect(await refreshAccessToken()).toBeNull()
+    vi.mocked(fetch).mockResolvedValueOnce({ ok: false, status: 502 } as Response)
+    expect(await refreshAccessToken()).toBeNull()
+    expect(logoutCalls()).toBe(0)
+
+    vi.mocked(fetch).mockResolvedValueOnce({ ok: false, status: 401 } as Response)
+    expect(await refreshAccessToken()).toBeNull()
+    expect(logoutCalls()).toBe(1)
+    await new Promise((r) => setTimeout(r, 0))
+    expect(window.location.href).toBe('/login?from=%2Fprojects%2Fp1%3Ffolder%3Df1')
+  })
 })

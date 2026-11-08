@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-const PUBLIC_ROUTES = ['/login', '/setup']
-const PUBLIC_PREFIXES = ['/invite/', '/share/']
+const PUBLIC_ROUTES = ['/login', '/setup', '/forgot-password']
+const PUBLIC_PREFIXES = ['/invite/', '/share/', '/reset-password/']
 
 // Server-side (middleware) must reach the API with an ABSOLUTE url — a
 // relative NEXT_PUBLIC_API_URL like "/api" (all-in-one) has no origin here.
@@ -50,7 +50,7 @@ export async function middleware(request: NextRequest) {
   let response: NextResponse
   if (!accessToken && !refreshToken) {
     const loginUrl = new URL('/login', request.url)
-    loginUrl.searchParams.set('from', pathname)
+    loginUrl.searchParams.set('from', pathname + request.nextUrl.search)
     response = NextResponse.redirect(loginUrl)
   } else {
     response = NextResponse.next()

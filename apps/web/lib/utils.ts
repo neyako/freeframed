@@ -194,3 +194,19 @@ function copyWithExecCommand(text: string): boolean {
     }
   }
 }
+
+/**
+ * Enter sends a comment, Shift+Enter is a newline. Never while an IME is
+ * composing (Vietnamese Telex/VNI commit with Enter), and never on touch
+ * keyboards, where Return is the only way to start a new line; phones send
+ * with the Send button.
+ */
+export function isSendEnter(e: {
+  key: string
+  shiftKey: boolean
+  nativeEvent: KeyboardEvent
+}): boolean {
+  if (e.key !== 'Enter' || e.shiftKey) return false
+  if (e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229) return false
+  return !(typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches)
+}

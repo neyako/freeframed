@@ -18,7 +18,7 @@ import {
 import { cn, formatTime, formatTimecode, formatFrames } from "@/lib/utils";
 import { afterCutSeconds, cutAt, mergedCuts, toEditTime, toSourceTime } from "@/lib/cuts";
 import { api } from "@/lib/api";
-import { useReviewStore, type TimeFormat } from "@/stores/review-store";
+import { useReviewStore, selectFps, type TimeFormat } from "@/stores/review-store";
 import { useVideoPlayer } from "@/hooks/use-video-player";
 import { resolveStreamUrl } from "@/components/share/share-stream";
 import { useReview } from "./review-provider";
@@ -148,6 +148,7 @@ export function VideoPlayer({
   const { isDrawingMode, timeFormat, setTimeFormat, setPlayheadTime } =
     useReviewStore();
   const versionId = useReviewStore((s) => s.currentVersion?.id);
+  const fps = useReviewStore(selectFps);
   const { registerPauseHandler } = useReview();
   const [timeFormatOpen, setTimeFormatOpen] = useState(false);
   const timeFormatRef = useRef<HTMLDivElement>(null);
@@ -194,13 +195,13 @@ export function VideoPlayer({
   function displayTime(seconds: number): string {
     switch (timeFormat) {
       case "frames":
-        return formatFrames(seconds);
+        return formatFrames(seconds, fps);
       case "standard":
         return formatTime(seconds);
       case "timecode":
-        return formatTimecode(seconds);
+        return formatTimecode(seconds, fps);
       default:
-        return formatTimecode(seconds);
+        return formatTimecode(seconds, fps);
     }
   }
 

@@ -717,7 +717,9 @@ function ShareReviewInner({
   // Guest identity flow for non-authenticated users
   const [guestIdentity, setGuestIdentity] = React.useState<{ name: string; email: string } | null>(null)
   const [showGuestPrompt, setShowGuestPrompt] = React.useState(false)
-  const pendingCommentRef = React.useRef<{ body: string; timecodeStart?: number; timecodeEnd?: number; annotationData?: Record<string, unknown>; parentId?: string } | null>(null)
+  // Settles when the guest saves or cancels the name prompt, so the comment
+  // box keeps the draft until the comment actually posts
+  const identityWaitRef = React.useRef<{ resolve: () => void; reject: (err: Error) => void } | null>(null)
   React.useEffect(() => {
     try {
       const stored = localStorage.getItem('ff_guest_identity')
@@ -805,19 +807,28 @@ function ShareReviewInner({
     if (!isLoggedIn) rememberOwnGuestComment(comment.id)
   }, [addComment, currentVersion, isLoggedIn, rememberOwnGuestComment])
 
-  const handleGuestIdentitySave = React.useCallback(async (name: string, email: string) => {
+  const ensureGuestIdentity = React.useCallback(async () => {
+    if (isLoggedIn || localStorage.getItem('ff_guest_identity')) return
+    await new Promise<void>((resolve, reject) => {
+      identityWaitRef.current = { resolve, reject }
+      setShowGuestPrompt(true)
+    })
+  }, [isLoggedIn])
+
+  const handleGuestIdentitySave = React.useCallback((name: string, email: string) => {
     const identity = { name, email }
     setGuestIdentity(identity)
     localStorage.setItem('ff_guest_identity', JSON.stringify(identity))
     setShowGuestPrompt(false)
+    identityWaitRef.current?.resolve()
+    identityWaitRef.current = null
+  }, [])
 
-    // Auto-submit the pending comment
-    if (pendingCommentRef.current) {
-      const { body, timecodeStart, timecodeEnd, annotationData, parentId } = pendingCommentRef.current
-      pendingCommentRef.current = null
-      setTimeout(() => submitComment(body, timecodeStart, timecodeEnd, annotationData, parentId), 50)
-    }
-  }, [submitComment])
+  const handleGuestIdentityCancel = React.useCallback(() => {
+    setShowGuestPrompt(false)
+    identityWaitRef.current?.reject(new Error('Add your name and email to post'))
+    identityWaitRef.current = null
+  }, [])
 
   if (isLoading || !asset) {
     return <div className="flex items-center justify-center h-dvh bg-bg-primary"><span className="text-[13px] text-text-tertiary">Loading…</span></div>
@@ -909,33 +920,34 @@ function ShareReviewInner({
 
         {/* Right sidebar — reuses project comment panel */}
         {sidebarOpen && (
-          <div className="w-full h-[55vh] md:h-auto md:w-[360px] flex flex-col border-t md:border-t-0 border-l-0 md:border-l border-border bg-bg-secondary shrink-0 animate-ff-rise-in md:animate-ff-slide-in">
+          <div className={cn(
+            "w-full md:h-auto md:w-[360px] flex flex-col border-t md:border-t-0 border-l-0 md:border-l border-border bg-bg-secondary shrink-0 animate-ff-rise-in md:animate-ff-slide-in",
+            // Drawing on a phone: the sheet shrinks to the composer so the frame gets the room
+            isDrawingMode ? "h-auto" : "h-[55dvh]",
+          )}>
             <button
               onClick={() => setSidebarOpen(false)}
-              className="md:hidden flex items-center justify-center w-full py-2 border-b border-border"
+              className={cn("md:hidden flex items-center justify-center w-full py-2 border-b border-border", isDrawingMode && "hidden")}
               aria-label="Hide comments"
             >
               <span className="h-1 w-8 rounded-full bg-border-strong" />
             </button>
             {CommentPanel && (
               <>
-                <CommentPanel
-                  comments={comments}
-                  currentUserId={currentUserId}
-                  mutationQuery={mutationQuery}
-                  ownGuestCommentIds={ownGuestCommentIds}
-                  onDelete={handleDeleteComment}
-                  onReply={() => {}}
-                  onSubmitReply={canComment ? async (parentId: string, body: string) => {
-                    const hasIdentity = isLoggedIn || Boolean(localStorage.getItem('ff_guest_identity'))
-                    if (!hasIdentity) {
-                      pendingCommentRef.current = { body, parentId }
-                      setShowGuestPrompt(true)
-                      return
-                    }
-                    await submitComment(body, undefined, undefined, undefined, parentId)
-                  } : undefined}
-                />
+                <div className={cn("flex-1 flex flex-col min-h-0 overflow-hidden", isDrawingMode && "hidden md:flex")}>
+                  <CommentPanel
+                    comments={comments}
+                    currentUserId={currentUserId}
+                    mutationQuery={mutationQuery}
+                    ownGuestCommentIds={ownGuestCommentIds}
+                    onDelete={handleDeleteComment}
+                    onReply={() => {}}
+                    onSubmitReply={canComment ? async (parentId: string, body: string) => {
+                      await ensureGuestIdentity()
+                      await submitComment(body, undefined, undefined, undefined, parentId)
+                    } : undefined}
+                  />
+                </div>
                 {canComment && CommentInput && (
                   <CommentInput
                     assetId={asset.id}
@@ -943,12 +955,7 @@ function ShareReviewInner({
                     assetType={asset.asset_type}
                     visibilityLocked
                     onSubmit={async ({ body, timecodeStart, timecodeEnd, annotation: annotationData }: CommentDraft) => {
-                      const hasIdentity = isLoggedIn || Boolean(localStorage.getItem('ff_guest_identity'))
-                      if (!hasIdentity) {
-                        pendingCommentRef.current = { body, timecodeStart, timecodeEnd, annotationData }
-                        setShowGuestPrompt(true)
-                        return
-                      }
+                      await ensureGuestIdentity()
                       await submitComment(body, timecodeStart, timecodeEnd, annotationData)
                     }}
                   />
@@ -963,7 +970,7 @@ function ShareReviewInner({
       {showGuestPrompt && !isLoggedIn && (
         <GuestIdentityPrompt
           onSave={handleGuestIdentitySave}
-          onCancel={() => { setShowGuestPrompt(false); pendingCommentRef.current = null }}
+          onCancel={handleGuestIdentityCancel}
         />
       )}
     </div>
@@ -977,7 +984,15 @@ function GuestIdentityPrompt({ onSave, onCancel }: { onSave: (name: string, emai
   const [email, setEmail] = React.useState('')
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4"
+      role="dialog"
+      aria-modal="true"
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') onCancel()
+        if (e.key === 'Enter' && !e.nativeEvent.isComposing && name.trim() && email.trim()) onSave(name.trim(), email.trim())
+      }}
+    >
       <div className="w-full max-w-sm rounded border border-border bg-bg-elevated p-5">
         <h3 className="text-sm font-semibold text-text-primary mb-1">Leave a comment</h3>
         <p className="text-xs text-text-tertiary mb-4">Enter your name and email to comment on this shared asset.</p>
@@ -1347,7 +1362,8 @@ export function FolderShareViewer({
           )}
           <button
             onClick={() => setPanelOpen((v) => !v)}
-            className="flex items-center justify-center h-7 w-7 rounded-md text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors"
+            // Phones open an asset straight into the viewer; the side panel is desktop only
+            className="hidden md:flex items-center justify-center h-7 w-7 rounded-md text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors"
             title={panelOpen ? 'Hide panel' : 'Show panel'}
           >
             {panelOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
@@ -1583,7 +1599,7 @@ export function FolderShareViewer({
 
         {/* ─── Right Panel ───────────────────────────────────────────── */}
         {panelOpen && (
-          <div className="w-full h-[55vh] md:h-auto md:w-[320px] shrink-0 border-t md:border-t-0 md:border-l border-border bg-bg-secondary flex flex-col overflow-hidden">
+          <div className="hidden md:flex md:w-[320px] shrink-0 md:border-l border-border bg-bg-secondary flex-col overflow-hidden">
             <RightPanel
               selectedAsset={selectedAsset}
               token={token}

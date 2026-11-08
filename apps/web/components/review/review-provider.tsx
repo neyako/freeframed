@@ -9,7 +9,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import { useReviewStore } from "@/stores/review-store";
 import type { AssetResponse, AssetVersion, Comment } from "@/types";
 
@@ -140,10 +140,20 @@ export function ReviewProvider({
 
   // Track whether component is still mounted to avoid state updates after unmount
   const mountedRef = useRef(true);
+  const loadedAssetIdRef = useRef<string | null>(null);
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      // Leaving the asset: the next visit starts clean (playhead, range, drawing)
+      useReviewStore.setState({
+        currentAsset: null,
+        rangeStart: null,
+        rangeEnd: null,
+        isDrawingMode: false,
+        pendingAnnotation: null,
+        activeAnnotation: null,
+      });
     };
   }, []);
 
@@ -224,6 +234,8 @@ export function ReviewProvider({
       }
 
       if (!mountedRef.current) return;
+      loadedAssetIdRef.current = assetId;
+      setError(null);
       setAsset(data);
       setCurrentAsset(data);
 
@@ -253,6 +265,10 @@ export function ReviewProvider({
       }
     } catch (err) {
       if (!mountedRef.current) return;
+      // A poll that hits a blip (phone waking up, flaky Wi-Fi) keeps the
+      // loaded page; only a real denial or a failed first load is an error.
+      const denied = err instanceof ApiError && (err.status === 403 || err.status === 404);
+      if (!denied && loadedAssetIdRef.current === assetId) return;
       setError(err instanceof Error ? err.message : "Failed to load asset");
     }
   }, [assetId, shareToken, shareSessionParam, shareSessionQuery, setCurrentAsset, setCurrentVersion]);

@@ -367,7 +367,9 @@ const storeCreator: StateCreator<UploadStore, [['zustand/persist', unknown]]> = 
       ...(options?.source ? { source: options.source } : {}),
     }
 
-    set((s) => ({ files: [entry, ...s.files], panelOpen: true }))
+    // Quick share shows its own progress on Home; opening the panel there
+    // would only dim the page behind a panel that stays hidden
+    set((s) => ({ files: [entry, ...s.files], panelOpen: isQuickShareUpload(entry) ? s.panelOpen : true }))
 
     const updateFile = (fileId: string, patch: Partial<UploadFile>) => {
       set((s) => ({

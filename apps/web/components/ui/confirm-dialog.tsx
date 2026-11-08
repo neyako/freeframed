@@ -30,14 +30,21 @@ export function ConfirmDialog({
   onConfirm,
 }: ConfirmDialogProps) {
   const [isLoading, setIsLoading] = React.useState(false)
+  const [error, setError] = React.useState<string | null>(null)
+
+  React.useEffect(() => {
+    if (open) setError(null)
+  }, [open])
 
   async function handleConfirm() {
     setIsLoading(true)
+    setError(null)
     try {
       await onConfirm()
       onOpenChange(false)
-    } catch {
-      // let caller handle errors
+    } catch (err) {
+      // Stay open and say why, instead of a dialog that silently won't close
+      setError(err instanceof Error ? err.message : 'Something went wrong')
     } finally {
       setIsLoading(false)
     }
@@ -60,6 +67,8 @@ export function ConfirmDialog({
               {description}
             </Dialog.Description>
           )}
+
+          {error && <p className="mt-2 text-[12px] text-accent">{error}</p>}
 
           <div className="mt-4 flex items-center justify-end gap-2">
             <Button

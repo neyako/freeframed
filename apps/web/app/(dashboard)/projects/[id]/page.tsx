@@ -69,6 +69,12 @@ export default function ProjectDetailPage() {
   const [currentFolderId, setCurrentFolderId] = React.useState<string | null>(
     searchParams.get("folder") || null,
   );
+  // Header crumbs and the command palette navigate by URL; Next keeps this page
+  // mounted when only ?folder= changes, so follow it
+  const urlFolderId = searchParams.get("folder") || null;
+  React.useEffect(() => {
+    setCurrentFolderId(urlFolderId);
+  }, [urlFolderId]);
   const [showTrash, setShowTrash] = React.useState(false);
   const [folderDialogOpen, setFolderDialogOpen] = React.useState(false);
   const [folderDialogParentId, setFolderDialogParentId] = React.useState<

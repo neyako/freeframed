@@ -49,7 +49,7 @@ interface AssetGridProps {
   onDropToFolder?: (targetFolderId: string, assetIds: string[], folderIds: string[]) => void
   /** Bulk actions */
   onBulkDelete?: (assetIds: string[], folderIds: string[]) => void
-  onBulkMove?: (assetIds: string[], folderIds: string[], targetFolderId: string | null) => void
+  onBulkMove?: (assetIds: string[], folderIds: string[], targetFolderId: string | null) => void | Promise<void>
   onBulkDownload?: (assetIds: string[], folderIds: string[]) => void
   projectName?: string
   folderTree?: FolderTreeNode[]
@@ -141,6 +141,20 @@ export function AssetGrid({
     setSelectedAssetIds(new Set())
     setSelectedFolderIds(new Set())
   }
+
+  // A selection belongs to the folder it was made in
+  React.useEffect(clearSelection, [currentFolderId])
+
+  // Drop ids that left the view (deleted, moved), so the bar never acts on ghosts
+  React.useEffect(() => {
+    const keep = (prev: Set<string>, items: { id: string }[] | undefined) => {
+      const ids = new Set((items ?? []).map((i) => i.id))
+      const next = new Set(Array.from(prev).filter((id) => ids.has(id)))
+      return next.size === prev.size ? prev : next
+    }
+    setSelectedAssetIds((prev) => keep(prev, assets))
+    setSelectedFolderIds((prev) => keep(prev, folders))
+  }, [assets, folders])
 
   const copyAssetLink = (asset: Asset) => {
     const url = `${window.location.origin}/projects/${asset.project_id}/assets/${asset.id}`
@@ -451,21 +465,22 @@ export function AssetGrid({
           </Button>
           <span className="text-[13px] text-text-primary">{totalSelected} selected</span>
           {selectedTotalSize > 0 && (
-            <span className="font-mono text-[12px] text-text-tertiary">{formatBytes(selectedTotalSize)}</span>
+            <span className="hidden font-mono text-[12px] text-text-tertiary sm:inline">{formatBytes(selectedTotalSize)}</span>
           )}
           <div className="flex-1" />
           {onBulkDownload && (
             <Button
               variant="ghost"
               size="sm"
+              aria-label="Download"
               onClick={() => onBulkDownload(Array.from(selectedAssetIds), Array.from(selectedFolderIds))}
             >
-              <Download /> Download
+              <Download /><span className="hidden sm:inline">Download</span>
             </Button>
           )}
           {onBulkMove && (
-            <Button variant="ghost" size="sm" onClick={() => setMoveDialogOpen(true)}>
-              <FolderInput /> Move to
+            <Button variant="ghost" size="sm" aria-label="Move to" onClick={() => setMoveDialogOpen(true)}>
+              <FolderInput /><span className="hidden sm:inline">Move to</span>
             </Button>
           )}
           {onBulkDelete && (
@@ -473,9 +488,10 @@ export function AssetGrid({
               variant="ghost"
               size="sm"
               className="hover:text-accent"
+              aria-label="Delete"
               onClick={() => onBulkDelete(Array.from(selectedAssetIds), Array.from(selectedFolderIds))}
             >
-              <Trash2 /> Delete
+              <Trash2 /><span className="hidden sm:inline">Delete</span>
             </Button>
           )}
         </div>
@@ -488,9 +504,13 @@ export function AssetGrid({
         tree={folderTree}
         currentFolderId={currentFolderId ?? null}
         movingFolderIds={Array.from(selectedFolderIds)}
-        onMove={(targetFolderId) => {
-          onBulkMove?.(Array.from(selectedAssetIds), Array.from(selectedFolderIds), targetFolderId)
-          clearSelection()
+        onMove={async (targetFolderId) => {
+          try {
+            await onBulkMove?.(Array.from(selectedAssetIds), Array.from(selectedFolderIds), targetFolderId)
+            clearSelection()
+          } catch (err) {
+            toast.error(err instanceof Error ? err.message : 'Could not move')
+          }
         }}
       />
 
@@ -501,8 +521,8 @@ export function AssetGrid({
         placeholder="Folder name"
         defaultValue={folderToRename?.name ?? ''}
         submitLabel="Rename"
-        onSubmit={(name) => {
-          if (folderToRename) void onFolderRename?.(folderToRename.id, name)
+        onSubmit={async (name) => {
+          if (folderToRename) await onFolderRename?.(folderToRename.id, name)
         }}
       />
 

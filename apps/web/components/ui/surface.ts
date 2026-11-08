@@ -7,7 +7,7 @@ export const dialogOverlayClass =
 
 /** Add a max-w-* per dialog. */
 export const dialogContentClass =
-  'fixed left-1/2 top-1/2 z-50 w-full -translate-x-1/2 -translate-y-1/2 rounded-md border border-border-strong bg-bg-secondary p-4 shadow-xl focus:outline-none data-[state=open]:animate-ff-rise-in data-[state=closed]:animate-ff-rise-out'
+  'fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 rounded-md border border-border-strong bg-bg-secondary p-4 shadow-xl focus:outline-none data-[state=open]:animate-ff-rise-in data-[state=closed]:animate-ff-rise-out'
 
 export const dialogTitleClass = 'text-[14px] font-medium text-text-primary'
 
