@@ -308,10 +308,11 @@ def test_accept_invite_activates_verified_user_and_logs_in(client, mock_db):
     ):
         resp = client.post(
             "/auth/accept-invite",
-            json={"token": "fixed-invite-token", "password": "fixed-test-password"},
+            json={"token": "fixed-invite-token", "name": "  Jane Invitee ", "password": "fixed-test-password"},
         )
 
     assert resp.status_code == 200
+    assert user.name == "Jane Invitee"
     assert user.password_hash == "fixed-password-hash"
     assert user.email_verified is True
     assert user.status == UserStatus.active
@@ -320,6 +321,17 @@ def test_accept_invite_activates_verified_user_and_logs_in(client, mock_db):
     revoke_tokens.assert_called_once_with(mock_db, user.id)
     mock_db.commit.assert_called_once()
     _assert_auth_cookies(resp)
+
+
+@pytest.mark.parametrize("name", ["", "   "])
+def test_accept_invite_refuses_a_blank_name(client, mock_db, name):
+    resp = client.post(
+        "/auth/accept-invite",
+        json={"token": "fixed-invite-token", "name": name, "password": "fixed-test-password"},
+    )
+
+    assert resp.status_code == 422
+    mock_db.commit.assert_not_called()
 
 
 def test_get_me(client, auth_headers, test_user):

@@ -20,6 +20,18 @@ def _reject_bcrypt_overflow(v: str) -> str:
 # password was accepted before) and a byte ceiling so it is never stored truncated.
 NewPassword = Annotated[str, Field(min_length=8), AfterValidator(_reject_bcrypt_overflow)]
 
+def _trimmed_nonblank(v: str) -> str:
+    v = v.strip()
+    if not v:
+        raise ValueError("must not be blank")
+    return v
+
+
+# A person's display name: bounded to what the column holds, then trimmed, and a
+# blank one refused (min_length alone lets "   " through and stores it as "").
+DisplayName = Annotated[str, Field(max_length=255), AfterValidator(_trimmed_nonblank)]
+
+
 class RegisterRequest(BaseModel):
     email: EmailStr
     name: str
@@ -73,6 +85,9 @@ class InviteRequest(BaseModel):
 # Invite flow
 class AcceptInviteRequest(BaseModel):
     token: str
+    # The name typed on the accept screen. The field was undeclared, so it was
+    # silently dropped and the invitee kept whatever the invite dialog guessed.
+    name: DisplayName
     password: NewPassword
 
 class InviteInfoResponse(BaseModel):

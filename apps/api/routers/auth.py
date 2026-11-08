@@ -93,7 +93,8 @@ def accept_invite(
     if user.invite_token_expires_at and user.invite_token_expires_at < datetime.now(timezone.utc):
         raise HTTPException(status_code=400, detail="Invite link expired")
     
-    # Set password and activate user
+    # Set name and password, and activate the user
+    user.name = body.name
     user.password_hash = hash_password(body.password)
     user.email_verified = True  # Invited users are pre-verified
     user.status = UserStatus.active
