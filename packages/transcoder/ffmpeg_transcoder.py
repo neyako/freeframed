@@ -4,6 +4,7 @@ import shutil
 import subprocess
 import tempfile
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -11,6 +12,13 @@ from .base import TranscodeJob, TranscodeResult, VideoMetadata
 from .hwaccel import build_hls_command, resolve_backend
 
 logger = logging.getLogger(__name__)
+
+# Segments go to storage a few at a time. Each PUT costs mostly a round trip, so
+# a long encode (thousands of 2 s segments across the rungs) used to spend most
+# of its upload phase waiting on latency. Eight, because the gain flattens above
+# it and botocore's default pool holds ten connections: the workers never queue
+# for a socket and the thumbnail upload after them still has room.
+_UPLOAD_THREADS = 8
 
 
 def _parse_progress_percent(line: str, duration: float) -> float | None:
@@ -162,6 +170,30 @@ class FFmpegTranscoder:
             ExpiresIn=expires_in,
         )
 
+    def _upload_directory(self, source_dir: Path, s3_prefix: str) -> list[str]:
+        """Upload every file under `source_dir` to `s3_prefix`, several at a time.
+
+        boto3 clients are thread-safe and HLS segments are far below the
+        multipart threshold, so each upload_file is one plain PUT. list() drains
+        the results inside the pool: a failed upload must fail the transcode, not
+        sit unread in a future while the version goes ready with segments missing.
+        """
+        files = sorted(f for f in source_dir.rglob("*") if f.is_file())
+        if not files:
+            return []
+
+        def upload(path: Path) -> str:
+            s3_key = f"{s3_prefix}/{path.relative_to(source_dir)}"
+            content_type, cache_control = self._get_content_type(path.name)
+            self.s3.upload_file(
+                str(path), self.bucket, s3_key,
+                ExtraArgs={"ContentType": content_type, "CacheControl": cache_control},
+            )
+            return s3_key
+
+        with ThreadPoolExecutor(max_workers=min(_UPLOAD_THREADS, len(files))) as pool:
+            return list(pool.map(upload, files))
+
     async def transcode(
         self,
         job: TranscodeJob,
@@ -271,17 +303,7 @@ class FFmpegTranscoder:
                     break
 
             # 4. Upload HLS files to S3
-            uploaded_keys = []
-            for f in hls_dir.rglob("*"):
-                if f.is_file():
-                    relative = f.relative_to(hls_dir)
-                    s3_key = f"{job.output_s3_prefix}/{relative}"
-                    content_type, cache_control = self._get_content_type(f.name)
-                    self.s3.upload_file(
-                        str(f), self.bucket, s3_key,
-                        ExtraArgs={"ContentType": content_type, "CacheControl": cache_control},
-                    )
-                    uploaded_keys.append(s3_key)
+            self._upload_directory(hls_dir, job.output_s3_prefix)
 
             # 5. Thumbnail: best effort — the HLS output is already uploaded, so
             # a thumbnail failure must not fail the transcode. Seek past frame 0,
