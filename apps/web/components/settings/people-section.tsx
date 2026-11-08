@@ -4,7 +4,7 @@ import * as React from 'react'
 import useSWR from 'swr'
 import { Plus } from 'lucide-react'
 import { api } from '@/lib/api'
-import { cn } from '@/lib/utils'
+import { cn, copyToClipboard } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth-store'
 import { Avatar } from '@/components/shared/avatar'
 import { Button } from '@/components/ui/button'
@@ -108,8 +108,9 @@ export function PeopleSection() {
 
   async function copyLink() {
     if (!inviteLink) return
-    await navigator.clipboard.writeText(inviteLink)
-    setCopied(true)
+    // Also works over plain HTTP (a LAN address); on failure the link stays
+    // selectable in the field above.
+    if (await copyToClipboard(inviteLink)) setCopied(true)
   }
 
   return (
