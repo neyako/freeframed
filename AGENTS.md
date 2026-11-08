@@ -123,5 +123,10 @@ Full stack: `docker compose -f docker-compose.dev.yml up --build`
   `get_user_by_email` / `get_email_owner` (case-insensitive) and new accounts
   are stored lowercase (`NewUserEmail`). Per-file upload size is capped by
   `MAX_UPLOAD_BYTES` (0 = no cap).
+- Comment, reply and edit fields are textareas that grow with `useAutoGrow`
+  (`hooks/use-auto-grow.ts`) and send through `isSendEnter` (`lib/utils.ts`):
+  never mid-IME composition (Vietnamese Telex/VNI) and never on touch
+  keyboards, where Return is a newline. Text fields are 16px on phones so iOS
+  Safari doesn't zoom.
 - Upstream (Techiebutler/freeframe) fixes were ported on `t3/upstream-sync`
   up to its `bfb4d19`; the commit messages cite the upstream PR numbers.
