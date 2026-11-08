@@ -1,10 +1,12 @@
 from collections import deque
+from contextlib import contextmanager
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..database import get_db
@@ -52,6 +54,52 @@ def _get_deleted_folder(db: Session, folder_id: uuid.UUID) -> Folder:
     if not folder:
         raise HTTPException(status_code=404, detail="Deleted folder not found")
     return folder
+
+
+def _folder_name_conflict(name: Optional[str]) -> HTTPException:
+    if name is None:
+        return HTTPException(status_code=409, detail="A folder with that name already exists here")
+    return HTTPException(status_code=409, detail=f"A folder named '{name}' already exists here")
+
+
+def _ensure_folder_name_free(
+    db: Session,
+    project_id: uuid.UUID,
+    parent_id: Optional[uuid.UUID],
+    name: str,
+    exclude_ids: tuple[uuid.UUID, ...] = (),
+) -> None:
+    """Refuse a second live folder called `name` under `parent_id`.
+
+    uq_folder_name_per_parent allows one live folder per name and parent (a
+    trashed folder frees its name). Left to the index, a collision is a 500.
+    Root level is exempt, as in the index: a NULL parent never equals another.
+    """
+    if parent_id is None:
+        return
+    query = db.query(Folder.id).filter(
+        Folder.project_id == project_id,
+        Folder.parent_id == parent_id,
+        Folder.name == name,
+        Folder.deleted_at.is_(None),
+    )
+    if exclude_ids:
+        query = query.filter(Folder.id.notin_(exclude_ids))
+    if query.first() is not None:
+        raise _folder_name_conflict(name)
+
+
+@contextmanager
+def _folder_name_guard(db: Session, name: Optional[str]):
+    """Turn the index's own refusal into the same 409, for a sibling a concurrent
+    request created after _ensure_folder_name_free looked."""
+    try:
+        yield
+    except IntegrityError as e:
+        db.rollback()
+        if "uq_folder_name_per_parent" not in str(e.orig):
+            raise
+        raise _folder_name_conflict(name) from e
 
 
 def _get_descendant_ids(db: Session, folder_id: uuid.UUID) -> list[uuid.UUID]:
@@ -260,6 +308,8 @@ def create_folder(
                 detail=f"Maximum folder depth of {MAX_FOLDER_DEPTH} exceeded",
             )
 
+    _ensure_folder_name_free(db, project_id, body.parent_id, body.name)
+
     folder = Folder(
         project_id=project_id,
         parent_id=body.parent_id,
@@ -267,7 +317,8 @@ def create_folder(
         created_by=current_user.id,
     )
     db.add(folder)
-    db.commit()
+    with _folder_name_guard(db, body.name):
+        db.commit()
     db.refresh(folder)
     return _folder_to_response(db, folder)
 
@@ -360,6 +411,10 @@ def update_folder(
     folder = _get_folder(db, folder_id)
     require_project_role(db, folder.project_id, current_user, ProjectRole.editor)
 
+    # The name and parent the folder ends up with, checked together below
+    name = body.name if body.name is not None else folder.name
+    parent_id = folder.parent_id
+
     # Handle parent_id move (only if explicitly set)
     if "parent_id" in body.model_fields_set:
         _lock_active_project(db, folder.project_id)
@@ -382,12 +437,14 @@ def update_folder(
                 status_code=400,
                 detail=f"Move would exceed maximum folder depth of {MAX_FOLDER_DEPTH}",
             )
-        folder.parent_id = new_parent_id
+        parent_id = new_parent_id
 
-    if body.name is not None:
-        folder.name = body.name
+    _ensure_folder_name_free(db, folder.project_id, parent_id, name, exclude_ids=(folder_id,))
 
-    db.commit()
+    folder.name = name
+    folder.parent_id = parent_id
+    with _folder_name_guard(db, name):
+        db.commit()
     db.refresh(folder)
     return _folder_to_response(db, folder)
 
@@ -511,12 +568,27 @@ def bulk_move(
                 detail=f"Move would exceed maximum folder depth of {MAX_FOLDER_DEPTH}",
             )
 
+    # Moved folders may not collide with what is already in the target, nor with
+    # each other (root is exempt, as in the index).
+    moving_ids = tuple(folder.id for folder in moved_folders)
+    moving_names: set[str] = set()
+    for folder in moved_folders:
+        if body.target_folder_id is not None and folder.name in moving_names:
+            raise _folder_name_conflict(folder.name)
+        moving_names.add(folder.name)
+        _ensure_folder_name_free(
+            db, project_id, body.target_folder_id, folder.name, exclude_ids=moving_ids,
+        )
+
     for asset in assets:
         asset.folder_id = body.target_folder_id
     for folder in moved_folders:
         folder.parent_id = body.target_folder_id
 
-    db.commit()
+    # The name a collision at commit is reported under: unknown when several moved.
+    only_name = moved_folders[0].name if len(moved_folders) == 1 else None
+    with _folder_name_guard(db, only_name):
+        db.commit()
     return {"ok": True, "moved_assets": len(body.asset_ids), "moved_folders": len(body.folder_ids)}
 
 
@@ -641,6 +713,9 @@ def restore_folder(
         if not parent:
             folder.parent_id = None
 
+    # Its name may have been taken while it sat in the trash
+    _ensure_folder_name_free(db, folder.project_id, folder.parent_id, folder.name)
+
     # Restore only what this folder's delete cascaded (same deleted_at);
     # things trashed separately before it stay in trash.
     cascade_deleted_at = folder.deleted_at
@@ -654,5 +729,6 @@ def restore_folder(
         {"deleted_at": None}, synchronize_session="fetch"
     )
 
-    db.commit()
+    with _folder_name_guard(db, folder.name):
+        db.commit()
     return {"ok": True}
