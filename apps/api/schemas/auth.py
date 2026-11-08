@@ -1,8 +1,24 @@
-from pydantic import BaseModel, EmailStr, Field, model_validator
-from typing import Any
+from pydantic import AfterValidator, BaseModel, EmailStr, Field, model_validator
+from typing import Annotated, Any
 import uuid
 from ..models.user import UserStatus
+from ..services.auth_service import BCRYPT_MAX_PASSWORD_BYTES
 from ..services.avatar_service import effective_avatar_url
+
+
+def _reject_bcrypt_overflow(v: str) -> str:
+    """Refuse a password bcrypt would silently truncate. The limit is 72 bytes,
+    but Field(max_length=...) counts characters, so a short multi-byte password
+    can still overflow and then verifies against any password sharing its first
+    72 bytes."""
+    if len(v.encode("utf-8")) > BCRYPT_MAX_PASSWORD_BYTES:
+        raise ValueError(f"password must be at most {BCRYPT_MAX_PASSWORD_BYTES} bytes when UTF-8 encoded")
+    return v
+
+
+# Anything that sets a password: 8 characters minimum (an empty or one-letter
+# password was accepted before) and a byte ceiling so it is never stored truncated.
+NewPassword = Annotated[str, Field(min_length=8), AfterValidator(_reject_bcrypt_overflow)]
 
 class RegisterRequest(BaseModel):
     email: EmailStr
@@ -11,7 +27,9 @@ class RegisterRequest(BaseModel):
 
 class LoginRequest(BaseModel):
     email: EmailStr
-    password: str
+    # No length floor on login: accounts that predate the 8-character rule must
+    # still get a 401, not a 422. The cap only keeps an oversized body away from bcrypt.
+    password: str = Field(max_length=4096)
 
 class TokenResponse(BaseModel):
     access_token: str
@@ -55,7 +73,7 @@ class InviteRequest(BaseModel):
 # Invite flow
 class AcceptInviteRequest(BaseModel):
     token: str
-    password: str
+    password: NewPassword
 
 class InviteInfoResponse(BaseModel):
     email: str
@@ -68,12 +86,11 @@ class ForgotPasswordRequest(BaseModel):
 
 class ResetPasswordRequest(BaseModel):
     token: str
-    password: str
+    password: NewPassword
 
 class ChangePasswordRequest(BaseModel):
     current_password: str
-    # bcrypt only reads the first 72 bytes
-    new_password: str = Field(min_length=8, max_length=72)
+    new_password: NewPassword
 
 class UpdateProfileRequest(BaseModel):
     name: str | None = None

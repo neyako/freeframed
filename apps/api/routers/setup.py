@@ -11,6 +11,7 @@ from pydantic import BaseModel, EmailStr
 
 from ..database import get_db
 from ..models.user import User, UserStatus
+from ..schemas.auth import NewPassword
 from ..services.auth_service import create_access_token, hash_password, issue_refresh_token, set_auth_cookies
 from ..middleware.rate_limit import rate_limit
 from ..config import settings
@@ -26,7 +27,7 @@ class SetupStatusResponse(BaseModel):
 class CreateSuperAdminRequest(BaseModel):
     email: EmailStr
     name: str
-    password: str
+    password: NewPassword
     setup_token: str | None = None
 
 

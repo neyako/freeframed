@@ -12,18 +12,21 @@ from ..models.user import RefreshToken, User
 ACCESS_COOKIE = "ff_access_token"
 REFRESH_COOKIE = "ff_refresh_token"
 
+BCRYPT_MAX_PASSWORD_BYTES = 72
+
+def bcrypt_password_bytes(password: str) -> bytes:
+    """The bytes bcrypt will actually hash: its limit is 72 bytes, not
+    characters. Encode first, then cut, so the truncation point is explicit and
+    identical to what bcrypt does internally (existing hashes stay valid)."""
+    return password.encode('utf-8')[:BCRYPT_MAX_PASSWORD_BYTES]
+
 def hash_password(password: str) -> str:
-    # bcrypt has a 72 byte limit, truncate to avoid errors
-    pwd_bytes = password[:72].encode('utf-8')
-    salt = bcrypt.gensalt()
-    hashed_bytes = bcrypt.hashpw(pwd_bytes, salt)
+    hashed_bytes = bcrypt.hashpw(bcrypt_password_bytes(password), bcrypt.gensalt())
     return hashed_bytes.decode('utf-8')
 
 def verify_password(plain: str, hashed: str) -> bool:
     try:
-        plain_bytes = plain[:72].encode('utf-8')
-        hashed_bytes = hashed.encode('utf-8')
-        return bcrypt.checkpw(plain_bytes, hashed_bytes)
+        return bcrypt.checkpw(bcrypt_password_bytes(plain), hashed.encode('utf-8'))
     except ValueError:
         return False
 
