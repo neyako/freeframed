@@ -149,7 +149,8 @@ export function AssetCard({
       {selected && <FrameCorners />}
       <div
         className={cn(
-          'relative flex w-full items-center justify-center overflow-hidden rounded-sm border bg-bg-tertiary transition-colors duration-100',
+          // Phones crop every poster to 4:5 so the two-up rows line up
+          'relative flex w-full items-center justify-center overflow-hidden rounded-sm border bg-bg-tertiary transition-colors duration-100 max-sm:![aspect-ratio:4/5]',
           selected ? 'border-border-strong' : 'border-border group-hover:border-border-strong',
         )}
         style={{ aspectRatio: aspect }}
