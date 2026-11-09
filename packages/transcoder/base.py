@@ -19,6 +19,9 @@ class TranscodeResult:
     width: Optional[int] = None
     height: Optional[int] = None
     fps: Optional[float] = None
+    # The input has audio but no video stream at all: a good file that is not
+    # video, so the caller can treat it as audio instead of reporting a failure.
+    no_video_stream: bool = False
 
 @dataclass
 class VideoMetadata:

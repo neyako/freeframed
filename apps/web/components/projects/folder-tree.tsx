@@ -142,7 +142,7 @@ function FolderNode({
         )}
 
         {node.item_count > 0 && !renaming && (
-          <span className="shrink-0 font-mono text-[11px] text-text-tertiary group-hover:hidden">
+          <span className="shrink-0 tabular-nums text-[11px] text-text-tertiary group-hover:hidden">
             {node.item_count}
           </span>
         )}

@@ -45,6 +45,8 @@ class AssetResponse(BaseModel):
     latest_version: Optional[AssetVersionResponse] = None
     thumbnail_url: Optional[str] = None
     target_duration_seconds: Optional[int] = None
+    # Unresolved top-level notes on the latest version (lists only)
+    open_comment_count: int = 0
     model_config = {"from_attributes": True}
 
 class AssetUpdate(BaseModel):

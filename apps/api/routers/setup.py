@@ -11,7 +11,14 @@ from pydantic import BaseModel, EmailStr
 
 from ..database import get_db
 from ..models.user import User, UserStatus
-from ..services.auth_service import create_access_token, hash_password, issue_refresh_token, set_auth_cookies
+from ..schemas.auth import NewPassword, NewUserEmail
+from ..services.auth_service import (
+    create_access_token,
+    get_email_owner,
+    hash_password,
+    issue_refresh_token,
+    set_auth_cookies,
+)
 from ..middleware.rate_limit import rate_limit
 from ..config import settings
 
@@ -24,9 +31,9 @@ class SetupStatusResponse(BaseModel):
 
 
 class CreateSuperAdminRequest(BaseModel):
-    email: EmailStr
+    email: NewUserEmail
     name: str
-    password: str
+    password: NewPassword
     setup_token: str | None = None
 
 
@@ -101,8 +108,9 @@ def create_superadmin(
             detail="Setup already completed. Superadmin already exists.",
         )
     
-    # Check if email is already taken
-    existing = db.query(User).filter(User.email == body.email, User.deleted_at.is_(None)).first()
+    # Check if email is already taken, in any case and including soft-deleted
+    # rows, which the unique constraint on users.email still covers.
+    existing = get_email_owner(db, body.email)
     if existing:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

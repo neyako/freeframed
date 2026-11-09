@@ -2,7 +2,6 @@ import sqlalchemy as sa
 
 from apps.api.models.asset import MediaFile
 from apps.api.models.comment import CommentAttachment
-from apps.api.schemas.upload import MAX_FILE_SIZE_BYTES
 
 
 def test_media_file_size_column_is_bigint():
@@ -19,8 +18,3 @@ def test_comment_attachment_size_column_is_bigint():
 
     # Then: attachments above int32 range can be represented by the DB type.
     assert isinstance(col.type, sa.BigInteger)
-
-
-def test_declared_limit_exceeds_int32():
-    # Given/When/Then: the advertised upload limit documents why BIGINT is required.
-    assert MAX_FILE_SIZE_BYTES > 2**31 - 1

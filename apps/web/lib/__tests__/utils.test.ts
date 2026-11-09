@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import {
   formatTime,
   formatTimecode,
@@ -6,6 +6,8 @@ import {
   formatRelativeTime,
   truncate,
   cn,
+  isSendEnter,
+  formatAgo,
 } from '../utils'
 
 describe('formatTime', () => {
@@ -128,5 +130,40 @@ describe('cn', () => {
   it('merges conflicting tailwind classes (last wins)', () => {
     const result = cn('text-red-500', 'text-blue-500')
     expect(result).toBe('text-blue-500')
+  })
+})
+
+describe('isSendEnter', () => {
+  const key = (over: Partial<KeyboardEventInit> = {}, composing = false) => {
+    const nativeEvent = new KeyboardEvent('keydown', { key: 'Enter', ...over })
+    Object.defineProperty(nativeEvent, 'isComposing', { value: composing })
+    return { key: nativeEvent.key, shiftKey: nativeEvent.shiftKey, nativeEvent }
+  }
+  const pointer = (coarse: boolean) =>
+    vi.stubGlobal('matchMedia', (q: string) => ({ matches: coarse && q.includes('coarse') }))
+
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('sends on Enter with a mouse, not on Shift+Enter or while an IME composes', () => {
+    pointer(false)
+    expect(isSendEnter(key())).toBe(true)
+    expect(isSendEnter(key({ shiftKey: true }))).toBe(false)
+    expect(isSendEnter(key({}, true))).toBe(false)
+  })
+
+  it('Return is a newline on touch keyboards', () => {
+    pointer(true)
+    expect(isSendEnter(key())).toBe(false)
+  })
+})
+
+describe('formatAgo', () => {
+  it('compacts an age to one unit', () => {
+    const now = Date.parse('2026-11-09T12:00:00Z')
+    expect(formatAgo('2026-11-09T11:59:40Z', now)).toBe('now')
+    expect(formatAgo('2026-11-09T11:48:00Z', now)).toBe('12m')
+    expect(formatAgo('2026-11-09T05:00:00Z', now)).toBe('7h')
+    expect(formatAgo('2026-11-06T12:00:00Z', now)).toBe('3d')
+    expect(formatAgo('2026-08-01T12:00:00Z', now)).toBe('3mo')
   })
 })

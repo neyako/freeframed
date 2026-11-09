@@ -50,6 +50,10 @@ class Settings(BaseSettings):
     transcode_hwaccel: str = "auto"
     transcode_vaapi_device: str = "/dev/dri/renderD128"
 
+    # Max size in bytes of one uploaded file; 0 = unlimited. S3 multipart still
+    # bounds the real ceiling at 10,000 parts x the 10 MB part size (~97 GB).
+    max_upload_bytes: int = 0
+
     # Worker concurrency settings
     transcoding_concurrency: int = 2  # Number of concurrent video transcoding jobs
     email_concurrency: int = 2  # Number of concurrent email sending jobs

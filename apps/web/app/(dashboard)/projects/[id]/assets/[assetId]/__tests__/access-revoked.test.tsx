@@ -94,6 +94,7 @@ vi.mock('@/hooks/use-comments', () => ({
   }),
 }))
 vi.mock('@/hooks/use-page-title', () => ({ usePageTitle: vi.fn() }))
+vi.mock('@/components/shared/toast', () => ({ useToast: () => ({ success: vi.fn(), error: vi.fn() }) }))
 vi.mock('@/lib/api', () => ({ api: { get: vi.fn() } }))
 
 describe('ReviewPage revoked access', () => {

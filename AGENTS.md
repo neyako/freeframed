@@ -130,3 +130,19 @@ Full stack: `docker compose -f docker-compose.dev.yml up --build`
   they resolve same-origin — `S3_PUBLIC_ENDPOINT` defaults to `FRONTEND_URL`
   and nginx routes the bucket path to internal MinIO. Don't reintroduce a
   separate browser-facing S3 host.
+- Copy buttons use `copyToClipboard` (`lib/utils.ts`), never
+  `navigator.clipboard` directly: it does not exist on a LAN `http://` origin,
+  the usual homelab URL. Presigned input URLs must never reach an error
+  message, log or SSE payload (`packages/transcoder/redact.py`).
+- Accounts: a password is set only through the `NewPassword` type
+  (`schemas/auth.py`: 8+ characters, at most 72 UTF-8 bytes); email lookups use
+  `get_user_by_email` / `get_email_owner` (case-insensitive) and new accounts
+  are stored lowercase (`NewUserEmail`). Per-file upload size is capped by
+  `MAX_UPLOAD_BYTES` (0 = no cap).
+- Comment, reply and edit fields are textareas that grow with `useAutoGrow`
+  (`hooks/use-auto-grow.ts`) and send through `isSendEnter` (`lib/utils.ts`):
+  never mid-IME composition (Vietnamese Telex/VNI) and never on touch
+  keyboards, where Return is a newline. Text fields are 16px on phones so iOS
+  Safari doesn't zoom.
+- Upstream (Techiebutler/freeframe) fixes were ported on `t3/upstream-sync`
+  up to its `bfb4d19`; the commit messages cite the upstream PR numbers.

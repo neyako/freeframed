@@ -100,13 +100,12 @@ export function ProfileSection() {
               className={fieldClass}
             />
           </div>
-          <Button
-            type="submit"
-            size="sm"
-            disabled={savingName || !trimmedName || trimmedName === user?.name}
-          >
-            {savingName ? 'Saving…' : 'Save'}
-          </Button>
+          {/* Save appears once there's something to save */}
+          {(savingName || (trimmedName && trimmedName !== user?.name)) && (
+            <Button type="submit" size="sm" disabled={savingName}>
+              {savingName ? 'Saving…' : 'Save'}
+            </Button>
+          )}
         </form>
 
         <span className="text-text-secondary">Avatar</span>

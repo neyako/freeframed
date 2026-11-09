@@ -3,7 +3,7 @@
 import * as React from 'react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { X, Download, MoreHorizontal, Share2, Trash2, FolderInput, FolderIcon, Check, Film, Music, Image as ImageIcon, Link as LinkIcon, Pencil } from 'lucide-react'
-import { cn, formatBytes } from '@/lib/utils'
+import { cn, copyToClipboard, formatBytes } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/shared/empty-state'
 import { AssetCard } from './asset-card'
@@ -21,21 +21,14 @@ import {
 } from '@/components/ui/surface'
 import { useToast } from '@/components/shared/toast'
 import { useViewStore } from '@/stores/view-store'
-import type { Asset, AssetResponse, AssetStatus, Folder, FolderTreeNode } from '@/types'
+import type { Asset, AssetResponse, Folder, FolderTreeNode } from '@/types'
 import { mediaAspect } from '@/lib/aspect'
+import { sortAssets } from '@/lib/sort-assets'
 
 const assetTypeIcons: Record<string, React.ElementType> = {
   video: Film,
   audio: Music,
   image: ImageIcon,
-}
-
-const statusOrder: Record<AssetStatus, number> = {
-  in_review: 0,
-  draft: 1,
-  approved: 2,
-  rejected: 3,
-  archived: 4,
 }
 
 interface AssetGridProps {
@@ -56,7 +49,7 @@ interface AssetGridProps {
   onDropToFolder?: (targetFolderId: string, assetIds: string[], folderIds: string[]) => void
   /** Bulk actions */
   onBulkDelete?: (assetIds: string[], folderIds: string[]) => void
-  onBulkMove?: (assetIds: string[], folderIds: string[], targetFolderId: string | null) => void
+  onBulkMove?: (assetIds: string[], folderIds: string[], targetFolderId: string | null) => void | Promise<void>
   onBulkDownload?: (assetIds: string[], folderIds: string[]) => void
   projectName?: string
   folderTree?: FolderTreeNode[]
@@ -72,12 +65,12 @@ interface AssetGridProps {
 // its media's shape needs, and rows stretch a little to fill the width.
 const rowHeightMap = { S: 140, M: 200, L: 280 }
 
-// Folder cards stay on a plain grid (they have no media shape)
-const gridColsMap = {
-  S: 'grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6',
-  M: 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3',
-  L: 'grid-cols-1 sm:grid-cols-1 lg:grid-cols-2',
-}
+// Narrowest a card may get, so a 9:16 video keeps a readable title and
+// poster instead of being squeezed to its row-height width
+const minCardWidthMap = { S: 120, M: 180, L: 240 }
+
+// Folders are compact rows on a plain grid, whatever the card size
+const folderGridClass = 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4'
 
 
 export function AssetGrid({
@@ -144,45 +137,52 @@ export function AssetGrid({
     })
   }
 
+  // Touch has no hover, so selecting is a mode: "Select" shows the boxes and
+  // a tap toggles instead of opening. Pointer devices use the hover boxes.
+  const [selectMode, setSelectMode] = React.useState(false)
+
   const clearSelection = () => {
     setSelectedAssetIds(new Set())
     setSelectedFolderIds(new Set())
+    setSelectMode(false)
   }
+
+  // A selection belongs to the folder it was made in
+  React.useEffect(clearSelection, [currentFolderId])
+
+  // Drop ids that left the view (deleted, moved), so the bar never acts on ghosts
+  React.useEffect(() => {
+    const keep = (prev: Set<string>, items: { id: string }[] | undefined) => {
+      const ids = new Set((items ?? []).map((i) => i.id))
+      const next = new Set(Array.from(prev).filter((id) => ids.has(id)))
+      return next.size === prev.size ? prev : next
+    }
+    setSelectedAssetIds((prev) => keep(prev, assets))
+    setSelectedFolderIds((prev) => keep(prev, folders))
+  }, [assets, folders])
 
   const copyAssetLink = (asset: Asset) => {
     const url = `${window.location.origin}/projects/${asset.project_id}/assets/${asset.id}`
-    navigator.clipboard.writeText(url).then(
-      () => toast.success('Link copied'),
-      () => toast.error('Could not copy link'),
+    void copyToClipboard(url).then((copied) =>
+      copied ? toast.success('Link copied') : toast.error('Could not copy link'),
     )
   }
 
   const totalSelected = selectedAssetIds.size + selectedFolderIds.size
+  const selecting = selectMode || totalSelected > 0
   const selectedTotalSize = Array.from(selectedAssetIds).reduce((sum, id) => sum + (fileSizes[id] ?? 0), 0)
 
-  const filtered = React.useMemo(() => {
-    const result = [...assets]
+  const filtered = React.useMemo(
+    () => sortAssets(assets, sortKey, sortDirection),
+    [assets, sortKey, sortDirection],
+  )
 
-    if (sortKey !== 'custom') {
-      result.sort((a, b) => {
-        let cmp = 0
-        if (sortKey === 'date') {
-          cmp = new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime()
-        } else if (sortKey === 'name') {
-          cmp = a.name.localeCompare(b.name)
-        } else if (sortKey === 'status') {
-          cmp = statusOrder[a.status] - statusOrder[b.status]
-        } else if (sortKey === 'type') {
-          cmp = a.asset_type.localeCompare(b.asset_type)
-        }
-        return sortDirection === 'asc' ? cmp : -cmp
-      })
-    }
-
-    return result
-  }, [assets, sortKey, sortDirection])
-
-  const showFolders = !flattenFolders && folders && folders.length > 0
+  // Same order as the folder sidebar, so a folder sits in one place everywhere
+  const orderedFolders = React.useMemo(
+    () => [...(folders ?? [])].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true })),
+    [folders],
+  )
+  const showFolders = !flattenFolders && orderedFolders.length > 0
   const folderCount = showFolders ? folders!.length : 0
 
   if (isLoading) {
@@ -214,6 +214,14 @@ export function AssetGrid({
       <div className="flex flex-wrap items-center gap-1">
         <span className="mr-2 text-[12.5px] text-text-secondary">{countLabel}</span>
         <div className="grow" />
+        <Button
+          variant="ghost"
+          size="sm"
+          className="hidden pointer-coarse:inline-flex"
+          onClick={() => (selectMode ? clearSelection() : setSelectMode(true))}
+        >
+          {selectMode ? 'Done' : 'Select'}
+        </Button>
         <SortPopover />
         <div className="hidden lg:block">
           <AppearancePopover />
@@ -223,8 +231,9 @@ export function AssetGrid({
 
       {/* Grid view: folders */}
       {showFolders && layout === 'grid' && (
-        <div className={cn('grid gap-x-3 gap-y-4', gridColsMap[cardSize])}>
-          {folders!.map((folder) => {
+        // At the project root, phones already list these folders in the strip above
+        <div className={cn('grid gap-2', folderGridClass, !currentFolderId && 'max-lg:hidden')}>
+          {orderedFolders.map((folder) => {
             const isFolderSelected = selectedFolderIds.has(folder.id)
             return (
               <div key={folder.id} className="group/folder relative">
@@ -233,10 +242,15 @@ export function AssetGrid({
                   aria-label={isFolderSelected ? `Deselect ${folder.name}` : `Select ${folder.name}`}
                   aria-pressed={isFolderSelected}
                   className={cn(
-                    'absolute left-1.5 top-1.5 z-10 flex h-5 w-5 items-center justify-center rounded-sm transition-colors duration-100',
+                    // Sits over the folder icon; an empty box on touch, a hint on hover
+                    'absolute left-2.5 top-1/2 z-10 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-sm border transition-colors duration-100',
                     isFolderSelected
-                      ? 'bg-text-primary text-bg-primary'
-                      : 'bg-black/60 text-transparent opacity-0 group-hover/folder:opacity-100 group-hover/folder:text-white/60 pointer-coarse:opacity-100',
+                      ? 'border-text-primary bg-text-primary text-bg-primary'
+                      : cn(
+                          'border-border-strong bg-bg-secondary text-transparent opacity-0 group-hover/folder:opacity-100 group-hover/folder:text-text-tertiary',
+                          // On touch, folders show their icon until a selection is under way
+                          selecting && 'pointer-coarse:opacity-100',
+                        ),
                   )}
                   onClick={(e) => { e.stopPropagation(); toggleFolderSelect(folder.id) }}
                 >
@@ -244,7 +258,7 @@ export function AssetGrid({
                 </button>
                 <FolderCard
                   folder={folder}
-                  onOpen={onFolderOpen!}
+                  onOpen={(f) => (selectMode ? toggleFolderSelect(f.id) : onFolderOpen?.(f))}
                   onRename={onFolderRename}
                   onDelete={onFolderDelete}
                   onShare={onFolderShare}
@@ -263,15 +277,27 @@ export function AssetGrid({
           action={onUpload ? { label: 'Upload', onClick: onUpload } : undefined}
         />
       ) : layout === 'grid' && filtered.length > 0 ? (
-        <div className={cn('flex flex-wrap gap-x-3 gap-y-4', showFolders && 'mt-3')}>
+        <div className={cn('flex flex-wrap gap-x-3 gap-y-4', showFolders && 'mt-2')}>
           {filtered.map((asset) => {
             const aspect = mediaAspect(asset)
             return (
             <div
               key={asset.id}
-              className="min-w-0"
-              style={{ flexGrow: aspect, flexBasis: aspect * rowHeightMap[cardSize] }}
-              onClick={() => onAssetOpen?.(asset)}
+              // Phones: two clips per row, whatever their shape, so you browse a library
+              // instead of one poster per screen
+              className="min-w-0 rounded-sm outline-none focus-visible:ring-1 focus-visible:ring-text-secondary max-sm:!grow-0 max-sm:!basis-[calc(50%-6px)]"
+              style={{ flexGrow: aspect, flexBasis: Math.max(aspect * rowHeightMap[cardSize], minCardWidthMap[cardSize]) }}
+              onClick={() => (selectMode ? toggleAssetSelect(asset.id) : onAssetOpen?.(asset))}
+              // Reachable by keyboard: Tab to a clip, Enter opens it
+              role="link"
+              tabIndex={0}
+              aria-label={asset.name}
+              onKeyDown={(e) => {
+                if (e.key !== 'Enter' || e.target !== e.currentTarget) return
+                e.preventDefault()
+                if (selectMode) toggleAssetSelect(asset.id)
+                else onAssetOpen?.(asset)
+              }}
             >
               <AssetCard
                 asset={asset}
@@ -280,6 +306,7 @@ export function AssetGrid({
                 thumbnailUrl={thumbnails[asset.id]}
                 fileSize={fileSizes[asset.id] ?? null}
                 selected={selectedAssetIds.has(asset.id)}
+                selecting={selecting}
                 onSelect={() => toggleAssetSelect(asset.id)}
                 showInfo={showCardInfo}
                 showFileSize={showFileSize}
@@ -320,7 +347,7 @@ export function AssetGrid({
             <div className="w-6 shrink-0" />
           </div>
 
-          {showFolders && folders!.map((folder) => {
+          {showFolders && orderedFolders.map((folder) => {
             const isFolderSelected = selectedFolderIds.has(folder.id)
             return (
               <div
@@ -343,12 +370,12 @@ export function AssetGrid({
                 </div>
                 {showUploader && <div className="hidden w-32 md:block" />}
                 {showFileSize && (
-                  <div className="hidden w-20 text-right font-mono text-[12px] text-text-tertiary sm:block">
+                  <div className="hidden w-20 text-right tabular-nums text-[12px] text-text-tertiary sm:block">
                     {folder.item_count ?? 0} item{(folder.item_count ?? 0) !== 1 ? 's' : ''}
                   </div>
                 )}
                 <div className="hidden w-10 md:block" />
-                <div className="hidden w-24 shrink-0 font-mono text-[12px] text-text-tertiary sm:block">
+                <div className="hidden w-24 shrink-0 tabular-nums text-[12px] text-text-tertiary sm:block">
                   {formatShortDate(folder.created_at)}
                 </div>
                 <div className="flex w-6 shrink-0 justify-center opacity-0 transition-opacity duration-100 group-hover:opacity-100 pointer-coarse:opacity-100">
@@ -414,14 +441,14 @@ export function AssetGrid({
                   </div>
                 )}
                 {showFileSize && (
-                  <div className="hidden w-20 shrink-0 text-right font-mono text-[12px] text-text-secondary sm:block">
+                  <div className="hidden w-20 shrink-0 text-right tabular-nums text-[12px] text-text-secondary sm:block">
                     {fileSize ? formatBytes(fileSize) : ''}
                   </div>
                 )}
-                <div className="hidden w-10 shrink-0 text-center font-mono text-[12px] text-text-secondary md:block">
+                <div className="hidden w-10 shrink-0 text-center tabular-nums text-[12px] text-text-secondary md:block">
                   v{versionCount ?? 1}
                 </div>
-                <div className="hidden w-24 shrink-0 font-mono text-[12px] text-text-tertiary sm:block">
+                <div className="hidden w-24 shrink-0 tabular-nums text-[12px] text-text-tertiary sm:block">
                   {formatShortDate(asset.created_at)}
                 </div>
                 <div className="flex w-6 shrink-0 justify-center opacity-0 transition-opacity duration-100 group-hover:opacity-100 pointer-coarse:opacity-100">
@@ -476,21 +503,22 @@ export function AssetGrid({
           </Button>
           <span className="text-[13px] text-text-primary">{totalSelected} selected</span>
           {selectedTotalSize > 0 && (
-            <span className="font-mono text-[12px] text-text-tertiary">{formatBytes(selectedTotalSize)}</span>
+            <span className="hidden tabular-nums text-[12px] text-text-tertiary sm:inline">{formatBytes(selectedTotalSize)}</span>
           )}
           <div className="flex-1" />
           {onBulkDownload && (
             <Button
               variant="ghost"
               size="sm"
+              aria-label="Download"
               onClick={() => onBulkDownload(Array.from(selectedAssetIds), Array.from(selectedFolderIds))}
             >
-              <Download /> Download
+              <Download /><span className="hidden sm:inline">Download</span>
             </Button>
           )}
           {onBulkMove && (
-            <Button variant="ghost" size="sm" onClick={() => setMoveDialogOpen(true)}>
-              <FolderInput /> Move to
+            <Button variant="ghost" size="sm" aria-label="Move to" onClick={() => setMoveDialogOpen(true)}>
+              <FolderInput /><span className="hidden sm:inline">Move to</span>
             </Button>
           )}
           {onBulkDelete && (
@@ -498,9 +526,10 @@ export function AssetGrid({
               variant="ghost"
               size="sm"
               className="hover:text-accent"
+              aria-label="Delete"
               onClick={() => onBulkDelete(Array.from(selectedAssetIds), Array.from(selectedFolderIds))}
             >
-              <Trash2 /> Delete
+              <Trash2 /><span className="hidden sm:inline">Delete</span>
             </Button>
           )}
         </div>
@@ -513,9 +542,13 @@ export function AssetGrid({
         tree={folderTree}
         currentFolderId={currentFolderId ?? null}
         movingFolderIds={Array.from(selectedFolderIds)}
-        onMove={(targetFolderId) => {
-          onBulkMove?.(Array.from(selectedAssetIds), Array.from(selectedFolderIds), targetFolderId)
-          clearSelection()
+        onMove={async (targetFolderId) => {
+          try {
+            await onBulkMove?.(Array.from(selectedAssetIds), Array.from(selectedFolderIds), targetFolderId)
+            clearSelection()
+          } catch (err) {
+            toast.error(err instanceof Error ? err.message : 'Could not move')
+          }
         }}
       />
 
@@ -526,8 +559,8 @@ export function AssetGrid({
         placeholder="Folder name"
         defaultValue={folderToRename?.name ?? ''}
         submitLabel="Rename"
-        onSubmit={(name) => {
-          if (folderToRename) void onFolderRename?.(folderToRename.id, name)
+        onSubmit={async (name) => {
+          if (folderToRename) await onFolderRename?.(folderToRename.id, name)
         }}
       />
 

@@ -2,8 +2,8 @@
 
 import * as React from 'react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
-import { Film, Music, Image as ImageIcon, MessageSquare, MoreHorizontal, Check, Share2, Download, Link as LinkIcon, Pencil, Trash2 } from 'lucide-react'
-import { cn, formatRelativeTime, formatBytes } from '@/lib/utils'
+import { Film, Music, Image as ImageIcon, MoreHorizontal, Check, Share2, Download, Link as LinkIcon, Pencil, Trash2 } from 'lucide-react'
+import { cn, copyToClipboard, formatAgo, formatBytes } from '@/lib/utils'
 import {
   menuContentClass,
   menuItemClass,
@@ -11,7 +11,11 @@ import {
   menuSeparatorClass,
 } from '@/components/ui/surface'
 import { useToast } from '@/components/shared/toast'
-import type { Asset, AssetType } from '@/types'
+import { FrameCorners } from '@/components/shared/wordmark'
+import type { Asset, AssetResponse, AssetType } from '@/types'
+
+/** Cards take a plain asset; list responses add version and note counts */
+type CardAsset = Asset & Partial<Pick<AssetResponse, 'latest_version' | 'open_comment_count'>>
 import type { TitleLines } from '@/stores/view-store'
 
 const assetTypeIcons: Record<AssetType, React.ElementType> = {
@@ -20,14 +24,55 @@ const assetTypeIcons: Record<AssetType, React.ElementType> = {
   image: ImageIcon,
 }
 
+export function assetDuration(asset: CardAsset): number | null {
+  return asset.latest_version?.files?.find((f) => f.duration_seconds)?.duration_seconds ?? null
+}
+
+/**
+ * Corner readouts on a poster: runtime bottom-right, and open notes bottom-left
+ * with a red tick (red means something still needs a look).
+ */
+export function MediaBadges({
+  asset,
+  duration,
+  openNotes,
+}: {
+  asset: CardAsset
+  duration?: number | null
+  openNotes?: number
+}) {
+  const runtime = duration ?? assetDuration(asset)
+  const open = openNotes ?? asset.open_comment_count ?? 0
+  return (
+    <>
+      {runtime != null && runtime > 0 && (
+        <span className="absolute bottom-1.5 right-1.5 rounded-sm bg-black/75 px-1 font-mono text-[11px] tabular-nums text-white">
+          {formatDuration(runtime)}
+        </span>
+      )}
+      {open > 0 && (
+        <span
+          className="absolute bottom-1.5 left-1.5 inline-flex items-center gap-1 rounded-sm bg-black/75 px-1 tabular-nums text-[11px] tabular-nums text-white"
+          title={`${open} open note${open === 1 ? '' : 's'}`}
+        >
+          <span className="h-2.5 w-[2px] bg-accent" aria-hidden />
+          {open}
+        </span>
+      )}
+    </>
+  )
+}
+
 interface AssetCardProps {
-  asset: Asset
+  asset: CardAsset
   versionCount?: number
   authorName?: string
   thumbnailUrl?: string | null
   commentCount?: number
   duration?: number | null
   selected?: boolean
+  /** A selection is under way: touch shows every card's box */
+  selecting?: boolean
   onSelect?: (e: React.MouseEvent) => void
   onDragStart?: (e: React.DragEvent) => void
   onShare?: () => void
@@ -65,6 +110,7 @@ export function AssetCard({
   duration,
   selected = false,
   onSelect,
+  selecting = false,
   onDragStart,
   onShare,
   onDownload,
@@ -86,7 +132,7 @@ export function AssetCard({
   const meta = [
     versionCount > 1 ? `v${versionCount}` : null,
     showUploader && authorName ? authorName : null,
-    formatRelativeTime(asset.created_at),
+    formatAgo(asset.created_at),
     showFileSize && fileSize ? formatBytes(fileSize) : null,
   ]
     .filter(Boolean)
@@ -98,11 +144,14 @@ export function AssetCard({
       onDragStart={onDragStart}
       className={cn('group flex cursor-pointer flex-col', className)}
     >
-      {/* Thumbnail area */}
+      {/* Thumbnail area; a selected card gets the mark's red corners */}
+      <div className="relative">
+      {selected && <FrameCorners />}
       <div
         className={cn(
-          'relative flex w-full items-center justify-center overflow-hidden rounded-sm border bg-bg-tertiary transition-colors duration-100',
-          selected ? 'border-text-primary' : 'border-border group-hover:border-border-strong',
+          // Phones crop every poster to 4:5 so the two-up rows line up
+          'relative flex w-full items-center justify-center overflow-hidden rounded-sm border bg-bg-tertiary transition-colors duration-100 max-sm:![aspect-ratio:4/5]',
+          selected ? 'border-border-strong' : 'border-border group-hover:border-border-strong',
         )}
         style={{ aspectRatio: aspect }}
       >
@@ -125,37 +174,30 @@ export function AssetCard({
             aria-pressed={selected}
             onClick={(e) => { e.stopPropagation(); onSelect(e) }}
             className={cn(
-              'absolute left-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-sm transition-colors duration-100',
+              'absolute left-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-sm border transition-colors duration-100',
               selected
-                ? 'bg-text-primary text-bg-primary'
-                : 'bg-black/60 text-white/60 opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100',
+                ? 'border-text-primary bg-text-primary text-bg-primary'
+                : cn(
+                    'border-white/70 bg-black/40 text-transparent opacity-0 group-hover:opacity-100 group-hover:text-white/70',
+                    selecting && 'pointer-coarse:opacity-100',
+                  ),
             )}
           >
             <Check className="h-3.5 w-3.5" />
           </button>
         )}
 
-        {duration != null && duration > 0 && (
-          <span className="absolute bottom-1.5 right-1.5 rounded-sm bg-black/70 px-1 font-mono text-2xs tabular-nums text-white">
-            {formatDuration(duration)}
-          </span>
-        )}
-
-        {commentCount != null && commentCount > 0 && (
-          <span className="absolute bottom-1.5 left-1.5 inline-flex items-center gap-1 rounded-sm bg-black/70 px-1 font-mono text-2xs text-white">
-            <MessageSquare className="h-3 w-3" />
-            {commentCount}
-          </span>
-        )}
+        <MediaBadges asset={asset} duration={duration} openNotes={commentCount} />
+      </div>
       </div>
 
       {showInfo && (
         <div className="mt-1.5 flex items-start gap-1">
           <div className="min-w-0 flex-1">
-            <p className={cn('text-[12.5px] leading-snug text-text-primary', lineClamp)}>
+            <p className={cn('text-[13.5px] leading-snug text-text-primary', lineClamp)}>
               {asset.name}
             </p>
-            <p className="truncate font-mono text-[11.5px] text-text-tertiary">{meta}</p>
+            <p className="truncate tabular-nums text-[11.5px] text-text-tertiary">{meta}</p>
           </div>
           <DropdownMenu.Root>
             <DropdownMenu.Trigger asChild>
@@ -189,9 +231,8 @@ export function AssetCard({
                 <DropdownMenu.Item
                   onSelect={() => {
                     const url = `${window.location.origin}/projects/${asset.project_id}/assets/${asset.id}`
-                    navigator.clipboard.writeText(url).then(
-                      () => toast.success('Link copied'),
-                      () => toast.error('Could not copy link'),
+                    void copyToClipboard(url).then((copied) =>
+                      copied ? toast.success('Link copied') : toast.error('Could not copy link'),
                     )
                   }}
                   className={menuItemClass}

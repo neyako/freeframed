@@ -295,7 +295,7 @@ class TestBuildHlsCommand:
     ) -> None:
         cmd = _build("software", tmp_path)
         expected_filter = (
-            "[v:0]split=3[v0][v1][v2];"
+            "[0:V:0]split=3[v0][v1][v2];"
             "[v0]scale=1920:1080:force_original_aspect_ratio=decrease,"
             "pad=ceil(iw/2)*2:ceil(ih/2)*2[1080p];"
             "[v1]scale=1280:720:force_original_aspect_ratio=decrease,"
@@ -388,7 +388,10 @@ class TestBuildHlsCommand:
             hw_decode=False,
         )
 
-        assert hashlib.sha256("\0".join(cmd).encode()).hexdigest() == (
+        # Identical to the pre-hwdecode argv apart from the stream selector, which
+        # now skips attached cover art ([0:V:0] instead of [v:0]).
+        legacy = [arg.replace("[0:V:0]", "[v:0]") for arg in cmd]
+        assert hashlib.sha256("\0".join(legacy).encode()).hexdigest() == (
             "19a71a171d80477df52217bd97fbabd92eeddaba5081d23439970688fa84648e"
         )
 

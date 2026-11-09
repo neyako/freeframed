@@ -17,6 +17,8 @@ import {
   ArrowLeft,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { Wordmark } from '@/components/shared/wordmark'
+import { avatarGray } from '@/lib/avatar'
 import { clearTokens } from '@/lib/auth'
 import { useAuthStore } from '@/stores/auth-store'
 import { useBrandingStore } from '@/stores/branding-store'
@@ -303,7 +305,7 @@ function AssetGridCard({ asset, allowDownload, token, shareSession, isSelected, 
           />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-bg-hover text-text-secondary">
+            <div className="flex h-14 w-14 items-center justify-center rounded-md bg-bg-hover text-text-secondary">
               <TypeIcon className="h-7 w-7" />
             </div>
           </div>
@@ -461,16 +463,7 @@ function RightPanel({ selectedAsset, token, shareSession, permission }: RightPan
 
 // ─── Share Comment List (matches project review panel style) ─────────────────
 
-const AVATAR_COLORS = [
-  'bg-purple-500', 'bg-blue-500', 'bg-green-500', 'bg-orange-500',
-  'bg-pink-500', 'bg-cyan-500', 'bg-indigo-500', 'bg-rose-500',
-]
-
-function getAvatarColor(name: string): string {
-  let hash = 0
-  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash)
-  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length]
-}
+// Mono avatars, the same grays as the owner's review panel
 
 interface ShareCommentListProps {
   comments: GuestComment[]
@@ -500,12 +493,12 @@ function ShareCommentList({ comments, loading, canComment, onReply }: ShareComme
     <div className="px-4 py-3 space-y-1">
       {comments.map((comment, i) => {
         const name = comment.author?.name || comment.guest_author?.name || comment.guest_name || comment.author_name || 'User'
-        const color = getAvatarColor(name)
+        const color = avatarGray(name)
         return (
           <div key={comment.id} className="py-3 border-b border-border last:border-0">
             {/* Comment header */}
             <div className="flex items-start gap-3">
-              <div className={cn('h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold text-text-primary shrink-0', color)}>
+              <div className="h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-semibold text-white shrink-0" style={{ backgroundColor: color }}>
                 {name.charAt(0).toUpperCase()}
               </div>
               <div className="flex-1 min-w-0">
@@ -514,9 +507,9 @@ function ShareCommentList({ comments, loading, canComment, onReply }: ShareComme
                   <span className="text-2xs text-text-tertiary">{formatShortDate(comment.created_at)}</span>
                   <span className="ml-auto text-2xs text-text-tertiary">#{i + 1}</span>
                 </div>
-                <p className="text-sm text-text-secondary mt-1 leading-relaxed"><Linkified text={comment.body} /></p>
+                <p className="text-sm text-text-primary mt-1 whitespace-pre-line leading-relaxed"><Linkified text={comment.body} /></p>
                 {comment.timecode_start != null && (
-                  <span className="inline-flex items-center gap-1 mt-1 text-[10px] text-accent font-mono bg-accent/10 px-1.5 py-0.5 rounded">
+                  <span className="inline-flex items-center gap-1 mt-1 text-[11px] text-text-secondary font-mono tabular-nums">
                     {Math.floor(comment.timecode_start / 60)}:{String(Math.floor(comment.timecode_start % 60)).padStart(2, '0')}
                   </span>
                 )}
@@ -533,10 +526,10 @@ function ShareCommentList({ comments, loading, canComment, onReply }: ShareComme
               <div className="ml-11 mt-2 space-y-2 border-l-2 border-border pl-3">
                 {comment.replies.map((r) => {
                   const rName = r.author?.name || r.guest_author?.name || r.guest_name || r.author_name || 'User'
-                  const rColor = getAvatarColor(rName)
+                  const rColor = avatarGray(rName)
                   return (
                     <div key={r.id} className="flex items-start gap-2.5 py-1">
-                      <div className={cn('h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-bold text-text-primary shrink-0', rColor)}>
+                      <div className="h-5 w-5 rounded-full flex items-center justify-center text-[9px] font-semibold text-white shrink-0" style={{ backgroundColor: rColor }}>
                         {rName.charAt(0).toUpperCase()}
                       </div>
                       <div className="flex-1 min-w-0">
@@ -593,9 +586,9 @@ function AssetViewer({ token, shareSession, asset, viewerName, permission, allow
 
 /** Lazy-imported review components to avoid circular deps */
 export function ShareReviewScreen({
-  token, shareSession, assetId, assetName, viewerName, permission, allowDownload, watermark, onBack,
+  token, shareSession, assetId, assetName, viewerName, senderName, permission, allowDownload, watermark, onBack,
 }: {
-  token: string; shareSession?: string | null; assetId: string; assetName: string; viewerName?: string | null; permission: SharePermission; allowDownload: boolean; watermark: string | null; onBack?: () => void
+  token: string; shareSession?: string | null; assetId: string; assetName: string; viewerName?: string | null; senderName?: string | null; permission: SharePermission; allowDownload: boolean; watermark: string | null; onBack?: () => void
 }) {
   const [ReviewProvider, setProvider] = React.useState<any>(null)
   const [VideoPlayer, setVideoPlayer] = React.useState<any>(null)
@@ -641,6 +634,7 @@ export function ShareReviewScreen({
         shareSession={shareSession}
         assetName={assetName}
         viewerName={viewerName}
+        senderName={senderName}
         permission={permission}
         allowDownload={allowDownload}
         watermark={watermark}
@@ -658,7 +652,7 @@ export function ShareReviewScreen({
 }
 
 function ShareReviewInner({
-  token, shareSession, assetName, viewerName, permission, allowDownload, watermark, onBack,
+  token, shareSession, assetName, viewerName, senderName, permission, allowDownload, watermark, onBack,
   VideoPlayer, ImageViewer, AudioPlayer, CommentPanel, CommentInput,
   useReviewHook, useReviewStoreHook,
 }: any) {
@@ -667,17 +661,22 @@ function ShareReviewInner({
   const [sidebarOpen, setSidebarOpen] = React.useState(false)
   const [AnnotationOverlay, setAnnotationOverlay] = React.useState<any>(null)
   const [AnnotationCanvas, setAnnotationCanvas] = React.useState<any>(null)
+  const [CutSummary, setCutSummary] = React.useState<any>(null)
   const autoOpenedRef = React.useRef(false)
 
   React.useEffect(() => {
     Promise.all([
       import('@/components/review/annotation-overlay'),
       import('@/components/review/annotation-canvas'),
-    ]).then(([overlayMod, canvasMod]) => {
+      import('@/components/review/cut-summary'),
+    ]).then(([overlayMod, canvasMod, cutMod]) => {
       setAnnotationOverlay(() => overlayMod.AnnotationOverlay)
       setAnnotationCanvas(() => canvasMod.AnnotationCanvas)
+      setCutSummary(() => cutMod.CutSummary)
     })
   }, [])
+  // Guests see the same after-cut runtime as the owner (read-only: no target picker)
+  const runtime = currentVersion?.files?.find((f: { duration_seconds?: number | null }) => f.duration_seconds)?.duration_seconds ?? null
 
   const canComment = permission === 'comment'
   const versionReady = currentVersion?.processing_status === 'ready'
@@ -717,7 +716,9 @@ function ShareReviewInner({
   // Guest identity flow for non-authenticated users
   const [guestIdentity, setGuestIdentity] = React.useState<{ name: string; email: string } | null>(null)
   const [showGuestPrompt, setShowGuestPrompt] = React.useState(false)
-  const pendingCommentRef = React.useRef<{ body: string; timecodeStart?: number; timecodeEnd?: number; annotationData?: Record<string, unknown>; parentId?: string } | null>(null)
+  // Settles when the guest saves or cancels the name prompt, so the comment
+  // box keeps the draft until the comment actually posts
+  const identityWaitRef = React.useRef<{ resolve: () => void; reject: (err: Error) => void } | null>(null)
   React.useEffect(() => {
     try {
       const stored = localStorage.getItem('ff_guest_identity')
@@ -805,19 +806,28 @@ function ShareReviewInner({
     if (!isLoggedIn) rememberOwnGuestComment(comment.id)
   }, [addComment, currentVersion, isLoggedIn, rememberOwnGuestComment])
 
-  const handleGuestIdentitySave = React.useCallback(async (name: string, email: string) => {
+  const ensureGuestIdentity = React.useCallback(async () => {
+    if (isLoggedIn || localStorage.getItem('ff_guest_identity')) return
+    await new Promise<void>((resolve, reject) => {
+      identityWaitRef.current = { resolve, reject }
+      setShowGuestPrompt(true)
+    })
+  }, [isLoggedIn])
+
+  const handleGuestIdentitySave = React.useCallback((name: string, email: string) => {
     const identity = { name, email }
     setGuestIdentity(identity)
     localStorage.setItem('ff_guest_identity', JSON.stringify(identity))
     setShowGuestPrompt(false)
+    identityWaitRef.current?.resolve()
+    identityWaitRef.current = null
+  }, [])
 
-    // Auto-submit the pending comment
-    if (pendingCommentRef.current) {
-      const { body, timecodeStart, timecodeEnd, annotationData, parentId } = pendingCommentRef.current
-      pendingCommentRef.current = null
-      setTimeout(() => submitComment(body, timecodeStart, timecodeEnd, annotationData, parentId), 50)
-    }
-  }, [submitComment])
+  const handleGuestIdentityCancel = React.useCallback(() => {
+    setShowGuestPrompt(false)
+    identityWaitRef.current?.reject(new Error('Add your name and email to post'))
+    identityWaitRef.current = null
+  }, [])
 
   if (isLoading || !asset) {
     return <div className="flex items-center justify-center h-dvh bg-bg-primary"><span className="text-[13px] text-text-tertiary">Loading…</span></div>
@@ -826,21 +836,29 @@ function ShareReviewInner({
   return (
     <div className="flex flex-col h-dvh bg-bg-primary text-text-primary">
       {/* Top bar — same style as project review */}
-      <div className="flex items-center justify-between border-b border-border px-3 h-12 bg-bg-secondary shrink-0">
+      <div className="flex items-center justify-between border-b border-border px-3 h-12 bg-bg-primary shrink-0">
         <div className="flex items-center gap-1 min-w-0 flex-1">
           {onBack && (
             <button onClick={onBack} className="flex items-center justify-center h-7 w-7 rounded-md text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors shrink-0">
               <ArrowLeft className="h-4 w-4" />
             </button>
           )}
+          {!onBack && <Wordmark showName={false} className="mx-1.5 text-[13px]" />}
           <span className="text-[13px] font-medium text-text-primary truncate">{assetName}</span>
+          {versions.length === 0 && currentVersion && (
+            <span className="ml-1.5 shrink-0 text-[12px] tabular-nums text-text-tertiary">v{currentVersion.version_number}</span>
+          )}
+          {/* Who's asking: the client should know whose cut this is */}
+          {senderName && (
+            <span className="ml-2 min-w-0 truncate text-[12px] text-text-tertiary">from {senderName}</span>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {versions.length > 0 && (
             <VersionSwitcher versions={versions} />
           )}
           {allowDownload && (
-            <button className="flex items-center gap-1.5 h-7 px-3 rounded-md text-xs font-medium text-text-inverse bg-accent hover:bg-accent-hover transition-colors" onClick={() => handleDownload(token, asset.id, shareSession, currentVersion?.id)}>
+            <button className="flex items-center gap-1.5 h-7 px-3 rounded-md text-xs font-medium text-text-inverse bg-text-primary hover:opacity-90 transition-opacity" onClick={() => handleDownload(token, asset.id, shareSession, currentVersion?.id)}>
               <Download className="h-3 w-3" /> Download
             </button>
           )}
@@ -909,33 +927,37 @@ function ShareReviewInner({
 
         {/* Right sidebar — reuses project comment panel */}
         {sidebarOpen && (
-          <div className="w-full h-[55vh] md:h-auto md:w-[360px] flex flex-col border-t md:border-t-0 border-l-0 md:border-l border-border bg-bg-secondary shrink-0 animate-ff-rise-in md:animate-ff-slide-in">
+          <div className={cn(
+            "w-full md:h-auto md:w-[360px] flex flex-col border-t md:border-t-0 border-l-0 md:border-l border-border bg-bg-secondary shrink-0 animate-ff-rise-in md:animate-ff-slide-in",
+            // Drawing on a phone: the sheet shrinks to the composer so the frame gets the room
+            isDrawingMode ? "h-auto" : "h-[50dvh]",
+          )}>
             <button
               onClick={() => setSidebarOpen(false)}
-              className="md:hidden flex items-center justify-center w-full py-2 border-b border-border"
+              className={cn("md:hidden flex items-center justify-center w-full py-2 border-b border-border", isDrawingMode && "hidden")}
               aria-label="Hide comments"
             >
               <span className="h-1 w-8 rounded-full bg-border-strong" />
             </button>
             {CommentPanel && (
               <>
-                <CommentPanel
-                  comments={comments}
-                  currentUserId={currentUserId}
-                  mutationQuery={mutationQuery}
-                  ownGuestCommentIds={ownGuestCommentIds}
-                  onDelete={handleDeleteComment}
-                  onReply={() => {}}
-                  onSubmitReply={canComment ? async (parentId: string, body: string) => {
-                    const hasIdentity = isLoggedIn || Boolean(localStorage.getItem('ff_guest_identity'))
-                    if (!hasIdentity) {
-                      pendingCommentRef.current = { body, parentId }
-                      setShowGuestPrompt(true)
-                      return
-                    }
-                    await submitComment(body, undefined, undefined, undefined, parentId)
-                  } : undefined}
-                />
+                <div className={cn("flex-1 flex flex-col min-h-0 overflow-hidden", isDrawingMode && "hidden md:flex")}>
+                  {CutSummary && runtime !== null && asset.asset_type === 'video' && (
+                    <CutSummary comments={comments} duration={runtime} target={null} />
+                  )}
+                  <CommentPanel
+                    comments={comments}
+                    currentUserId={currentUserId}
+                    mutationQuery={mutationQuery}
+                    ownGuestCommentIds={ownGuestCommentIds}
+                    onDelete={handleDeleteComment}
+                    onReply={() => {}}
+                    onSubmitReply={canComment ? async (parentId: string, body: string) => {
+                      await ensureGuestIdentity()
+                      await submitComment(body, undefined, undefined, undefined, parentId)
+                    } : undefined}
+                  />
+                </div>
                 {canComment && CommentInput && (
                   <CommentInput
                     assetId={asset.id}
@@ -943,12 +965,7 @@ function ShareReviewInner({
                     assetType={asset.asset_type}
                     visibilityLocked
                     onSubmit={async ({ body, timecodeStart, timecodeEnd, annotation: annotationData }: CommentDraft) => {
-                      const hasIdentity = isLoggedIn || Boolean(localStorage.getItem('ff_guest_identity'))
-                      if (!hasIdentity) {
-                        pendingCommentRef.current = { body, timecodeStart, timecodeEnd, annotationData }
-                        setShowGuestPrompt(true)
-                        return
-                      }
+                      await ensureGuestIdentity()
                       await submitComment(body, timecodeStart, timecodeEnd, annotationData)
                     }}
                   />
@@ -963,7 +980,7 @@ function ShareReviewInner({
       {showGuestPrompt && !isLoggedIn && (
         <GuestIdentityPrompt
           onSave={handleGuestIdentitySave}
-          onCancel={() => { setShowGuestPrompt(false); pendingCommentRef.current = null }}
+          onCancel={handleGuestIdentityCancel}
         />
       )}
     </div>
@@ -977,7 +994,15 @@ function GuestIdentityPrompt({ onSave, onCancel }: { onSave: (name: string, emai
   const [email, setEmail] = React.useState('')
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4"
+      role="dialog"
+      aria-modal="true"
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') onCancel()
+        if (e.key === 'Enter' && !e.nativeEvent.isComposing && name.trim() && email.trim()) onSave(name.trim(), email.trim())
+      }}
+    >
       <div className="w-full max-w-sm rounded border border-border bg-bg-elevated p-5">
         <h3 className="text-sm font-semibold text-text-primary mb-1">Leave a comment</h3>
         <p className="text-xs text-text-tertiary mb-4">Enter your name and email to comment on this shared asset.</p>
@@ -1005,7 +1030,7 @@ function GuestIdentityPrompt({ onSave, onCancel }: { onSave: (name: string, emai
           <button
             disabled={!name.trim() || !email.trim()}
             onClick={() => onSave(name.trim(), email.trim())}
-            className="px-4 py-1.5 rounded-md bg-accent text-xs font-medium text-white hover:bg-accent/90 disabled:opacity-50 transition-colors"
+            className="px-4 py-1.5 rounded-md bg-text-primary text-xs font-medium text-text-inverse hover:opacity-90 disabled:opacity-50 transition-opacity"
           >
             Continue
           </button>
@@ -1289,7 +1314,7 @@ export function FolderShareViewer({
             <div ref={viewerMenuRef} className="relative group shrink-0">
               <button
                 onClick={() => setViewerMenuOpen((v) => !v)}
-                className="flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold text-text-primary bg-green-600 hover:ring-2 hover:ring-green-400/50 transition-all"
+                className="flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold text-text-primary bg-bg-hover hover:ring-1 hover:ring-border-strong transition-all"
               >
                 {viewerName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
               </button>
@@ -1315,7 +1340,7 @@ export function FolderShareViewer({
                   onClick={() => {
                     clearTokens()
                   }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 transition-colors"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-accent hover:bg-bg-hover transition-colors"
                 >
                   Log out
                 </button>
@@ -1323,10 +1348,7 @@ export function FolderShareViewer({
             </div>
           ) : (
             <div className="flex items-center gap-2 shrink-0">
-              <span className="h-2 w-2 rounded-full bg-accent" />
-              <span className="font-mono text-[15px] font-bold text-text-primary">
-                freeframed
-              </span>
+              <Wordmark className="text-[14px]" />
             </div>
           )}
 
@@ -1338,7 +1360,7 @@ export function FolderShareViewer({
         <div className="flex items-center gap-2 shrink-0">
           {allowDownload && (
             <button
-              className="flex items-center gap-1.5 h-7 px-3 rounded-md text-xs font-medium text-white bg-accent hover:bg-accent-hover transition-colors"
+              className="flex items-center gap-1.5 h-7 px-3 rounded-md text-xs font-medium text-text-inverse bg-text-primary hover:opacity-90 transition-opacity"
               onClick={() => handleDownloadAll(token, currentSubfolderId ?? null, shareSession)}
             >
               <Download className="h-3 w-3" />
@@ -1347,7 +1369,8 @@ export function FolderShareViewer({
           )}
           <button
             onClick={() => setPanelOpen((v) => !v)}
-            className="flex items-center justify-center h-7 w-7 rounded-md text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors"
+            // Phones open an asset straight into the viewer; the side panel is desktop only
+            className="hidden md:flex items-center justify-center h-7 w-7 rounded-md text-text-secondary hover:text-text-primary hover:bg-bg-hover transition-colors"
             title={panelOpen ? 'Hide panel' : 'Show panel'}
           >
             {panelOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
@@ -1583,7 +1606,7 @@ export function FolderShareViewer({
 
         {/* ─── Right Panel ───────────────────────────────────────────── */}
         {panelOpen && (
-          <div className="w-full h-[55vh] md:h-auto md:w-[320px] shrink-0 border-t md:border-t-0 md:border-l border-border bg-bg-secondary flex flex-col overflow-hidden">
+          <div className="hidden md:flex md:w-[320px] shrink-0 md:border-l border-border bg-bg-secondary flex-col overflow-hidden">
             <RightPanel
               selectedAsset={selectedAsset}
               token={token}

@@ -125,7 +125,7 @@ function ToastContainer({ toasts, onDismiss }: ToastContainerProps) {
     <div
       aria-live="polite"
       aria-label="Notifications"
-      className="pointer-events-none fixed bottom-4 right-4 z-[9999] flex flex-col-reverse gap-2"
+      className="pointer-events-none fixed bottom-20 left-4 right-4 z-[9999] flex flex-col-reverse items-end gap-2 lg:bottom-4 lg:left-auto"
     >
       {toasts.map((t) => (
         <ToastTile key={t.id} toast={t} onDismiss={onDismiss} />
@@ -148,7 +148,7 @@ function ToastTile({ toast, onDismiss }: ToastTileProps) {
   return (
     <div
       role="alert"
-      className="pointer-events-auto flex w-80 items-start gap-2.5 rounded-md border border-border-strong bg-bg-elevated px-3 py-2.5 shadow-xl animate-ff-rise-in"
+      className="pointer-events-auto flex w-full items-start sm:w-80 gap-2.5 rounded-md border border-border-strong bg-bg-elevated px-3 py-2.5 shadow-xl animate-ff-rise-in"
     >
       <Icon className={cn('mt-px h-[15px] w-[15px] shrink-0', config.iconClass)} />
       <p className="flex-1 text-[13px] text-text-primary">{toast.message}</p>

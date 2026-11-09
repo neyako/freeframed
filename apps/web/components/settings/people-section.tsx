@@ -4,7 +4,7 @@ import * as React from 'react'
 import useSWR from 'swr'
 import { Plus } from 'lucide-react'
 import { api } from '@/lib/api'
-import { cn } from '@/lib/utils'
+import { cn, copyToClipboard } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth-store'
 import { Avatar } from '@/components/shared/avatar'
 import { Button } from '@/components/ui/button'
@@ -108,8 +108,9 @@ export function PeopleSection() {
 
   async function copyLink() {
     if (!inviteLink) return
-    await navigator.clipboard.writeText(inviteLink)
-    setCopied(true)
+    // Also works over plain HTTP (a LAN address); on failure the link stays
+    // selectable in the field above.
+    if (await copyToClipboard(inviteLink)) setCopied(true)
   }
 
   return (
@@ -228,9 +229,12 @@ export function PeopleSection() {
       )}
 
       {error && <p className="text-xs text-status-error">{error}</p>}
-      <p className="text-xs text-text-tertiary">
-        Deactivated people are signed out everywhere and can&apos;t sign in. Their comments stay.
-      </p>
+      {/* Only relevant once there's someone besides you to deactivate */}
+      {people && people.length > 1 && (
+        <p className="text-xs text-text-tertiary">
+          Deactivated people are signed out everywhere and can&apos;t sign in. Their comments stay.
+        </p>
+      )}
 
       <ConfirmDialog
         open={toDeactivate !== null}

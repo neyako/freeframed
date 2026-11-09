@@ -11,10 +11,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirna
 
 from .celery_app import celery_app
 from ..database import SessionLocal
-from ..models.asset import AssetVersion, MediaFile, ProcessingStatus, AssetType
+from ..models.asset import AssetVersion, FileType, MediaFile, ProcessingStatus, AssetType
 from ..models.asset import Asset
 from ..services.s3_service import get_s3_client
 from ..config import settings
+from packages.transcoder.redact import redact_presigned_urls
 
 log = logging.getLogger("celery.transcode")
 
@@ -89,9 +90,11 @@ def process_asset(self, asset_id: str, version_id: str):
                 raise self.retry(exc=exc)
             version.processing_status = ProcessingStatus.failed
             db.commit()
+            # Every project member receives this event, so never let a presigned
+            # URL (signature + access key id) through in it.
             _publish_event(str(asset.project_id), "transcode_failed", {
                 "asset_id": asset_id,
-                "error": str(exc),
+                "error": redact_presigned_urls(str(exc)),
             })
             raise
 
@@ -126,6 +129,18 @@ def _process_video(db, asset, version, media_file, s3, output_prefix):
         })
 
     result = _run_async(transcoder.transcode(job, progress_callback=_on_progress))
+
+    if result.no_video_stream:
+        # Browsers type an audio-only .mp4/.mpg as video/*, which routed it here.
+        # The file is fine; it just is not video. Retype it and use the audio
+        # pipeline instead of failing an upload the user had no reason to doubt.
+        log.info("asset %s has no video stream; processing it as audio", asset.id)
+        asset.asset_type = AssetType.audio
+        media_file.file_type = FileType.audio
+        db.flush()
+        _process_audio(db, asset, version, media_file, s3, output_prefix)
+        return
+
     if not result.success:
         raise TranscodeProcessingError(result.error)
 
@@ -215,7 +230,7 @@ def backfill_media_metadata(self):
                 )
                 cmd = ["ffprobe", "-v", "error", "-print_format", "json", "-show_format"]
                 if asset_type == AssetType.video:
-                    cmd += ["-show_streams", "-select_streams", "v:0"]
+                    cmd += ["-show_streams", "-select_streams", "V:0"]  # not cover art
                 probe = subprocess.run(cmd + [url], capture_output=True, text=True, timeout=300)
                 if probe.returncode != 0:
                     skipped += 1
@@ -242,7 +257,8 @@ def backfill_media_metadata(self):
             except Exception as exc:
                 db.rollback()
                 skipped += 1
-                log.warning("backfill: skipping media_file %s: %s", row_id, exc)
+                # A probe timeout quotes its argv, presigned URL included.
+                log.warning("backfill: skipping media_file %s: %s", row_id, redact_presigned_urls(str(exc)))
                 continue
         return {"updated": updated, "skipped": skipped}
     finally:

@@ -10,6 +10,19 @@ interface PutPartResult {
 }
 
 /**
+ * A failure that repeating cannot fix: a 4xx from storage means the request
+ * itself was rejected (bad signature, expired URL, wrong length) and every
+ * further attempt is rejected the same way. 408 and 429 invite a retry.
+ */
+interface PartUploadError extends Error {
+  permanent?: boolean
+}
+
+function isPermanentStatus(status: number): boolean {
+  return status >= 400 && status < 500 && status !== 408 && status !== 429
+}
+
+/**
  * PUT a single multipart chunk (or a whole small file) with byte-level progress.
  * `onProgress` receives the fraction (0..1) of THIS body uploaded so far.
  * Pass `contentType` when the presigned URL signs it.
@@ -39,7 +52,9 @@ export function putPartWithProgress(
       if (xhr.status >= 200 && xhr.status < 300) {
         resolve({ etag: xhr.getResponseHeader('ETag') ?? '' })
       } else {
-        reject(new Error(`Part failed: ${xhr.status} ${xhr.statusText}`))
+        const error: PartUploadError = new Error(`Part failed: ${xhr.status} ${xhr.statusText}`)
+        error.permanent = isPermanentStatus(xhr.status)
+        reject(error)
       }
     }
     xhr.onerror = () => {
@@ -51,6 +66,152 @@ export function putPartWithProgress(
       reject(new DOMException('Upload cancelled', 'AbortError'))
     }
     xhr.send(chunk)
+  })
+}
+
+const PART_MAX_ATTEMPTS = 8 // per part, including the first try
+const PART_RETRY_BASE_MS = 2000 // 2s, 4s, 8s ... about 254s of tolerance per part
+
+function isAbortError(err: unknown): boolean {
+  return err instanceof DOMException && err.name === 'AbortError'
+}
+
+/** Whether another attempt could change the outcome. */
+function isRetryable(err: unknown): boolean {
+  if ((err as PartUploadError)?.permanent) return false
+  // A rejected presign request (bad session, upload gone) fails the same way again
+  if (err instanceof ApiError) return !isPermanentStatus(err.status)
+  return true
+}
+
+/**
+ * Uploads one part, retrying with exponential backoff and jitter. A large file
+ * is hundreds of PUTs; one transient 5xx or a brief network drop used to fail
+ * the whole upload and throw away everything already sent. The presigned URL is
+ * fetched on every attempt because it expires after an hour and a long upload
+ * can outlive a URL fetched before a long backoff. A cancel is never retried.
+ */
+async function uploadPart(
+  file: File,
+  s3Key: string,
+  uploadId: string,
+  partNumber: number,
+  controller: AbortController,
+  onFraction: (fraction: number) => void,
+): Promise<string> {
+  const start = (partNumber - 1) * CHUNK_SIZE
+  const chunk = file.slice(start, Math.min(start + CHUNK_SIZE, file.size))
+  let lastError: unknown
+
+  for (let attempt = 1; attempt <= PART_MAX_ATTEMPTS; attempt++) {
+    try {
+      const { presigned_url } = await api.post<{ presigned_url: string }>('/upload/presign-part', {
+        s3_key: s3Key,
+        upload_id: uploadId,
+        part_number: partNumber,
+      })
+      const { etag } = await putPartWithProgress(presigned_url, chunk, controller.signal, onFraction)
+      return etag
+    } catch (err) {
+      if (controller.signal.aborted || isAbortError(err) || !isRetryable(err)) throw err
+      lastError = err
+      if (attempt === PART_MAX_ATTEMPTS) break
+      const delay = PART_RETRY_BASE_MS * 2 ** (attempt - 1) + Math.random() * 250
+      await new Promise((resolve) => setTimeout(resolve, delay))
+    }
+  }
+  throw lastError
+}
+
+/**
+ * Uploads every part of a multipart upload in order and returns the part list
+ * for /upload/complete. `onProgress` gets the overall percent (0-95; the last
+ * 5 is the server finishing the upload). Used by both the new-asset and
+ * new-version flows. Exported for tests.
+ */
+export async function uploadAllParts(
+  file: File,
+  s3Key: string,
+  uploadId: string,
+  controller: AbortController,
+  onProgress: (percent: number) => void,
+): Promise<Array<{ PartNumber: number; ETag: string }>> {
+  const totalChunks = Math.ceil(file.size / CHUNK_SIZE)
+  const parts: Array<{ PartNumber: number; ETag: string }> = []
+
+  for (let partNumber = 1; partNumber <= totalChunks; partNumber++) {
+    if (controller.signal.aborted) {
+      throw new DOMException('Upload cancelled', 'AbortError')
+    }
+    const etag = await uploadPart(file, s3Key, uploadId, partNumber, controller, (fraction) =>
+      onProgress(Math.round(((partNumber - 1 + fraction) / totalChunks) * 95)),
+    )
+    parts.push({ PartNumber: partNumber, ETag: etag })
+  }
+  return parts
+}
+
+/**
+ * Keeps the screen awake while an upload runs. An upload lives entirely in the
+ * browser tab: when a phone locks or a machine sleeps mid-transfer the loop
+ * pushing parts dies with it, and nothing runs afterwards, so the version is
+ * left at "uploading" with the multipart still open.
+ *
+ * Best-effort: without HTTPS, in low-power mode or in a browser without the API
+ * there is no lock, and that is no reason to refuse an upload. Reference-counted
+ * because several uploads run at once; released when the last one finishes.
+ */
+let wakeLock: WakeLockSentinel | null = null
+let wakeLockPending: Promise<void> | null = null
+let wakeLockHolders = 0
+
+function acquireWakeLock(): void {
+  // Dropping several files starts several uploads in the same tick; without the
+  // pending guard each would request its own sentinel and only the last would be
+  // tracked, leaving the rest held for the life of the page.
+  if (wakeLock || wakeLockPending) return
+  if (typeof navigator === 'undefined' || !('wakeLock' in navigator)) return
+
+  wakeLockPending = (async () => {
+    try {
+      const sentinel = await navigator.wakeLock.request('screen')
+      if (wakeLockHolders === 0) {
+        // Every upload finished while the request was in flight.
+        void sentinel.release().catch(() => {})
+        return
+      }
+      wakeLock = sentinel
+      // The browser drops the lock by itself when the tab is hidden.
+      sentinel.addEventListener('release', () => {
+        if (wakeLock === sentinel) wakeLock = null
+      })
+    } catch {
+      // Not having a wake lock is not an upload error.
+    } finally {
+      wakeLockPending = null
+    }
+  })()
+}
+
+/** Exported for tests. */
+export function retainWakeLock(): void {
+  wakeLockHolders += 1
+  acquireWakeLock()
+}
+
+/** Exported for tests. */
+export function releaseWakeLock(): void {
+  wakeLockHolders = Math.max(0, wakeLockHolders - 1)
+  if (wakeLockHolders > 0) return
+  const held = wakeLock
+  wakeLock = null
+  void held?.release().catch(() => {})
+}
+
+// Returning to the foreground needs a fresh lock: the one dropped on hide is dead.
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && wakeLockHolders > 0) acquireWakeLock()
   })
 }
 
@@ -206,7 +367,9 @@ const storeCreator: StateCreator<UploadStore, [['zustand/persist', unknown]]> = 
       ...(options?.source ? { source: options.source } : {}),
     }
 
-    set((s) => ({ files: [entry, ...s.files], panelOpen: true }))
+    // Quick share shows its own progress on Home; opening the panel there
+    // would only dim the page behind a panel that stays hidden
+    set((s) => ({ files: [entry, ...s.files], panelOpen: isQuickShareUpload(entry) ? s.panelOpen : true }))
 
     const updateFile = (fileId: string, patch: Partial<UploadFile>) => {
       set((s) => ({
@@ -224,6 +387,7 @@ const storeCreator: StateCreator<UploadStore, [['zustand/persist', unknown]]> = 
       let s3_key: string | undefined
       let version_id: string | undefined
 
+      retainWakeLock()
       try {
         updateFile(id, { status: 'uploading' })
 
@@ -245,35 +409,9 @@ const storeCreator: StateCreator<UploadStore, [['zustand/persist', unknown]]> = 
 
         updateFile(id, { uploadId: upload_id, assetId: asset_id, versionId: version_id })
 
-        const totalChunks = Math.ceil(file.size / CHUNK_SIZE)
-        const parts: Array<{ PartNumber: number; ETag: string }> = []
-
-        for (let partNumber = 1; partNumber <= totalChunks; partNumber++) {
-          if (controller.signal.aborted) {
-            throw new DOMException('Upload cancelled', 'AbortError')
-          }
-
-          const start = (partNumber - 1) * CHUNK_SIZE
-          const end = Math.min(start + CHUNK_SIZE, file.size)
-          const chunk = file.slice(start, end)
-
-          const { presigned_url } = await api.post<{ presigned_url: string }>('/upload/presign-part', {
-            s3_key,
-            upload_id,
-            part_number: partNumber,
-          })
-
-          const { etag } = await putPartWithProgress(
-            presigned_url,
-            chunk,
-            controller.signal,
-            (fraction) => {
-              const overall = ((partNumber - 1 + fraction) / totalChunks) * 95
-              updateFile(id, { progress: Math.round(overall) })
-            },
-          )
-          parts.push({ PartNumber: partNumber, ETag: etag })
-        }
+        const parts = await uploadAllParts(file, s3_key, upload_id, controller, (percent) =>
+          updateFile(id, { progress: percent }),
+        )
 
         await api.post('/upload/complete', {
           s3_key,
@@ -304,6 +442,7 @@ const storeCreator: StateCreator<UploadStore, [['zustand/persist', unknown]]> = 
           api.post('/upload/abort', { s3_key, upload_id, version_id }).catch(() => {})
         }
       } finally {
+        releaseWakeLock()
         delete abortControllers[id]
       }
     })()
@@ -338,6 +477,7 @@ const storeCreator: StateCreator<UploadStore, [['zustand/persist', unknown]]> = 
       let upload_id: string | undefined
       let s3_key: string | undefined
       let version_id: string | undefined
+      retainWakeLock()
       try {
         updateFile(id, { status: 'uploading' })
         const initRes = await api.post<VersionInitiateResponse>(
@@ -355,26 +495,9 @@ const storeCreator: StateCreator<UploadStore, [['zustand/persist', unknown]]> = 
         version_id = initRes.version_id
         updateFile(id, { uploadId: upload_id, versionId: version_id })
 
-        const totalChunks = Math.ceil(file.size / CHUNK_SIZE)
-        const parts: Array<{ PartNumber: number; ETag: string }> = []
-        for (let partNumber = 1; partNumber <= totalChunks; partNumber++) {
-          if (controller.signal.aborted) throw new DOMException('Upload cancelled', 'AbortError')
-          const start = (partNumber - 1) * CHUNK_SIZE
-          const chunk = file.slice(start, Math.min(start + CHUNK_SIZE, file.size))
-          const { presigned_url } = await api.post<{ presigned_url: string }>('/upload/presign-part', {
-            s3_key, upload_id, part_number: partNumber,
-          })
-          const { etag } = await putPartWithProgress(
-            presigned_url,
-            chunk,
-            controller.signal,
-            (fraction) => {
-              const overall = ((partNumber - 1 + fraction) / totalChunks) * 95
-              updateFile(id, { progress: Math.round(overall) })
-            },
-          )
-          parts.push({ PartNumber: partNumber, ETag: etag })
-        }
+        const parts = await uploadAllParts(file, s3_key, upload_id, controller, (percent) =>
+          updateFile(id, { progress: percent }),
+        )
 
         await api.post('/upload/complete', { s3_key, upload_id, asset_id: assetId, version_id, parts })
         const isMedia = file.type.startsWith('video/') || file.type.startsWith('audio/') || file.type.startsWith('image/')
@@ -389,6 +512,7 @@ const storeCreator: StateCreator<UploadStore, [['zustand/persist', unknown]]> = 
           api.post('/upload/abort', { s3_key, upload_id, version_id }).catch(() => {})
         }
       } finally {
+        releaseWakeLock()
         delete abortControllers[id]
       }
     })()

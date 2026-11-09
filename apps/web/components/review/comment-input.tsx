@@ -22,11 +22,12 @@ import {
   Film,
   Check,
 } from "lucide-react";
-import { cn, formatTime, formatTimecode, formatFrames } from "@/lib/utils";
-import { formatRange, formatSpan } from "@/lib/cuts";
-import { useReviewStore } from "@/stores/review-store";
+import { cn, isSendEnter } from "@/lib/utils";
+import { Timecode, TimecodeRange } from "@/components/shared/timecode";
+import { useReviewStore, useFormatPosition } from "@/stores/review-store";
 import { useReview } from "./review-provider";
 import { useDrawing } from "@/hooks/use-drawing";
+import { useAutoGrow } from "@/hooks/use-auto-grow";
 import { api } from "@/lib/api";
 import type { User } from "@/types";
 
@@ -177,7 +178,7 @@ function MentionDropdown({
             onSelect(user);
           }}
         >
-          <div className="h-6 w-6 rounded-full bg-accent flex items-center justify-center text-[10px] text-text-primary font-semibold shrink-0">
+          <div className="h-6 w-6 rounded-full bg-bg-hover flex items-center justify-center text-[10px] text-text-primary font-semibold shrink-0">
             {user.name.charAt(0).toUpperCase()}
           </div>
           <div className="flex-1 text-left min-w-0">
@@ -235,7 +236,6 @@ export function CommentInput({
     playheadTime,
     rangeStart,
     rangeEnd,
-    timeFormat,
     pendingAnnotation,
     toggleDrawingMode,
     setIsDrawingMode,
@@ -248,6 +248,7 @@ export function CommentInput({
   } = useReviewStore();
 
   const { pauseVideo } = useReview();
+  const formatPosition = useFormatPosition();
 
   const { clear, undo, getJSON } = useDrawing();
 
@@ -271,6 +272,7 @@ export function CommentInput({
   const [mentionQuery, setMentionQuery] = React.useState<string | null>(null);
   const [mentionStart, setMentionStart] = React.useState<number>(0);
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+  useAutoGrow(textareaRef, body);
 
   // Pending image attachments (guests can't upload — the endpoint needs auth)
   const canAttach = !visibilityLocked;
@@ -377,18 +379,7 @@ export function CommentInput({
     return Math.floor((sent / total) * 100);
   })();
 
-  function displayTime(seconds: number): string {
-    switch (timeFormat) {
-      case "frames":
-        return formatFrames(seconds);
-      case "standard":
-        return formatTime(seconds);
-      case "timecode":
-        return formatTimecode(seconds);
-      default:
-        return formatTimecode(seconds);
-    }
-  }
+
   const hasAnnotation =
     !!(annotationData && Object.keys(annotationData).length > 0) ||
     !!(pendingAnnotation && (pendingAnnotation as any)?.objects?.length > 0);
@@ -432,7 +423,7 @@ export function CommentInput({
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Escape") setMentionQuery(null);
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (isSendEnter(e)) {
       e.preventDefault();
       handleSubmit();
     }
@@ -564,13 +555,14 @@ export function CommentInput({
   return (
     <div
       className={cn(
-        "border-t border-border bg-bg-secondary shrink-0",
+        // Focus lights the tray's top edge instead of drawing another box
+        "border-t border-border bg-bg-secondary shrink-0 transition-colors duration-100 focus-within:border-border-focus",
         className,
       )}
     >
       {/* Reply indicator */}
       {replyToId && (
-        <div className="flex items-center justify-between px-4 py-2 bg-accent/5 border-b border-accent/10 text-xs text-accent">
+        <div className="flex items-center justify-between px-4 py-2 border-b border-border text-xs text-text-secondary">
           <span>Replying to comment</span>
           <button
             className="text-text-tertiary hover:text-text-primary"
@@ -581,8 +573,8 @@ export function CommentInput({
         </div>
       )}
 
-      {/* Input area */}
-      <div className="px-4 pt-3 pb-2">
+      {/* Input area: the text sits right on the tray, no box inside a box */}
+      <div className="px-4 pt-2.5 pb-1">
         <div
           className="relative"
           onDragOver={(e) => {
@@ -602,19 +594,17 @@ export function CommentInput({
         >
           <div
             className={cn(
-              "flex items-start gap-0 rounded-lg border border-border bg-bg-tertiary focus-within:border-accent/50 focus-within:ring-1 focus-within:ring-accent/20",
-              dragOver && "border-dashed border-accent bg-accent-muted",
+              "flex flex-col rounded-sm",
+              dragOver && "outline-dashed outline-1 outline-text-secondary bg-bg-hover",
             )}
           >
-            {/* Inline timecode badge — show when timecode attached (normal mode) or in drawing mode */}
+            {/* Timecode badge sits above the text so the text gets the full width */}
             {hasTimecode && (timecodeAttached || isDrawingMode) && (
               <span
                 className={cn(
-                  "shrink-0 ml-2.5 mt-2.5 flex items-center gap-1 whitespace-nowrap rounded border px-1.5 py-0 font-mono text-[11px] leading-[19.5px] select-none",
-                  // Red only when a range is actively marked; quiet mono at rest
-                  rangeStart !== null || rangeEnd !== null
-                    ? "bg-accent-muted border-accent-line text-accent"
-                    : "bg-bg-secondary border-border text-text-secondary",
+                  "self-start flex items-center gap-1.5 whitespace-nowrap font-mono text-[12px] tabular-nums leading-5 select-none",
+                  // Red only while a range is marked (that's a cut); plain mono at rest
+                  rangeStart !== null || rangeEnd !== null ? "text-accent" : "text-text-secondary",
                 )}
               >
                 {rangeStart !== null || rangeEnd !== null ? (
@@ -622,11 +612,11 @@ export function CommentInput({
                   <>
                     {isCut && <Scissors className="h-3 w-3" aria-label="Cut" />}
                     {markedRange
-                      ? formatRange(markedRange.start, markedRange.end)
-                      : formatTime(rangeStart ?? rangeEnd ?? playheadTime)}
+                      ? <TimecodeRange start={formatPosition(markedRange.start)} end={formatPosition(markedRange.end)} />
+                      : <Timecode value={formatPosition(rangeStart ?? rangeEnd ?? playheadTime)} />}
                     <button
                       onClick={() => clearRange()}
-                      className="ml-0.5 text-accent/60 hover:text-accent transition-colors"
+                      className="ml-0.5 text-accent/60 hover:text-accent transition-colors relative after:absolute after:-inset-2.5 after:content-['']"
                       title="Clear range"
                     >
                       <X className="h-3 w-3" />
@@ -634,10 +624,16 @@ export function CommentInput({
                   </>
                 ) : (
                   <>
-                    {displayTime(playheadTime)}
+                    {/* Before playback a note is about the whole video; it only
+                        gets a time once the playhead has moved (see attachTime) */}
+                    {playheadTime > 0 ? (
+                      <Timecode value={formatPosition(playheadTime)} />
+                    ) : (
+                      <span className="font-sans">Whole video</span>
+                    )}
                     <button
                       onClick={() => setRangeStart(playheadTime)}
-                      className="ml-0.5 text-text-tertiary hover:text-text-primary transition-colors"
+                      className="ml-0.5 text-text-tertiary hover:text-text-primary transition-colors relative after:absolute after:-inset-2.5 after:content-['']"
                       title="Set range start (I)"
                     >
                       <Plus className="h-3 w-3" />
@@ -648,13 +644,18 @@ export function CommentInput({
             )}
             <textarea
               ref={textareaRef}
-              className="flex-1 resize-none bg-transparent px-2.5 py-2.5 text-[13px] text-text-primary placeholder:text-text-tertiary focus:outline-none min-h-[38px] max-h-[120px]"
+              // Grows with the text, then scrolls; 16px on phones so iOS doesn't zoom
+              className="block w-full resize-none overflow-y-auto bg-transparent px-0 py-1.5 text-[16px] leading-normal text-text-primary placeholder:text-text-tertiary focus:outline-none max-h-[35vh] md:max-h-[45vh] md:text-[14px]"
               placeholder={
                 replyToId
-                  ? "Write a reply..."
+                  ? "Reply…"
                   : isCut
                     ? "Why cut this? (optional)"
-                    : "Leave your comment..."
+                    : hasTimecode && timecodeAttached && (playheadTime > 0 || rangeActive)
+                      ? "Note at this frame"
+                      : hasTimecode
+                        ? "Note on the whole video"
+                        : "Leave a note"
               }
               value={body}
               onChange={handleTextChange}
@@ -674,14 +675,14 @@ export function CommentInput({
           </div>
 
           {dragOver && (
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-lg bg-bg-secondary/85 text-[13px] text-text-primary">
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-md bg-bg-secondary/85 text-[13px] text-text-primary">
               Drop to attach
             </div>
           )}
 
           {/* Mention dropdown */}
           {mentionQuery !== null && (
-            <div className="absolute bottom-full left-0 right-0 mb-1 z-50 rounded-lg border border-border bg-bg-elevated shadow-xl max-h-48 overflow-y-auto animate-ff-rise-in">
+            <div className="absolute bottom-full left-0 right-0 mb-1 z-50 rounded-md border border-border-strong bg-bg-elevated shadow-xl max-h-48 overflow-y-auto animate-ff-rise-in">
               <MentionDropdown
                 query={mentionQuery}
                 projectId={projectId}
@@ -709,7 +710,7 @@ export function CommentInput({
                       {Math.floor(uploadProgress[i] * 100)}%
                     </div>
                     <div className="absolute inset-x-0 bottom-0 h-[3px] bg-white/15">
-                      <div className="h-full bg-accent" style={{ width: `${uploadProgress[i] * 100}%` }} />
+                      <div className="h-full bg-text-primary" style={{ width: `${uploadProgress[i] * 100}%` }} />
                     </div>
                   </>
                 )}
@@ -723,7 +724,7 @@ export function CommentInput({
                     onClick={() =>
                       setPendingFiles((prev) => prev.filter((_, j) => j !== i))
                     }
-                    className="absolute top-0.5 right-0.5 h-4 w-4 flex items-center justify-center rounded-full bg-black/60 text-white opacity-0 group-hover/att:opacity-100 transition-opacity"
+                    className="absolute top-0.5 right-0.5 h-4 w-4 flex items-center justify-center rounded-full bg-black/60 text-white opacity-0 group-hover/att:opacity-100 pointer-coarse:opacity-100 pointer-coarse:h-6 pointer-coarse:w-6 transition-opacity"
                     title="Remove"
                   >
                     <X className="h-2.5 w-2.5" />
@@ -742,7 +743,7 @@ export function CommentInput({
           <div className="flex items-center gap-1">
             <button
               onClick={() => exitDrawingMode()}
-              className="h-7 w-7 flex items-center justify-center rounded-md text-text-tertiary hover:bg-bg-tertiary hover:text-text-primary transition-colors"
+              className="h-7 w-7 pointer-coarse:h-9 pointer-coarse:w-9 flex items-center justify-center rounded-md text-text-tertiary hover:bg-bg-tertiary hover:text-text-primary transition-colors"
               title="Exit drawing"
             >
               <ChevronLeft className="h-4 w-4" />
@@ -758,9 +759,9 @@ export function CommentInput({
                   onClick={() => setDrawingTool(tool.id as DrawingTool)}
                   title={tool.label}
                   className={cn(
-                    "h-7 w-7 flex items-center justify-center rounded-md transition-colors",
+                    "h-7 w-7 pointer-coarse:h-9 pointer-coarse:w-9 flex items-center justify-center rounded-md transition-colors",
                     drawingTool === tool.id
-                      ? "bg-accent/15 text-accent"
+                      ? "bg-bg-hover text-text-primary"
                       : "text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary",
                   )}
                 >
@@ -778,7 +779,7 @@ export function CommentInput({
                 className={cn(
                   "w-5 h-5 rounded-full transition-all shrink-0",
                   drawingColor === color
-                    ? "ring-2 ring-accent ring-offset-1 ring-offset-bg-secondary"
+                    ? "ring-2 ring-text-primary ring-offset-1 ring-offset-bg-secondary"
                     : "hover:scale-110",
                 )}
                 style={{ backgroundColor: color }}
@@ -789,14 +790,14 @@ export function CommentInput({
 
             <button
               onClick={undo}
-              className="h-7 w-7 flex items-center justify-center rounded-md text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary transition-colors"
+              className="h-7 w-7 pointer-coarse:h-9 pointer-coarse:w-9 flex items-center justify-center rounded-md text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary transition-colors"
               title="Undo"
             >
               <RotateCcw className="h-3.5 w-3.5" />
             </button>
             <button
               onClick={clear}
-              className="h-7 w-7 flex items-center justify-center rounded-md text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary transition-colors"
+              className="h-7 w-7 pointer-coarse:h-9 pointer-coarse:w-9 flex items-center justify-center rounded-md text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary transition-colors"
               title="Clear"
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -810,9 +811,9 @@ export function CommentInput({
               {hasTimecode && (
                 <button
                   className={cn(
-                    "h-7 w-7 flex items-center justify-center rounded-md transition-colors",
+                    "h-7 w-7 pointer-coarse:h-9 pointer-coarse:w-9 flex items-center justify-center rounded-md transition-colors",
                     timecodeAttached
-                      ? "text-accent bg-accent-muted"
+                      ? "text-text-primary bg-bg-hover"
                       : "text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary",
                   )}
                   onClick={() => {
@@ -831,9 +832,9 @@ export function CommentInput({
               {canAnnotate && (
                 <button
                   className={cn(
-                    "h-7 w-7 flex items-center justify-center rounded-md transition-colors",
+                    "h-7 w-7 pointer-coarse:h-9 pointer-coarse:w-9 flex items-center justify-center rounded-md transition-colors",
                     hasAnnotation
-                      ? "text-accent bg-accent/10"
+                      ? "text-text-primary bg-bg-hover"
                       : "text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary",
                   )}
                   onClick={() => toggleDrawingMode()}
@@ -846,14 +847,14 @@ export function CommentInput({
               {/* Emoji */}
               <div className="relative" ref={emojiRef}>
                 <button
-                  className="h-7 w-7 flex items-center justify-center rounded-md text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary transition-colors"
+                  className="h-7 w-7 pointer-coarse:h-9 pointer-coarse:w-9 flex items-center justify-center rounded-md text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary transition-colors"
                   title="Add emoji"
                   onClick={() => setEmojiOpen((p) => !p)}
                 >
                   <Smile className="h-4 w-4" />
                 </button>
                 {emojiOpen && (
-                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 rounded-lg border border-border bg-bg-elevated shadow-2xl p-1.5 duration-100 w-[200px] animate-ff-rise-in">
+                  <div className="absolute bottom-full left-0 mb-2 z-50 rounded-md border border-border-strong bg-bg-elevated shadow-2xl p-1.5 duration-100 w-[200px] animate-ff-rise-in">
                     <div className="grid grid-cols-8 gap-px">
                       {EMOJIS.map((e) => (
                         <button
@@ -888,7 +889,7 @@ export function CommentInput({
                     }}
                   />
                   <button
-                    className="h-7 w-7 flex items-center justify-center rounded-md text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary transition-colors"
+                    className="h-7 w-7 pointer-coarse:h-9 pointer-coarse:w-9 flex items-center justify-center rounded-md text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary transition-colors"
                     title="Attach image or video"
                     onClick={() => fileInputRef.current?.click()}
                   >
@@ -899,57 +900,49 @@ export function CommentInput({
             </div>
 
             <div className="flex items-center gap-2">
-              {/* Visibility dropdown */}
-              <div className="relative" ref={visRef}>
-                <button
-                  onClick={() => {
-                    if (!visibilityLocked) setVisDropdownOpen((p) => !p);
-                  }}
-                  disabled={visibilityLocked}
-                  className={cn(
-                    "inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md text-[12px] transition-colors border",
-                    commentVisibility === "internal"
-                      ? "text-accent border-accent-line bg-accent-muted"
-                      : "text-text-tertiary hover:bg-bg-tertiary hover:text-text-secondary border-border",
+              {/* Who sees the note: the team only, or guests on share links too.
+                  Guests can't choose, so they get no control at all. */}
+              {!visibilityLocked && (
+                <div className="relative" ref={visRef}>
+                  <button
+                    onClick={() => setVisDropdownOpen((p) => !p)}
+                    className="inline-flex items-center gap-1.5 h-7 px-2 rounded-md text-[12px] text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
+                    title="Who can see this note"
+                  >
+                    {commentVisibility === "internal" ? (
+                      <Lock className="h-3 w-3" />
+                    ) : (
+                      <Globe className="h-3 w-3" />
+                    )}
+                    {commentVisibility === "internal" ? "Team only" : "Everyone"}
+                    <ChevronDown className="h-3 w-3 text-text-tertiary" />
+                  </button>
+                  {visDropdownOpen && (
+                    <div className="absolute bottom-full right-0 mb-1 z-50 w-56 rounded-md border border-border-strong bg-bg-elevated shadow-2xl p-1 duration-100 animate-ff-rise-in">
+                      {([
+                        ["internal", Lock, "Team only", "You and your editor"],
+                        ["public", Globe, "Everyone", "Also guests on share links"],
+                      ] as const).map(([value, Icon, label, hint]) => (
+                        <button
+                          key={value}
+                          className={cn(
+                            "flex w-full items-start gap-2.5 rounded px-2 py-1.5 text-left transition-colors hover:bg-bg-hover",
+                            commentVisibility === value ? "text-text-primary" : "text-text-secondary",
+                          )}
+                          onClick={() => selectCommentVisibility(value)}
+                        >
+                          <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                          <span>
+                            <span className="block text-[13px]">{label}</span>
+                            <span className="block text-[11.5px] text-text-tertiary">{hint}</span>
+                          </span>
+                          {commentVisibility === value && <Check className="ml-auto mt-0.5 h-3.5 w-3.5 shrink-0" />}
+                        </button>
+                      ))}
+                    </div>
                   )}
-                >
-                  {commentVisibility === "internal" ? (
-                    <Lock className="h-3 w-3" />
-                  ) : (
-                    <Globe className="h-3 w-3" />
-                  )}
-                  {commentVisibility === "internal" ? "Internal" : "Public"}
-                  {!visibilityLocked && <ChevronDown className="h-3 w-3" />}
-                </button>
-                {!visibilityLocked && visDropdownOpen && (
-                  <div className="absolute bottom-full right-0 mb-1 z-50 w-44 rounded-xl border border-border bg-bg-elevated shadow-2xl py-1.5 duration-100 animate-ff-rise-in">
-                    <button
-                      className={cn(
-                        "flex w-full items-center gap-2.5 px-3 py-2 text-[13px] transition-colors",
-                        commentVisibility === "public"
-                          ? "text-text-primary bg-bg-tertiary"
-                          : "text-text-secondary hover:bg-bg-tertiary",
-                      )}
-                      onClick={() => selectCommentVisibility("public")}
-                    >
-                      <Globe className="h-3.5 w-3.5" />
-                      Public
-                    </button>
-                    <button
-                      className={cn(
-                        "flex w-full items-center gap-2.5 px-3 py-2 text-[13px] transition-colors",
-                        commentVisibility === "internal"
-                          ? "text-accent bg-bg-tertiary"
-                          : "text-text-secondary hover:bg-bg-tertiary",
-                      )}
-                      onClick={() => selectCommentVisibility("internal")}
-                    >
-                      <Lock className="h-3.5 w-3.5" />
-                      Internal
-                    </button>
-                  </div>
-                )}
-              </div>
+                </div>
+              )}
 
               {/* Submit: disabled while posting, no spinner */}
               {isCut ? (
@@ -965,7 +958,7 @@ export function CommentInput({
                   onClick={handleSubmit}
                   disabled={!canSubmit || submitting}
                   className={cn(
-                    "inline-flex h-7 min-w-7 items-center justify-center rounded-full bg-accent text-text-primary hover:bg-accent/90 disabled:opacity-30 disabled:cursor-not-allowed transition-colors",
+                    "inline-flex h-7 min-w-7 pointer-coarse:h-9 pointer-coarse:min-w-9 items-center justify-center rounded-md bg-text-primary text-text-inverse hover:opacity-90 disabled:opacity-25 disabled:cursor-not-allowed transition-opacity",
                     uploadPercent !== null && "px-1.5 disabled:opacity-100",
                   )}
                   title="Send (Enter)"

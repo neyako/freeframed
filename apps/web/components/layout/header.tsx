@@ -3,6 +3,7 @@
 import * as React from 'react'
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
+import { Wordmark } from '@/components/shared/wordmark'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { Search, Upload, Settings, LogOut, Moon, Sun } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -122,7 +123,7 @@ export function Header({ onSearchOpen }: HeaderProps) {
                 className="h-6 w-6 shrink-0 rounded-sm object-contain"
               />
             ) : (
-              <span className="font-semibold text-text-primary">freeframed</span>
+              <Wordmark />
             )}
           </Link>
 

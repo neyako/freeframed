@@ -5,10 +5,12 @@ import { MobileNav } from '../mobile-nav'
 
 const mocks = vi.hoisted(() => ({
   togglePanel: vi.fn(),
+  push: vi.fn(),
 }))
 
 vi.mock('next/navigation', () => ({
   usePathname: () => '/projects',
+  useRouter: () => ({ push: mocks.push }),
 }))
 
 vi.mock('@/stores/upload-store', () => ({
@@ -25,6 +27,7 @@ describe('MobileNav', () => {
   it('renders the bottom navigation tabs', () => {
     render(<MobileNav onSearchOpen={vi.fn()} />)
 
+    expect(screen.getByText('Review')).toBeInTheDocument()
     expect(screen.getByText('Projects')).toBeInTheDocument()
     expect(screen.getByText('Search')).toBeInTheDocument()
     expect(screen.getByText('Uploads')).toBeInTheDocument()

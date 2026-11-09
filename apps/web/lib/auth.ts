@@ -24,16 +24,18 @@ export function setTokens(access: string, refresh: string): void {
   clearLegacyTokens()
 }
 
-export function clearTokens(): void {
+export function clearTokens({ returnHere = false }: { returnHere?: boolean } = {}): void {
   if (typeof window === 'undefined') return
   clearLegacyTokens()
+  // An expired session comes back to the same page after signing in again
+  const from = returnHere ? window.location.pathname + window.location.search : ''
   fetch(`${API_URL}/auth/logout`, {
     method: 'POST',
     credentials: 'include',
     keepalive: true,
   }).finally(() => {
     if (window.location.pathname !== '/login') {
-      window.location.href = '/login'
+      window.location.href = from && from !== '/' ? `/login?from=${encodeURIComponent(from)}` : '/login'
     }
   })
 }
@@ -60,10 +62,16 @@ async function _doRefresh(): Promise<string | null> {
       credentials: 'include',
     })
 
-    if (!response.ok) {
-      clearTokens()
+    // Only a refusal ends the session: 401/403 is the server saying this
+    // refresh token is no longer valid. A 502 from a proxy mid-restart, a 500
+    // or a rate limit is the server being briefly unavailable, and signing
+    // the user out for it loses whatever they had open. A refused refresh
+    // comes back to the same page after signing in again.
+    if (response.status === 401 || response.status === 403) {
+      clearTokens({ returnHere: true })
       return null
     }
+    if (!response.ok) return null
 
     const data = await response.json()
     const newAccessToken: string = data.access_token
@@ -71,7 +79,10 @@ async function _doRefresh(): Promise<string | null> {
     clearLegacyTokens()
     return newAccessToken
   } catch {
-    clearTokens()
+    // fetch rejects only on a transport failure (no network, DNS, a dropped
+    // connection). clearTokens() would sign out and navigate to /login for
+    // going through a tunnel. Callers treat null as "could not refresh" and let
+    // the original request fail, so the session survives until the network is back.
     return null
   }
 }

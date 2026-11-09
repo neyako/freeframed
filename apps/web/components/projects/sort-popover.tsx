@@ -53,7 +53,7 @@ export function SortPopover() {
               </span>
               {opt.label}
               {sortKey === opt.value && (
-                <span className="ml-auto font-mono text-[11px] text-text-tertiary">
+                <span className="ml-auto tabular-nums text-[11px] text-text-tertiary">
                   {sortDirection === 'asc' ? 'A-Z' : 'Z-A'}
                 </span>
               )}

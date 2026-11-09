@@ -47,6 +47,15 @@ def test_picks_video_stream_and_detects_audio():
     assert has_audio_stream({"streams": data["streams"][1:]}) is False
 
 
+def test_attached_cover_art_is_not_the_video_stream():
+    cover = {"codec_type": "video", "width": 600, "height": 600, "disposition": {"attached_pic": 1}}
+    video = {"codec_type": "video", "width": 1920, "height": 1080, "r_frame_rate": "30/1", "disposition": {"attached_pic": 0}}
+    data = {"streams": [cover, {"codec_type": "audio"}, video]}
+    assert (parse_probe_metadata(data).width, parse_probe_metadata(data).height) == (1920, 1080)
+    # a file whose only "video" stream is cover art has no video at all
+    assert parse_probe_metadata({"streams": [cover, {"codec_type": "audio"}]}) is None
+
+
 def test_rotated_phone_footage_reports_display_size():
     meta = parse_probe_metadata({"streams": [{
         "codec_type": "video", "width": 1920, "height": 1080,

@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 import os
 import uuid
@@ -9,11 +10,12 @@ from ..middleware.auth import get_current_user
 from ..models.user import User
 from ..models.asset import Asset, AssetVersion, MediaFile, AssetType, FileType, ProcessingStatus
 from ..models.project import ProjectRole
+from ..models.comment import Comment
 from ..schemas.asset import AssetResponse, AssetVersionResponse, AssetUpdate, StreamUrlResponse, MediaFileResponse
 from ..services.permissions import require_project_role, require_asset_access
 from ..services.s3_service import generate_presigned_get_url, build_download_filename
 from .hls_proxy import create_hls_token
-from ..schemas.upload import InitiateUploadRequest, InitiateUploadResponse, ALLOWED_MIME_TYPES, MAX_FILE_SIZE_BYTES, mime_to_asset_type
+from ..schemas.upload import InitiateUploadRequest, InitiateUploadResponse, ALLOWED_MIME_TYPES, upload_size_error, mime_to_asset_type
 from ..services.s3_service import create_multipart_upload
 
 router = APIRouter(tags=["assets"])
@@ -53,6 +55,20 @@ def _build_asset_responses_bulk(assets: list[Asset], db: Session) -> list[AssetR
     for f in all_files:
         files_by_version.setdefault(f.version_id, []).append(f)
 
+    # Open notes on the version people are looking at: top-level, unresolved
+    latest_ids = [v.id for v in latest_by_asset.values()]
+    open_counts: dict = dict(
+        db.query(Comment.version_id, func.count(Comment.id))
+        .filter(
+            Comment.version_id.in_(latest_ids),
+            Comment.parent_id.is_(None),
+            Comment.resolved.is_(False),
+            Comment.deleted_at.is_(None),
+        )
+        .group_by(Comment.version_id)
+        .all()
+    ) if latest_ids else {}
+
     result = []
     for asset in assets:
         version_response = None
@@ -70,6 +86,7 @@ def _build_asset_responses_bulk(assets: list[Asset], db: Session) -> list[AssetR
         asset_resp = AssetResponse.model_validate(asset)
         asset_resp.latest_version = version_response
         asset_resp.thumbnail_url = thumbnail_url
+        asset_resp.open_comment_count = int(open_counts.get(latest.id, 0)) if latest else 0
         result.append(asset_resp)
     return result
 
@@ -79,6 +96,7 @@ def list_assets(
     project_id: uuid.UUID,
     include_failed: bool = Query(False, description="Include assets whose latest version failed processing"),
     folder_id: Optional[str] = Query(None, description="Filter by folder. 'root' for root level, UUID for specific folder."),
+    limit: Optional[int] = Query(None, ge=1, le=100, description="Only the newest N assets (project tile previews)"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -119,6 +137,10 @@ def list_assets(
                 ).distinct().all()
             )
             assets = [a for a in assets if a.id in usable or a.id not in has_any_version]
+
+    if limit is not None:
+        # Newest first, and only those get presigned thumbnails built
+        assets = sorted(assets, key=lambda a: a.created_at, reverse=True)[:limit]
 
     return _build_asset_responses_bulk(assets, db)
 
@@ -291,8 +313,9 @@ def start_version_upload(
 
     if body.mime_type not in ALLOWED_MIME_TYPES:
         raise HTTPException(status_code=400, detail="Unsupported file type")
-    if body.file_size_bytes > MAX_FILE_SIZE_BYTES:
-        raise HTTPException(status_code=400, detail="File exceeds 10GB limit")
+    size_error = upload_size_error(body.file_size_bytes)
+    if size_error:
+        raise HTTPException(status_code=400, detail=size_error)
     if mime_to_asset_type(body.mime_type) != asset.asset_type:
         raise HTTPException(status_code=400, detail=f"New version must be a {asset.asset_type.value} file")
 

@@ -21,7 +21,7 @@ describe('ProgressBar', () => {
     )
     const track = container.querySelector('.touch-none')!.firstElementChild as HTMLDivElement
     track.getBoundingClientRect = () => ({ left: 0, width: 200 }) as DOMRect
-    const marker = container.querySelector('.w-5.h-5') as HTMLDivElement
+    const marker = container.querySelector('[data-comment-marker]') as HTMLDivElement
 
     fireEvent.pointerDown(marker, { pointerId: 1, pointerType: 'touch', button: 0, clientX: 20 })
     fireEvent.pointerMove(marker, { pointerId: 1, pointerType: 'touch', clientX: 100 })

@@ -63,4 +63,23 @@ describe('Review store', () => {
     expect(state.drawingColor).toBe('#FF3B30')
     expect(state.brushSize).toBe(4)
   })
+
+  it('a poll of the same asset keeps the playhead and range; a new asset resets them', () => {
+    const store = useReviewStore.getState
+    const asset = { id: 'a1' } as any
+    store().setCurrentAsset(asset)
+    store().setPlayheadTime(42)
+    store().setRangeStart(40)
+    store().toggleDrawingMode()
+
+    store().setCurrentAsset({ ...asset })
+    expect(store().playheadTime).toBe(42)
+    expect(store().rangeStart).toBe(40)
+    expect(store().isDrawingMode).toBe(true)
+
+    store().setCurrentAsset({ id: 'a2' } as any)
+    expect(store().playheadTime).toBe(0)
+    expect(store().rangeStart).toBeNull()
+    expect(store().isDrawingMode).toBe(false)
+  })
 })

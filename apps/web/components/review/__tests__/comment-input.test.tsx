@@ -172,8 +172,8 @@ describe("CommentInput range comments", () => {
     localStorage.setItem("ff-comment-visibility", "public");
     const onSubmit = setup();
 
-    fireEvent.click(await screen.findByRole("button", { name: /Public/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Internal" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Everyone/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Team only/ }));
 
     expect(localStorage.getItem("ff-comment-visibility")).toBe("internal");
     await typeAndSend("team note");
@@ -189,7 +189,10 @@ describe("CommentInput range comments", () => {
     act(() => {
       useReviewStore.setState({ rangeStart: 6.8, rangeEnd: 9 });
     });
-    expect(screen.getByText("0:06.8 → 0:09.0")).toBeTruthy();
+    // The chip reads the player clock (SMPTE timecode by default)
+    expect(
+      screen.getAllByText((_, el) => /^00:00:06:\d\d–00:00:09:00$/.test(el?.textContent ?? "")).length,
+    ).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: "Add cut" }));
     await waitFor(() =>
       expect(onSubmit).toHaveBeenCalledWith(

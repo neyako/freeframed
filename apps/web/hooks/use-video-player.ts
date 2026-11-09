@@ -3,6 +3,7 @@
 import Hls, { type Level } from 'hls.js'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useReviewStore } from '@/stores/review-store'
+import { hlsStartConfig, saveBandwidth } from '@/lib/hls-bandwidth'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -34,7 +35,10 @@ export interface VideoPlayerState {
   isMuted: boolean
   playbackRate: number
   qualityLevels: QualityLevel[]
+  /** The rendition playing now (-1 until hls.js reports one). */
   currentQuality: number
+  /** What the viewer picked: -1 is Auto, which stays Auto while hls.js switches. */
+  selectedQuality: number
   isLoading: boolean
   isFullscreen: boolean
   error: string | null
@@ -70,9 +74,12 @@ export function useVideoPlayer(src: string | null): UseVideoPlayerReturn {
   const [isMuted, setIsMuted] = useState(false)
   const [playbackRate, setPlaybackRateState] = useState(1)
   const [qualityLevels, setQualityLevels] = useState<QualityLevel[]>([])
-  const [currentQuality, setCurrentQuality] = useState(-1) // -1 = auto
+  const [currentQuality, setCurrentQuality] = useState(-1) // -1 = no rung reported yet
+  const [selectedQuality, setSelectedQuality] = useState(-1) // -1 = auto
   const [isLoading, setIsLoading] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
+  // True while the CSS fill stands in for fullscreen (iPhone)
+  const pseudoFullscreenRef = useRef(false)
   const [error, setError] = useState<string | null>(null)
 
   // Sync playhead to store at ~4fps to avoid excessive re-renders
@@ -123,13 +130,19 @@ export function useVideoPlayer(src: string | null): UseVideoPlayerReturn {
     }
   }, [seekTarget])
 
-  // Fullscreen change listener
+  // Fullscreen state. Element fullscreen reports through the document, standard
+  // or Safari-prefixed (iPadOS, desktop). An iPhone uses a CSS fill (see
+  // toggleFullscreen); the native-player events below still cover a user who
+  // opens Safari's own player.
   useEffect(() => {
-    const handleFsChange = () => {
-      setIsFullscreen(!!document.fullscreenElement)
+    const doc = document as Document & { webkitFullscreenElement?: Element | null }
+    const readDoc = () => setIsFullscreen(!!(document.fullscreenElement || doc.webkitFullscreenElement))
+    document.addEventListener('fullscreenchange', readDoc)
+    document.addEventListener('webkitfullscreenchange', readDoc)
+    return () => {
+      document.removeEventListener('fullscreenchange', readDoc)
+      document.removeEventListener('webkitfullscreenchange', readDoc)
     }
-    document.addEventListener('fullscreenchange', handleFsChange)
-    return () => document.removeEventListener('fullscreenchange', handleFsChange)
   }, [])
 
   // HLS + video element setup
@@ -174,7 +187,11 @@ export function useVideoPlayer(src: string | null): UseVideoPlayerReturn {
         setBuffered(video.buffered.end(video.buffered.length - 1))
       }
     }
+    const onEnterNativeFullscreen = () => setIsFullscreen(true)
+    const onLeaveNativeFullscreen = () => setIsFullscreen(false)
 
+    video.addEventListener('webkitbeginfullscreen', onEnterNativeFullscreen)
+    video.addEventListener('webkitendfullscreen', onLeaveNativeFullscreen)
     video.addEventListener('loadedmetadata', onLoadedMetadata)
     video.addEventListener('timeupdate', onTimeUpdate)
     video.addEventListener('play', onPlay)
@@ -193,6 +210,7 @@ export function useVideoPlayer(src: string | null): UseVideoPlayerReturn {
         enableWorker: true,
         lowLatencyMode: false,
         preferManagedMediaSource: false,
+        ...hlsStartConfig(),
       })
       hlsRef.current = hls
       hls.loadSource(src)
@@ -209,7 +227,8 @@ export function useVideoPlayer(src: string | null): UseVideoPlayerReturn {
             : `${Math.round(level.bitrate / 1000)}kbps`,
         }))
         setQualityLevels(levels)
-        setCurrentQuality(-1) // start on auto
+        setCurrentQuality(-1) // wait for the first active rung
+        setSelectedQuality(-1) // every new manifest starts on auto
         setIsLoading(false)
       })
 
@@ -223,6 +242,14 @@ export function useVideoPlayer(src: string | null): UseVideoPlayerReturn {
       hls.on(Hls.Events.LEVEL_SWITCHED, (_event, data) => {
         setCurrentQuality(data.level)
       })
+
+      // Remember the measured bandwidth so the next video starts on the right
+      // rung. hls.js samples on the same fragment in a listener registered
+      // before this one, so the estimate already includes it.
+      hls.on(Hls.Events.FRAG_BUFFERED, (_event, { frag }) => {
+        if (frag.type !== 'main' || frag.sn === 'initSegment' || frag.stats.aborted) return
+        saveBandwidth(hls.bandwidthEstimate)
+      })
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
       // Safari native HLS
       video.src = src
@@ -232,6 +259,8 @@ export function useVideoPlayer(src: string | null): UseVideoPlayerReturn {
     }
 
     return () => {
+      video.removeEventListener('webkitbeginfullscreen', onEnterNativeFullscreen)
+      video.removeEventListener('webkitendfullscreen', onLeaveNativeFullscreen)
       video.removeEventListener('loadedmetadata', onLoadedMetadata)
       video.removeEventListener('timeupdate', onTimeUpdate)
       video.removeEventListener('play', onPlay)
@@ -299,7 +328,7 @@ export function useVideoPlayer(src: string | null): UseVideoPlayerReturn {
     const hls = hlsRef.current
     if (!hls) return
     hls.currentLevel = levelIndex // -1 = auto
-    setCurrentQuality(levelIndex)
+    setSelectedQuality(levelIndex)
   }, [])
 
   const setVolume = useCallback((vol: number) => {
@@ -316,11 +345,41 @@ export function useVideoPlayer(src: string | null): UseVideoPlayerReturn {
     video.muted = !video.muted
   }, [])
 
+  // An iPhone has no element fullscreen: Element.requestFullscreen is undefined
+  // there, so this used to throw "not a function" and the button did nothing.
+  // Safari on iPadOS and desktop has the prefixed element API; an iPhone gets a
+  // CSS fill instead. Try them in that order.
   const toggleFullscreen = useCallback((containerEl: HTMLElement) => {
-    if (!document.fullscreenElement) {
-      containerEl.requestFullscreen().catch(() => {})
-    } else {
-      document.exitFullscreen().catch(() => {})
+    const doc = document as Document & {
+      webkitFullscreenElement?: Element | null
+      webkitExitFullscreen?: () => Promise<void> | void
+    }
+    const el = containerEl as HTMLElement & { webkitRequestFullscreen?: () => Promise<void> | void }
+
+    if (pseudoFullscreenRef.current) {
+      pseudoFullscreenRef.current = false
+      setIsFullscreen(false)
+      return
+    }
+    const active = !!(document.fullscreenElement || doc.webkitFullscreenElement)
+    if (!active) {
+      if (typeof el.requestFullscreen === 'function') {
+        void Promise.resolve(el.requestFullscreen()).catch(() => {})
+      } else if (typeof el.webkitRequestFullscreen === 'function') {
+        void Promise.resolve(el.webkitRequestFullscreen()).catch(() => {})
+      } else {
+        // iPhone: fill the viewport with CSS (the container goes fixed
+        // inset-0) rather than the native video player, which would hide our
+        // controls, comment markers and annotations
+        pseudoFullscreenRef.current = true
+        setIsFullscreen(true)
+      }
+      return
+    }
+    if (typeof document.exitFullscreen === 'function') {
+      void Promise.resolve(document.exitFullscreen()).catch(() => {})
+    } else if (typeof doc.webkitExitFullscreen === 'function') {
+      void Promise.resolve(doc.webkitExitFullscreen()).catch(() => {})
     }
   }, [])
 
@@ -337,6 +396,7 @@ export function useVideoPlayer(src: string | null): UseVideoPlayerReturn {
     playbackRate,
     qualityLevels,
     currentQuality,
+    selectedQuality,
     isLoading,
     isFullscreen,
     error,

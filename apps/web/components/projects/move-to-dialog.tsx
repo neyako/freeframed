@@ -17,7 +17,7 @@ interface MoveToDialogProps {
   currentFolderId: string | null
   /** IDs of items being moved — disable moving into themselves */
   movingFolderIds?: string[]
-  onMove: (targetFolderId: string | null) => void
+  onMove: (targetFolderId: string | null) => void | Promise<void>
 }
 
 /** Flatten tree to find a node by id */

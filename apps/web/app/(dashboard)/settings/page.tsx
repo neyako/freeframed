@@ -12,7 +12,7 @@ export default function SettingsPage() {
 
   return (
     <div className="mx-auto w-full max-w-[720px] space-y-8 px-5 py-8 text-[13px] text-text-primary">
-      <h1 className="text-lg font-semibold">Settings</h1>
+      <h1 className="text-display text-text-primary">Settings</h1>
       {isOwner && <WorkspaceNameSection />}
       {isOwner && <PeopleSection />}
       {isOwner && <AgentsSection />}

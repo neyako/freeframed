@@ -6,10 +6,10 @@ import Link from "next/link";
 import { Film, LayoutGrid, Trash2 } from "lucide-react";
 import { api } from "@/lib/api";
 import { mediaAspect } from "@/lib/aspect";
-import { useAuthStore } from "@/stores/auth-store";
 import { useHomeModeStore } from "@/stores/home-mode-store";
 import { useRouter } from "next/navigation";
-import { formatRelativeTime } from "@/lib/utils";
+import { formatAgo } from "@/lib/utils";
+import { MediaBadges } from "@/components/projects/asset-card";
 import { QuickShare } from "@/components/dashboard/quick-share";
 import { StorageMeter } from "@/components/dashboard/storage-meter";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -17,12 +17,6 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import type { AssetResponse } from "@/types";
 
-function getGreeting(): string {
-  const hour = new Date().getHours();
-  if (hour < 12) return "Good morning";
-  if (hour < 17) return "Good afternoon";
-  return "Good evening";
-}
 
 // Time/locale-derived text must not be server-rendered: the container renders
 // in UTC while the client hydrates in the viewer's timezone, and any mismatch
@@ -71,10 +65,10 @@ function AssetCard({ asset, onDelete }: AssetCardProps) {
   const aspect = mediaAspect(asset);
   return (
     // Justified row item: as wide as the media's shape needs at ROW_HEIGHT
-    <div className="group relative min-w-0" style={{ flexGrow: aspect, flexBasis: aspect * ROW_HEIGHT }}>
+    <div className="group relative min-w-0 max-sm:!grow-0 max-sm:!basis-[calc(50%-6px)]" style={{ flexGrow: aspect, flexBasis: Math.max(aspect * ROW_HEIGHT, 160) }}>
       <Link href={`/projects/${asset.project_id}/assets/${asset.id}`} className="block">
         <div
-          className="flex w-full items-center justify-center overflow-hidden rounded-sm border border-border bg-bg-tertiary text-text-tertiary transition-colors duration-100 group-hover:border-border-strong"
+          className="relative flex w-full items-center justify-center overflow-hidden rounded-sm border border-border bg-bg-tertiary text-text-tertiary transition-colors duration-100 group-hover:border-border-strong max-sm:![aspect-ratio:4/5]"
           style={{ aspectRatio: aspect }}
         >
           {asset.thumbnail_url && !imgError ? (
@@ -89,16 +83,17 @@ function AssetCard({ asset, onDelete }: AssetCardProps) {
           ) : (
             <Film className="h-[15px] w-[15px]" />
           )}
+          <MediaBadges asset={asset} />
         </div>
-        <p className="mt-1.5 truncate text-[12.5px] text-text-primary">{asset.name}</p>
-        <p className="text-[11.5px] text-text-tertiary">
-          {mounted ? formatRelativeTime(asset.updated_at) : "\u00a0"}
+        <p className="mt-1.5 truncate text-[13.5px] text-text-primary">{asset.name}</p>
+        <p className="tabular-nums text-[11.5px] tabular-nums text-text-tertiary">
+          {mounted ? [asset.latest_version && asset.latest_version.version_number > 1 ? `v${asset.latest_version.version_number}` : null, asset.open_comment_count ? `${asset.open_comment_count} open` : null, formatAgo(asset.updated_at)].filter(Boolean).join(" · ") : "\u00a0"}
         </p>
       </Link>
       <button
         type="button"
         onClick={handleDeleteClick}
-        className="pointer-events-none absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-md bg-black/70 text-text-secondary opacity-0 transition-colors duration-100 hover:text-accent group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-text-primary/60 pointer-coarse:pointer-events-auto pointer-coarse:opacity-100"
+        className="pointer-events-none absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-md bg-black/70 text-text-secondary opacity-0 transition-colors duration-100 hover:text-accent group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-text-primary/60"
         aria-label={`Delete ${asset.name}`}
         title={`Delete ${asset.name}`}
       >
@@ -121,7 +116,7 @@ function AssetCard({ asset, onDelete }: AssetCardProps) {
   );
 }
 
-const ROW_HEIGHT = 240;
+const ROW_HEIGHT = 200;
 const PAGE_SIZE = 40;
 
 // Each page peeks one item past PAGE_SIZE: if it comes back, there is more.
@@ -158,7 +153,7 @@ function Section({
       <h2 className="flex items-baseline gap-2 text-[13px] font-medium text-text-primary">
         {title}
         {assets && assets.length > 0 && (
-          <span className="font-mono text-[12px] font-normal text-text-tertiary">
+          <span className="tabular-nums text-[12px] font-normal text-text-tertiary">
             {assets.length}
             {hasMore && "+"}
           </span>
@@ -190,7 +185,6 @@ function Section({
 
 export default function HomePage() {
   const mounted = useMounted();
-  const { user } = useAuthStore();
   const router = useRouter();
   const homeMode = useHomeModeStore((s) => s.mode);
   const setHomeMode = useHomeModeStore((s) => s.setMode);
@@ -227,19 +221,17 @@ export default function HomePage() {
   return (
     <div className="mx-auto w-full max-w-[1200px] space-y-8 px-4 pb-16 pt-6 sm:px-6">
       <div className="flex items-center justify-between gap-6">
-        <h1 className="text-[18px] font-semibold text-text-primary">
-          {mounted ? getGreeting() : "Welcome"}, {user?.name?.split(" ")[0] ?? "there"}
-        </h1>
+        <h1 className="text-display text-text-primary">Review</h1>
         <div className="hidden shrink-0 items-center gap-4 sm:flex">
           <Button
             type="button"
             variant="ghost"
             size="sm"
             onClick={() => setHomeMode("projects")}
-            title="Use the projects grid as your home screen"
+            title="Make the projects grid your home screen"
           >
             <LayoutGrid />
-            Projects home
+            Projects
           </Button>
           <StorageMeter className="w-48" />
         </div>
@@ -248,7 +240,7 @@ export default function HomePage() {
       <QuickShare />
 
       <Section
-        title="Recent"
+        title="Awaiting approval"
         assets={recentAssets}
         isLoading={loadingRecent}
         emptyTitle="No assets yet."

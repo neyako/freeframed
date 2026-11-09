@@ -29,6 +29,11 @@ celery_app.conf.update(
     broker_connection_retry=True,
     broker_connection_max_retries=5,
     broker_pool_limit=0,  # Disable connection pooling in web process to avoid stale connections
+    # Bound every broker socket call. Without this a Redis that accepts the
+    # connection but never answers (paused, network blackhole) hangs a publish
+    # forever and pins one of the four dispatch threads below. A publish is one
+    # LPUSH and a worker's BRPOP waits 1 s, so 5 s never fires on a live Redis.
+    broker_transport_options={"socket_timeout": 5, "socket_connect_timeout": 5},
     # Define queues
     task_queues=(
         Queue("default"),
@@ -72,20 +77,36 @@ celery_app.conf.beat_schedule = {
 }
 
 
-import threading
 import logging
+from concurrent.futures import ThreadPoolExecutor
 
 _task_logger = logging.getLogger("celery.dispatch")
 
+# Dispatches go through a small shared pool instead of one daemon thread per
+# call. With broker_pool_limit=0 every thread also opened its own broker
+# connection, so a burst had no bound on threads or connections, and daemon
+# threads are killed at interpreter exit, so a dispatch that had not reached the
+# broker when the API worker stopped or restarted (a deploy right after an
+# upload completes) was lost without a log line. concurrent.futures joins its
+# workers at exit, so a queued or in-flight dispatch is sent instead. The queue is
+# unbounded on purpose: a caller on the request path must never wait for a slot.
+_dispatch_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="celery-dispatch")
+
 
 def _dispatch_task(task, args, kwargs):
-    """Actually send the task to Celery broker (runs in background thread)."""
+    """Actually send the task to Celery broker (runs on the dispatch pool).
+
+    ignore_result: the caller discards the AsyncResult, so nothing can read the
+    result. Without it Celery first subscribes to the result backend in case the
+    caller waits, and on an unresponsive Redis that call retries for minutes
+    before the publish is even attempted.
+    """
     try:
-        task.delay(*args, **kwargs)
+        task.apply_async(args=args, kwargs=kwargs, ignore_result=True)
     except (OperationalError, ConnectionError, OSError):
         try:
             with celery_app.producer_or_acquire() as producer:
-                task.apply_async(args=args, kwargs=kwargs, producer=producer)
+                task.apply_async(args=args, kwargs=kwargs, producer=producer, ignore_result=True)
         except Exception:
             _task_logger.warning("Failed to dispatch task %s after retry", task.name)
     except Exception:
@@ -93,14 +114,10 @@ def _dispatch_task(task, args, kwargs):
 
 
 def send_task_safe(task, *args, **kwargs):
-    """Send a Celery task in a background thread so it never blocks the API response.
+    """Send a Celery task from a background thread so it never blocks the API response.
 
     Broker connections can take seconds (especially with pool_limit=0).
-    This ensures the API returns immediately while the task is dispatched async.
+    This ensures the API returns immediately while the task is dispatched async
+    on the shared, bounded dispatch pool.
     """
-    thread = threading.Thread(
-        target=_dispatch_task,
-        args=(task, args, kwargs),
-        daemon=True,
-    )
-    thread.start()
+    _dispatch_executor.submit(_dispatch_task, task, args, kwargs)

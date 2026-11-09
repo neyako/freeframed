@@ -4,7 +4,7 @@ import * as React from "react";
 
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { cn } from "@/lib/utils";
+import { cn, copyToClipboard } from "@/lib/utils";
 
 export function CopyButton({
   text,
@@ -13,13 +13,10 @@ export function CopyButton({
   const [copied, setCopied] = React.useState(false);
 
   async function handleCopy() {
-    try {
-      await navigator.clipboard.writeText(text);
+    // Also works over plain HTTP, and only says "Copied" when it was.
+    if (await copyToClipboard(text)) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      if (err instanceof Error) return;
-      throw err;
     }
   }
 

@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import useSWR from 'swr'
+import { useToast } from '@/components/shared/toast'
 import { ReviewProvider, useReview } from '@/components/review/review-provider'
 import { captureAnnotationSnapshot, reviewVideoElement, uploadAnnotationSnapshot } from '@/lib/annotation-snapshot'
 import { VideoPlayer } from '@/components/review/video-player'
@@ -24,6 +25,8 @@ import { api } from '@/lib/api'
 import { canGoBackInApp } from '@/lib/navigation'
 import { useUploadStore } from '@/stores/upload-store'
 import { useBreadcrumbStore } from '@/stores/breadcrumb-store'
+import { useViewStore } from '@/stores/view-store'
+import { sortAssets } from '@/lib/sort-assets'
 import {
   ArrowLeft,
   ChevronLeft,
@@ -31,7 +34,7 @@ import {
   Download,
   Columns2,
   MessageSquare,
-  Upload,
+  FilePlus2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { usePageTitle } from '@/hooks/use-page-title'
@@ -60,6 +63,7 @@ function findPath(
 
 function ReviewScreenInner({ projectId }: { projectId: string }) {
   const router = useRouter()
+  const toast = useToast()
   const searchParams = useSearchParams()
   const { asset, versions, isLoading, error: reviewError, refetchVersions } = useReview()
   const { currentVersion, isDrawingMode, focusedCommentId, seekTo, setCurrentVersion, setFocusedCommentId, setActiveAnnotation } = useReviewStore()
@@ -140,14 +144,25 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
     if (project?.name) setLabel(projectId, project.name)
   }, [project?.name, projectId, setLabel])
 
-  // Fetch all assets for navigation (1 of N)
-  const { data: allAssets } = useSWR<AssetResponse[]>(
-    project && !reviewError && !projectDenied ? `/projects/${projectId}/assets` : null,
-    () => api.get<AssetResponse[]>(`/projects/${projectId}/assets`),
+  // Previous/next walks the asset's own folder in the order the project view
+  // shows it, not the whole project in database order. Same key as the project
+  // page, so the list is usually already cached.
+  const { data: folderAssets } = useSWR<AssetResponse[]>(
+    asset && project && !reviewError && !projectDenied
+      ? `/projects/${projectId}/assets?folder_id=${asset.folder_id ?? 'root'}`
+      : null,
+    (key: string) => api.get<AssetResponse[]>(key),
+  )
+  const sortKey = useViewStore((s) => s.sortKey)
+  const sortDirection = useViewStore((s) => s.sortDirection)
+  const navAssets = useMemo(
+    () => (folderAssets ? sortAssets(folderAssets, sortKey, sortDirection) : undefined),
+    [folderAssets, sortKey, sortDirection],
   )
 
   const {
     comments,
+    isLoading: commentsLoading,
     createComment,
     resolveComment,
     toggleCut,
@@ -198,10 +213,10 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
   }, [comments, searchParams, seekTo, setFocusedCommentId, setActiveAnnotation])
 
   // Asset navigation
-  const currentIndex = allAssets?.findIndex((a) => a.id === asset?.id) ?? -1
-  const totalAssets = allAssets?.length ?? 0
-  const prevAsset = currentIndex > 0 ? allAssets?.[currentIndex - 1] : null
-  const nextAsset = currentIndex < totalAssets - 1 ? allAssets?.[currentIndex + 1] : null
+  const currentIndex = navAssets?.findIndex((a) => a.id === asset?.id) ?? -1
+  const totalAssets = navAssets?.length ?? 0
+  const prevAsset = currentIndex > 0 ? navAssets?.[currentIndex - 1] : null
+  const nextAsset = currentIndex < totalAssets - 1 ? navAssets?.[currentIndex + 1] : null
 
   const navigateAsset = (assetId: string) => {
     router.push(`/projects/${projectId}/assets/${assetId}`)
@@ -246,8 +261,22 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
     return (
       <div className="flex flex-1 items-center justify-center px-6 text-center">
         <div>
-          <h1 className="text-base font-semibold text-text-primary">Access denied</h1>
-          <p className="mt-1 text-sm text-text-tertiary">Your access to this asset is no longer active.</p>
+          <h1 className="text-base font-semibold text-text-primary">
+            {projectDenied ? 'Access denied' : "Couldn't open this asset"}
+          </h1>
+          <p className="mt-1 text-sm text-text-tertiary">
+            {projectDenied ? 'Your access to this asset is no longer active.' : reviewError}
+          </p>
+          <div className="mt-4 flex justify-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => router.push(`/projects/${projectId}`)}>
+              Back
+            </Button>
+            {!projectDenied && (
+              <Button variant="secondary" size="sm" onClick={() => window.location.reload()}>
+                Retry
+              </Button>
+            )}
+          </div>
         </div>
       </div>
     )
@@ -270,7 +299,13 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
       uploadAnnotationSnapshot(created.id, snapshot).then(() => mutateComments(), () => {})
     }
     if (draft.attachments?.length) {
-      await uploadCommentAttachments(created.id, draft.attachments, draft.onAttachmentProgress)
+      // The comment is already posted; a failed upload must not leave the
+      // draft in the box, or sending again posts it twice
+      try {
+        await uploadCommentAttachments(created.id, draft.attachments, draft.onAttachmentProgress)
+      } catch (err) {
+        toast.error(`Comment posted, but the attachment failed: ${err instanceof Error ? err.message : 'upload error'}`)
+      }
       await mutateComments()
     }
     setAnnotationData(null)
@@ -408,9 +443,10 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
               setTimeout(() => refetchVersions(), 800)
             }}
           />
-          <Button variant="ghost" size="sm" className="hidden md:inline-flex" onClick={() => versionFileInputRef.current?.click()}>
-            <Upload />
-            New version
+          {/* Icon-only on phones, so an editor can send v2 from the couch */}
+          <Button variant="ghost" size="sm" onClick={() => versionFileInputRef.current?.click()} title="Upload a new version" aria-label="New version">
+            <FilePlus2 />
+            <span className="hidden md:inline">New version</span>
           </Button>
           <Button variant="ghost" size="sm" onClick={handleDownload} disabled={downloading} title="Download original file">
             <Download />
@@ -461,7 +497,7 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
           <div
             className={cn(
               'w-full flex flex-col border-t md:border-t-0 border-l-0 md:border-l border-border bg-bg-secondary shrink-0 animate-ff-rise-in md:animate-ff-slide-in md:h-auto md:w-[372px]',
-              isDrawingMode ? 'h-auto' : 'h-[55vh]',
+              isDrawingMode ? 'h-auto' : 'h-[50dvh]',
             )}
           >
             <button
@@ -488,6 +524,7 @@ function ReviewScreenInner({ projectId }: { projectId: string }) {
                 )}
                 <CommentPanel
                   comments={comments as any}
+                  isLoading={commentsLoading}
                   currentUserId={user?.id}
                   onResolve={resolveComment}
                   onToggleCut={toggleCut}

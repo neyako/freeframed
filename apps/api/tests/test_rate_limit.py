@@ -185,3 +185,32 @@ class TestGlobalRateLimitMiddleware:
 
         assert allowed is False
         assert retry_after == 25
+
+
+class TestCorsOnShortCircuitedResponses:
+    """The limiter's 429 is returned before the request reaches the routes, so CORS
+    has to be the outermost middleware or a cross-origin browser sees no status."""
+
+    ORIGIN = "http://localhost:3000"
+
+    def test_rate_limited_response_carries_cors_headers(self, client):
+        from apps.api.middleware.global_rate_limit import GlobalRateLimitMiddleware
+
+        with patch.object(GlobalRateLimitMiddleware, "_check", return_value=(False, 7)):
+            resp = client.get("/auth/me", headers={"Origin": self.ORIGIN})
+
+        assert resp.status_code == 429
+        assert resp.headers["access-control-allow-origin"] == self.ORIGIN
+        assert "retry-after" in resp.headers["access-control-expose-headers"].lower()
+
+    def test_preflight_is_answered_without_counting_against_the_limit(self, client):
+        from apps.api.middleware.global_rate_limit import GlobalRateLimitMiddleware
+
+        with patch.object(GlobalRateLimitMiddleware, "_check", return_value=(False, 7)) as check:
+            resp = client.options(
+                "/auth/login",
+                headers={"Origin": self.ORIGIN, "Access-Control-Request-Method": "POST"},
+            )
+
+        assert resp.status_code == 200
+        check.assert_not_called()

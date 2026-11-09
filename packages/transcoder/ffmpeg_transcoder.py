@@ -4,13 +4,36 @@ import shutil
 import subprocess
 import tempfile
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Callable, Optional
 
 from .base import TranscodeJob, TranscodeResult, VideoMetadata
 from .hwaccel import build_hls_command, resolve_backend
+from .redact import redact_presigned_urls
 
 logger = logging.getLogger(__name__)
+
+# Segments go to storage a few at a time. Each PUT costs mostly a round trip, so
+# a long encode (thousands of 2 s segments across the rungs) used to spend most
+# of its upload phase waiting on latency. Eight, because the gain flattens above
+# it and botocore's default pool holds ten connections: the workers never queue
+# for a socket and the thumbnail upload after them still has room.
+_UPLOAD_THREADS = 8
+
+# The poster frame is square-pixel and fits inside 1280x1280 (never enlarged), in
+# the clip's own shape. A JPEG carries no pixel aspect ratio that browsers honour,
+# so an anamorphic frame has to be de-squeezed here: the first scale shrinks the
+# long axis by the sample aspect ratio (1 when the source sets none) instead of
+# widening, so a 2x-squeezed 4K frame never passes through an 8K one. It comes
+# before the fit because force_original_aspect_ratio works on pixel dimensions and
+# ignores SAR. Without the fit a 4K or 8K clip made a multi-megabyte JPEG for a
+# grid card.
+THUMBNAIL_VF = (
+    "scale=w='trunc(iw*min(1\\,sar)/2)*2':h='trunc(ih/max(1\\,sar)/2)*2',setsar=1,"
+    "scale='min(1280,iw)':'min(1280,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2,"
+    "setsar=1,format=yuvj420p"
+)
 
 
 def _parse_progress_percent(line: str, duration: float) -> float | None:
@@ -37,7 +60,24 @@ def _parse_progress_percent(line: str, duration: float) -> float | None:
 def _stderr_tail(stderr: str | bytes | None, sensitive_url: str) -> str:
     if isinstance(stderr, bytes):
         stderr = stderr.decode("utf-8", errors="replace")
-    return (stderr or "").replace(sensitive_url, "<redacted input URL>")[-2000:]
+    scrubbed = (stderr or "").replace(sensitive_url, "<redacted input URL>")
+    return redact_presigned_urls(scrubbed)[-2000:]
+
+
+def _failure_message(error: Exception, sensitive_url: str) -> str:
+    """What a failed transcode reports. A CalledProcessError's own text is only
+    the argv (which holds the presigned input URL), so report ffmpeg's stderr
+    instead: that is what says why it failed. Always scrubbed of signed URLs,
+    since this text reaches the transcode_failed event and the logs."""
+    if isinstance(error, subprocess.CalledProcessError):
+        cmd = error.cmd if isinstance(error.cmd, (list, tuple)) and error.cmd else ["ffmpeg"]
+        text = (
+            f"{Path(str(cmd[0])).name} exited {error.returncode}: "
+            f"{_stderr_tail(error.stderr, sensitive_url) or 'no stderr output'}"
+        )
+    else:
+        text = str(error)
+    return redact_presigned_urls(text)
 
 
 def _reset_hls_dir(hls_dir: Path) -> None:
@@ -97,8 +137,30 @@ def _rotation(stream: dict) -> int:
         return 0
 
 
+def _is_attached_pic(stream: dict) -> bool:
+    """A cover image carried as a "video" stream (artwork on a file, a poster
+    frame). It is a single still, not a timeline, so it must never be treated as
+    the picture: ffmpeg's `V` stream specifier (below) skips these too."""
+    try:
+        return int((stream.get("disposition") or {}).get("attached_pic") or 0) == 1
+    except (TypeError, ValueError):
+        return False
+
+
+def _primary_video_stream(data: dict) -> Optional[dict]:
+    """The first real video stream: what `-map 0:V:0` selects."""
+    return next(
+        (
+            s
+            for s in data.get("streams") or []
+            if s.get("codec_type", "video") == "video" and not _is_attached_pic(s)
+        ),
+        None,
+    )
+
+
 def is_rotated_90(data: dict) -> bool:
-    video = next((s for s in data.get("streams") or [] if s.get("codec_type", "video") == "video"), None)
+    video = _primary_video_stream(data)
     return video is not None and abs(_rotation(video)) % 180 == 90
 
 
@@ -115,11 +177,9 @@ def parse_probe_metadata(data: dict) -> Optional[VideoMetadata]:
     are display dimensions: phone footage stored landscape with a 90° rotation
     flag reports as portrait, matching what ffmpeg's autorotate decodes.
     """
-    streams = data.get("streams") or []
-    video_streams = [s for s in streams if s.get("codec_type", "video") == "video"]
-    if not video_streams:
+    stream = _primary_video_stream(data)
+    if stream is None:
         return None
-    stream = video_streams[0]
     fps = 0.0
     raw_rate = stream.get("r_frame_rate") or ""
     if "/" in raw_rate:
@@ -162,6 +222,30 @@ class FFmpegTranscoder:
             ExpiresIn=expires_in,
         )
 
+    def _upload_directory(self, source_dir: Path, s3_prefix: str) -> list[str]:
+        """Upload every file under `source_dir` to `s3_prefix`, several at a time.
+
+        boto3 clients are thread-safe and HLS segments are far below the
+        multipart threshold, so each upload_file is one plain PUT. list() drains
+        the results inside the pool: a failed upload must fail the transcode, not
+        sit unread in a future while the version goes ready with segments missing.
+        """
+        files = sorted(f for f in source_dir.rglob("*") if f.is_file())
+        if not files:
+            return []
+
+        def upload(path: Path) -> str:
+            s3_key = f"{s3_prefix}/{path.relative_to(source_dir)}"
+            content_type, cache_control = self._get_content_type(path.name)
+            self.s3.upload_file(
+                str(path), self.bucket, s3_key,
+                ExtraArgs={"ContentType": content_type, "CacheControl": cache_control},
+            )
+            return s3_key
+
+        with ThreadPoolExecutor(max_workers=min(_UPLOAD_THREADS, len(files))) as pool:
+            return list(pool.map(upload, files))
+
     async def transcode(
         self,
         job: TranscodeJob,
@@ -188,13 +272,25 @@ class FFmpegTranscoder:
             # Assume audio when the probe fails, matching the old behavior.
             has_audio = True
             rotated = False
+            probed_streams = False
             try:
                 probe_data = json.loads(probe.stdout)
                 meta = parse_probe_metadata(probe_data)
                 has_audio = has_audio_stream(probe_data)
                 rotated = is_rotated_90(probe_data)
+                probed_streams = bool(probe_data.get("streams"))
             except (ValueError, TypeError, IndexError, json.JSONDecodeError):
                 meta = None
+            if meta is None and probed_streams:
+                # Streams were read and none is video (a .mp4/.mpg that only
+                # carries audio). Every rung would be empty and ffmpeg would die
+                # on "[v:0] matches no streams", which says nothing about the
+                # real cause. Report it so the caller can process it as audio.
+                return TranscodeResult(
+                    success=False,
+                    no_video_stream=True,
+                    error=f"No video stream in {job.input_s3_key}",
+                )
             duration = meta.duration_seconds if meta else 0.0
 
             # 3. Build the quality ladder from the source's display size
@@ -259,17 +355,7 @@ class FFmpegTranscoder:
                     break
 
             # 4. Upload HLS files to S3
-            uploaded_keys = []
-            for f in hls_dir.rglob("*"):
-                if f.is_file():
-                    relative = f.relative_to(hls_dir)
-                    s3_key = f"{job.output_s3_prefix}/{relative}"
-                    content_type, cache_control = self._get_content_type(f.name)
-                    self.s3.upload_file(
-                        str(f), self.bucket, s3_key,
-                        ExtraArgs={"ContentType": content_type, "CacheControl": cache_control},
-                    )
-                    uploaded_keys.append(s3_key)
+            self._upload_directory(hls_dir, job.output_s3_prefix)
 
             # 5. Thumbnail: best effort — the HLS output is already uploaded, so
             # a thumbnail failure must not fail the transcode. Seek past frame 0,
@@ -277,13 +363,14 @@ class FFmpegTranscoder:
             thumb_path = work_dir / "thumbnail.jpg"
             thumb_cmd = [
                 "ffmpeg", "-y", "-ss", f"{min(1.0, duration / 2):.3f}", "-i", input_url,
+                "-map", "0:V:0", "-vf", THUMBNAIL_VF,
                 "-q:v", "2", "-frames:v", "1", str(thumb_path),
             ]
             thumbnail_keys: list[str] = []
             try:
                 subprocess.run(thumb_cmd, capture_output=True, timeout=300)
             except subprocess.SubprocessError as error:
-                logger.warning("Thumbnail generation failed: %s", error)
+                logger.warning("Thumbnail generation failed: %s", redact_presigned_urls(str(error)))
             if thumb_path.exists():
                 thumbnail_key = f"{job.output_s3_prefix}/thumbnail.jpg"
                 self.s3.upload_file(
@@ -303,7 +390,7 @@ class FFmpegTranscoder:
             )
 
         except Exception as e:  # noqa  # noqa: BROAD_EXCEPT_OK - boundary converts failure to result.
-            return TranscodeResult(success=False, error=str(e))
+            return TranscodeResult(success=False, error=_failure_message(e, input_url))
         finally:
             shutil.rmtree(work_dir, ignore_errors=True)
 

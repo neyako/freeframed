@@ -1,4 +1,6 @@
+import { useCallback } from 'react'
 import { create } from 'zustand'
+import { formatFrames, formatTime, formatTimecode } from '@/lib/utils'
 import type { Asset, AssetVersion } from '@/types'
 
 type DrawingTool = 'pen' | 'rectangle' | 'arrow' | 'line'
@@ -59,7 +61,22 @@ export const useReviewStore = create<ReviewState>()((set, get) => ({
   ...initialState,
 
   setCurrentAsset: (asset: Asset) => {
-    set({ currentAsset: asset, playheadTime: 0, seekTarget: null, rangeStart: null, rangeEnd: null })
+    // Polling refreshes the same asset; only a real switch resets the playhead,
+    // the I/O range and any drawing left over from the previous asset.
+    if (get().currentAsset?.id === asset.id) {
+      set({ currentAsset: asset })
+      return
+    }
+    set({
+      currentAsset: asset,
+      playheadTime: 0,
+      seekTarget: null,
+      rangeStart: null,
+      rangeEnd: null,
+      isDrawingMode: false,
+      pendingAnnotation: null,
+      activeAnnotation: null,
+    })
   },
 
   setCurrentVersion: (version: AssetVersion) => {
@@ -129,3 +146,26 @@ export const useReviewStore = create<ReviewState>()((set, get) => ({
     set(initialState)
   },
 }))
+
+/** The current version's frame rate, for SMPTE timecode and frame counts */
+export const selectFps = (s: ReviewState): number =>
+  s.currentVersion?.files?.find((f) => f.fps)?.fps ?? 24
+
+/**
+ * Formats a position in the video the way the viewer chose in the player
+ * (timecode, frames or m:ss), so the transport, notes and the composer chip
+ * all read the same clock.
+ */
+export function useFormatPosition(): (seconds: number) => string {
+  const timeFormat = useReviewStore((s) => s.timeFormat)
+  const fps = useReviewStore(selectFps)
+  return useCallback(
+    (seconds: number) =>
+      timeFormat === 'frames'
+        ? formatFrames(seconds, fps)
+        : timeFormat === 'standard'
+          ? formatTime(seconds)
+          : formatTimecode(seconds, fps),
+    [timeFormat, fps],
+  )
+}
