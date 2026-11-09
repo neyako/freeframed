@@ -23,6 +23,22 @@ router = APIRouter(tags=["approvals"])
 logger = logging.getLogger(__name__)
 
 
+def _require_human_reviewer(user: User) -> None:
+    # Approval is the human's hand-off signal to the agent; agents only revise
+    if user.is_agent:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Agents can't approve or reject")
+
+
+def _creator_to_email(db: Session, asset: Asset, current_user: User) -> User | None:
+    if asset.created_by == current_user.id:
+        return None
+    return db.query(User).filter(
+        User.id == asset.created_by,
+        User.deleted_at.is_(None),
+        User.is_agent.is_(False),
+    ).first()
+
+
 def _get_asset(db: Session, asset_id: uuid.UUID) -> Asset:
     asset = db.query(Asset).filter(Asset.id == asset_id, Asset.deleted_at.is_(None)).first()
     if not asset:
@@ -37,6 +53,7 @@ def approve_asset(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    _require_human_reviewer(current_user)
     asset = _get_asset(db, asset_id)
     require_asset_access(db, asset, current_user)
     version = get_active_version(db, asset, body.version_id)
@@ -49,9 +66,7 @@ def approve_asset(
 
     approval = upsert_approval(db, asset, body.version_id, current_user, ApprovalStatus.approved, body.note)
 
-    creator = None
-    if asset.created_by != current_user.id:
-        creator = db.query(User).filter(User.id == asset.created_by, User.deleted_at.is_(None)).first()
+    creator = _creator_to_email(db, asset, current_user)
     workspace_name = get_workspace_name(db)
     email_payload = None if creator is None else {
         "to_email": creator.email,
@@ -79,6 +94,7 @@ def reject_asset(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    _require_human_reviewer(current_user)
     asset = _get_asset(db, asset_id)
     require_asset_access(db, asset, current_user)
     version = get_active_version(db, asset, body.version_id)
@@ -91,9 +107,7 @@ def reject_asset(
 
     approval = upsert_approval(db, asset, body.version_id, current_user, ApprovalStatus.rejected, body.note)
 
-    creator = None
-    if asset.created_by != current_user.id:
-        creator = db.query(User).filter(User.id == asset.created_by, User.deleted_at.is_(None)).first()
+    creator = _creator_to_email(db, asset, current_user)
     workspace_name = get_workspace_name(db)
     email_payload = None if creator is None else {
         "to_email": creator.email,
@@ -166,6 +180,7 @@ def list_approvals(
                 id=u.id,
                 name=u.name,
                 avatar_url=avatar_service.effective_avatar_url(u),
+                is_agent=u.is_agent,
             )
         result.append(resp)
     return result

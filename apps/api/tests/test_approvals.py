@@ -81,7 +81,7 @@ def test_approval_routes_reject_review_of_own_upload(
     action,
     version_created_by_user,
 ) -> None:
-    actor = SimpleNamespace(id=uuid.uuid4(), name="Reviewer", email="reviewer@example.invalid")
+    actor = SimpleNamespace(id=uuid.uuid4(), name="Reviewer", email="reviewer@example.invalid", is_agent=False)
     asset = SimpleNamespace(
         id=uuid.uuid4(),
         name="Asset",
@@ -108,7 +108,7 @@ def test_approval_routes_reject_review_of_own_upload(
 
 @pytest.mark.parametrize("action", ["approve", "reject"])
 def test_approval_routes_allow_different_user_to_review_version(monkeypatch, action) -> None:
-    actor = SimpleNamespace(id=uuid.uuid4(), name="Reviewer", email="reviewer@example.invalid")
+    actor = SimpleNamespace(id=uuid.uuid4(), name="Reviewer", email="reviewer@example.invalid", is_agent=False)
     version_creator_id = uuid.uuid4()
     asset = SimpleNamespace(id=uuid.uuid4(), name="Asset", created_by=version_creator_id)
     creator = SimpleNamespace(id=version_creator_id, email="creator@example.invalid")
@@ -129,7 +129,7 @@ def test_approval_routes_allow_different_user_to_review_version(monkeypatch, act
 @pytest.mark.parametrize("action", ["approve", "reject"])
 def test_approval_routes_capture_email_scalars_before_commit(monkeypatch, action) -> None:
     expired = [False]
-    actor = MagicMock(id=uuid.uuid4(), email="reviewer@example.invalid")
+    actor = MagicMock(id=uuid.uuid4(), email="reviewer@example.invalid", is_agent=False)
     asset = MagicMock(id=uuid.uuid4(), created_by=uuid.uuid4())
     creator = MagicMock(id=asset.created_by)
     type(actor).name = PropertyMock(side_effect=lambda: _read_before_commit(expired, "Reviewer"))
@@ -148,7 +148,7 @@ def test_approval_routes_capture_email_scalars_before_commit(monkeypatch, action
 
 @pytest.mark.parametrize("action", ["approve", "reject"])
 def test_committed_approval_survives_dispatch_start_failure(monkeypatch, action) -> None:
-    actor = SimpleNamespace(id=uuid.uuid4(), name="Reviewer", email="reviewer@example.invalid")
+    actor = SimpleNamespace(id=uuid.uuid4(), name="Reviewer", email="reviewer@example.invalid", is_agent=False)
     asset = SimpleNamespace(id=uuid.uuid4(), name="Asset", created_by=uuid.uuid4())
     creator = SimpleNamespace(id=asset.created_by, email="creator@example.invalid")
     db = MagicMock()

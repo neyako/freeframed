@@ -45,6 +45,7 @@ class AnnotationResponse(BaseModel):
     comment_id: uuid.UUID
     drawing_data: dict
     frame_number: Optional[int]
+    snapshot_url: Optional[str] = None  # presigned JPEG of the frame + drawing
     model_config = {"from_attributes": True}
 
 # ── Attachments ────────────────────────────────────────────────────────────────
@@ -89,6 +90,7 @@ class AuthorInfo(BaseModel):
     id: uuid.UUID
     name: str
     avatar_url: Optional[str] = None
+    is_agent: bool = False
 
 class GuestAuthorInfo(BaseModel):
     id: uuid.UUID

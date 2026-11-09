@@ -5,6 +5,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 from ..database import get_db
 from ..services.auth_service import ACCESS_COOKIE, decode_token, get_user_by_id
+from ..services.agent_service import TOKEN_PREFIX, user_for_api_token
 from ..models.user import User, UserStatus
 
 optional_bearer_scheme = HTTPBearer(auto_error=False)
@@ -17,6 +18,11 @@ def get_current_user(
     token = credentials.credentials if credentials else request.cookies.get(ACCESS_COOKIE)
     if not token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing token")
+    if token.startswith(TOKEN_PREFIX):
+        user = user_for_api_token(db, token)
+        if not user:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid agent token")
+        return user
     payload = decode_token(token)
     if not payload or payload.get("type") != "access":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
@@ -34,6 +40,8 @@ def get_optional_user(
     token = credentials.credentials if credentials else request.cookies.get(ACCESS_COOKIE)
     if not token:
         return None
+    if token.startswith(TOKEN_PREFIX):
+        return user_for_api_token(db, token)
     try:
         payload = decode_token(token)
         if not payload or payload.get("type") != "access":

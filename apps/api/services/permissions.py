@@ -40,7 +40,8 @@ def require_project_role(
     """Require the user to have at least `minimum_role` on the project.
 
     owner > editor. Editor is the lowest role, so `ProjectRole.editor` means
-    "any project member". Superadmins pass as owner.
+    "any project member". Superadmins pass as owner; agent accounts pass as
+    editor on every project.
     """
     ROLE_RANK = {
         ProjectRole.owner: 2,
@@ -55,6 +56,8 @@ def require_project_role(
             user_id=user.id,
             role=ProjectRole.owner,
         )
+    if not member and user.is_agent:
+        member = ProjectMember(project_id=project_id, user_id=user.id, role=ProjectRole.editor)
     if not member:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not a project member")
     if ROLE_RANK[member.role] < ROLE_RANK[minimum_role]:
@@ -69,11 +72,13 @@ def require_project_role(
 
 
 def can_access_asset(db: Session, asset: Asset, user: User) -> bool:
-    """Project members (owner or editor) and superadmins can read, comment on
-    and approve every asset in the project; nobody else can."""
+    """Project members (owner or editor), superadmins and agent accounts can
+    read and comment on every asset in the project; nobody else can."""
     if asset.deleted_at is not None or get_project(db, asset.project_id) is None:
         return False
-    return user.is_superadmin or _find_project_member(db, asset.project_id, user.id) is not None
+    if user.is_superadmin or user.is_agent:
+        return True
+    return _find_project_member(db, asset.project_id, user.id) is not None
 
 
 def require_asset_access(db: Session, asset: Asset, user: User) -> None:

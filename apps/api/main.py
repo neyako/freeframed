@@ -20,6 +20,7 @@ from .routers import (
     hls_proxy,
     workspace,
     embeds,
+    agents,
 )
 from .services.s3_service import ensure_bucket_exists
 from .middleware.global_rate_limit import GlobalRateLimitMiddleware
@@ -81,6 +82,7 @@ app.include_router(folders.router)
 app.include_router(hls_proxy.router)
 app.include_router(workspace.router)
 app.include_router(embeds.router)
+app.include_router(agents.router)
 
 
 @app.get("/health")

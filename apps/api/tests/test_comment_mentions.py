@@ -12,6 +12,7 @@ def _user(email: str, status: UserStatus = UserStatus.active) -> MagicMock:
     u.email = email
     u.status = status
     u.deleted_at = None
+    u.is_agent = False
     return u
 
 

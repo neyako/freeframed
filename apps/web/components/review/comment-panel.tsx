@@ -592,6 +592,10 @@ function CommentItem({
             >
               {isOwn && comment.author_id ? "You" : authorName}
             </span>
+            {/* Sans, not mono: mono is reserved for time */}
+            {comment.author?.is_agent && (
+              <span className="shrink-0 text-[11.5px] text-text-tertiary">Agent</span>
+            )}
             <span className="shrink-0 text-[11.5px] text-text-tertiary">
               {formatAgo(comment.created_at)}
             </span>

@@ -45,6 +45,7 @@ def search_users(
     pattern = f"%{q}%"
     users = db.query(User).filter(
         User.deleted_at.is_(None),
+        User.is_agent.is_(False),
         (User.name.ilike(pattern) | User.email.ilike(pattern)),
     ).limit(10).all()
     return users
@@ -181,8 +182,12 @@ def invite_user(body: InviteRequest, db: Session = Depends(get_db), current_user
 
 @router.get("/people", response_model=list[UserResponse])
 def list_people(db: Session = Depends(get_db), _: User = Depends(require_admin)):
-    """Every account, including pending invites and deactivated ones."""
-    return db.query(User).filter(User.deleted_at.is_(None)).order_by(User.created_at).all()
+    """Every account, including pending invites and deactivated ones. Agent
+    accounts live under /agents instead."""
+    return db.query(User).filter(
+        User.deleted_at.is_(None),
+        User.is_agent.is_(False),
+    ).order_by(User.created_at).all()
 
 
 def _get_other_user(db: Session, user_id: uuid.UUID, current_user: User) -> User:

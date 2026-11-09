@@ -15,9 +15,10 @@ router = APIRouter(prefix="/me", tags=["me"])
 
 
 def _visible_project_ids(db: Session, user: User):
-    """Projects the user can browse: the workspace owner (superadmin) sees every
-    project, e.g. editors' Quick Shares; everyone else sees their memberships."""
-    if user.is_superadmin:
+    """Projects the user can browse: the workspace owner (superadmin) and agent
+    accounts see every project, e.g. editors' Quick Shares; everyone else sees
+    their memberships."""
+    if user.is_superadmin or user.is_agent:
         return db.query(Project.id).filter(Project.deleted_at.is_(None)).subquery()
     return (
         db.query(ProjectMember.project_id)
